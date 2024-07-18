@@ -1,0 +1,50 @@
+.spacer-50 {
+  height: 50px;
+}
+
+.spacer-75 {
+  height: 75px;
+}
+
+.body-height {
+  min-height: fit-content;
+}
+
+.paste-area {
+  margin-bottom: 10px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  min-height: 300px !important;
+  width: 100%;
+  font-size: 10pt !important;
+  --bs-focus-ring-color: #fafafa;
+  --bs-focus-ring-width: 0.5px;
+  --bs-focus-ring-opacity: 0.1;
+}
+
+.form-control:focus {
+  border-color: #fafafa !important;
+}
+
+.view-area {
+  white-space: break-spaces;
+}
+
+.paste-info {
+  top: 25px;
+  position: relative;
+  margin-left: 0px;
+}
+
+.hor-spacer {
+  width: 100%;
+}
+
+.list-group-item.footer-item {
+  padding: 0 !important;
+  font-size: small;
+}
+
+/* .accordion-button:not(.collapsed) {
+  background-color: #f8f9fa !important;
+} */

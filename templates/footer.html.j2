@@ -1,0 +1,21 @@
+<footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
+    <div class="col-12 d-flex justify-content-between">
+        <div class="d-flex flex-column">
+            <span class="mb-md-0 text-body-secondary">&copy; 2024 e2ePaste.XYZ</span>
+            <a style="font-size:small;padding:0;" href="https://github.com/bleach86/e2epaste" target="_blank" rel="noopener noreferrer">Fork me on Github</a>
+        </div>
+
+        <ul class="list-group list-group-flush d-flex justify-content-end mb-0">
+            <li class="list-group-item border-0 footer-item">Total Pastes: <span id="total-pastes"></span></li>
+            <li class="list-group-item footer-item">Total Views: <span id="total-views"></span></li>
+        </ul>
+    </div>
+</footer>
+
+<script>
+    const total_pastes = document.getElementById('total-pastes');
+    const total_views = document.getElementById('total-views');
+
+    total_pastes.textContent = {{ site_stats.pastes }};
+    total_views.textContent = {{ site_stats.views }};
+</script>

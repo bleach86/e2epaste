@@ -1,0 +1,15 @@
+[package]
+name = "e2epaste"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rocket = { version = "0.5.1", features = ["json"] }
+rocket_dyn_templates = { version = "0.2.0", features = ["minijinja"] }
+sled = { version = "0.34.7", features = ["compression"] }
+rand = "0.8.5"
+serde = { version = "1.0.166", features = ["derive"] }
+serde_json = "1.0.100"
+chrono = "0.4.38"

@@ -1,0 +1,20 @@
+{% extends "layout" %}
+
+{% block page %}
+    <div class="spacer-50"></div>
+    <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
+        <div class="row">
+            <div class="col-md-12 rounded-2">
+                <h2 class="text-center mt-3">Paste Not Found</h2>
+                <section id="hello" class="h-100">
+                    <div class="alert alert-danger mt-4" role="alert">
+                        <h4 class="alert-heading">Paste Not Found</h4>
+                        <p>The paste you are looking for does not exist or has expired.</p>
+                        <hr>
+                        <p class="mb-0">Please check the URL and try again.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+{% endblock %}

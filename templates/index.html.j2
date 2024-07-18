@@ -1,0 +1,289 @@
+{% extends "layout" %}
+
+{% block page %}
+    <div class="spacer-50"></div>
+    <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
+        <div class="row">
+            <div class="col-md-12 rounded-2">
+                <h2 class="text-center mt-3">e2ePaste.XYZ</h2>
+                <section id="hello" class="h-100">
+                    <textarea placeholder="Paste here..." id="paste-area" class="form-control mt-4 paste-area focus-ring"></textarea>
+                </section>
+            </div>
+        </div>
+
+        <div class="mt-4 pb-3 row  display-flex flex-column" style="font-size:8pt">
+            
+            <div class="form-group col-sm-3">
+                <label class="mb-1" for="expireDropdown">Expiration:</label>
+                <div class="dropdown">
+                    <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="never">
+                        Never
+                    </button>
+
+                    <ul class="dropdown-menu" aria-labelledby="expireDropdown">
+                        <li><a class="dropdown-item" href="#" data-value="never">Never</a></li>
+                        <li><a class="dropdown-item" href="#" data-value="1hour">1 Hour</a></li>
+                        <li><a class="dropdown-item" href="#" data-value="1day">1 Day</a></li>
+                        <li><a class="dropdown-item" href="#" data-value="1week">1 Week</a></li>
+                        <li><a class="dropdown-item" href="#" data-value="2weeks">2 Weeks</a></li>
+                        <li><a class="dropdown-item" href="#" data-value="1month">1 Month</a></li>
+                        <li><a class="dropdown-item" href="#" data-value="6months">6 Months</a></li>
+                        <li><a class="dropdown-item" href="#" data-value="1year">1 Year</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="form-group mt-3 col-sm-3">
+                <label class="mb-1"  for="max-views">Max Views (0 for unlimited):</label>
+                <input type="number" min="0" max="999999999999" id="max-views" class="form-control border border-light" style="--bs-border-width:0.5px" value="0">
+            </div>
+
+            <div class="form-group mt-4 col-sm-3">
+                <button id="submit-paste" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important">Submit New Paste</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-lLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            <div class="modal-header bg-success">
+                <h1 class="modal-title fs-5" id="url-modal-Label">Paste Success!</h1>
+                <button type="button" class="btn-close" onclick="copyToClipboard();" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Your paste has been created. Here is the URL:</p>
+                <input class="w-100 rounded-2" style="font-size: 10pt;" id="paste-url" disabled>
+            </div>
+            <div class="modal-footer">
+                <button id="copy-url-btn" type="button" class="btn btn-secondary" data-toggle="popover" onclick="copyToClipboard();">Copy URL</button>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <script> 
+        let paste_el = document.getElementById("paste-area");
+        paste_el.value = "";
+        paste_el.focus();
+
+        let max_views_el = document.getElementById("max-views");
+        max_views_el.value = "0";
+
+        const tx = document.getElementById("paste-area");
+        tx.addEventListener("input", OnInput, false);
+
+        function OnInput() {
+        this.style.height = "auto";
+        this.style.height = this.scrollHeight + "px";
+        }
+
+        document.querySelectorAll(".dropdown-item").forEach((item) => {
+        item.addEventListener("click", function (event) {
+            event.preventDefault();  // Prevent the default action
+            let button = document.getElementById("expireDropdown");
+            button.textContent = this.textContent;
+            button.setAttribute("data-value", this.getAttribute("data-value"));
+        });
+    });
+
+        document
+        .getElementById("submit-paste")
+        .addEventListener("click", async function () {
+            const text = document.getElementById("paste-area").value;
+            
+            if (text === "") {
+                return;
+            }
+
+            if (byteSize(text) > 1048576) {
+                alert("Paste is too large. Please keep it under 1MB.");
+                return;
+            }
+
+            const expire = document
+            .getElementById("expireDropdown")
+            .getAttribute("data-value");
+            let max_views = document.getElementById("max-views").value;
+            const key = await generateKey();
+            const iv = generateIv();
+            const exportedKey = await exportCryptoKey(key);
+            const encrypted = await encryptText(text, key, iv);
+            const encryptedBase64 = arrayBufferToBase64(encrypted);
+
+            let timestamp = Date.now();
+
+            let expireTime = 0;
+            if (expire === "1hour") {
+                expireTime = 3600 * 1000 + timestamp;
+            } else if (expire === "1day") {
+                expireTime = 86400 * 1000 + timestamp;
+            } else if (expire === "1week") {
+                expireTime = 604800 * 1000 + timestamp;
+            } else if (expire === "2weeks") {
+                expireTime = 1209600 * 1000 + timestamp;
+            } else if (expire === "1month") {
+                expireTime = 2592000 * 1000 + timestamp;
+            } else if (expire === "6months") {
+                expireTime = 15552000 * 1000 + timestamp;
+            } else if (expire === "1year") {
+                expireTime = 31536000 * 1000 + timestamp;
+            } else {
+                expireTime = null;
+            }
+
+            if (max_views === "" || max_views === "0" || max_views < 0) {
+                max_views = null;
+            } else {
+                max_views = parseInt(max_views);
+                if (max_views > 999999999999) {
+                    max_views = 999999999999;
+                }
+            }
+
+            const iv_array = Array.from(iv);
+
+            const paste = {
+            content: encryptedBase64,
+            iv: iv_array,
+            expires: expireTime,
+            max_views: max_views,
+            };
+            const response = await fetch("/api/submit_paste", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(paste),
+            });
+            const data = await response.json();
+
+            if (data.id) {
+            console.log(data.id);
+            let host = decodeHtmlEntity("{{ host }}");
+            let url = `${host}/paste/${data.id}#${exportedKey}`;
+            openModal(url);
+
+            } else {
+            alert("Failed to create paste");
+            }
+        });
+
+        function generateIv() {
+            return crypto.getRandomValues(new Uint8Array(12));
+            }
+
+        function decodeHtmlEntity(str) {
+            // Create a temporary DOM element to decode the entities
+            const txt = document.createElement("textarea");
+            txt.innerHTML = str;
+            return txt.value;
+        }
+
+        function byteSize(str) {
+            const encoder = new TextEncoder();
+            const encoded = encoder.encode(str);
+            return encoded.byteLength;
+        }
+
+        async function encryptText(text, key, iv) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(text);
+            const encrypted = await crypto.subtle.encrypt(
+                {
+                name: "AES-GCM",
+                iv: iv, // Initialization vector
+                },
+                key,
+                data
+            );
+            return new Uint8Array(encrypted);
+            }
+
+            async function generateKey() {
+            const key = await crypto.subtle.generateKey(
+                {
+                name: "AES-GCM",
+                length: 256,
+                },
+                true, // extractable
+                ["encrypt", "decrypt"]
+            );
+            return key;
+            }
+
+            function arrayBufferToBase64(buffer) {
+            let binary = "";
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+            }
+
+            async function exportCryptoKey(key) {
+            const jwk = await crypto.subtle.exportKey("jwk", key);
+            const kValue = jwk.k;
+            const base64 = btoa(kValue);
+            return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            }
+
+            async function importCryptoKey(urlSafeBase64Key) {
+            const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
+            const kValue = atob(base64);
+            const jwk = {
+                kty: "oct",
+                k: kValue,
+                alg: "A256GCM",
+                ext: true,
+                key_ops: ["encrypt", "decrypt"],
+            };
+            return crypto.subtle.importKey(
+                "jwk",
+                jwk,
+                {
+                name: "AES-GCM",
+                },
+                true, // extractable
+                ["encrypt", "decrypt"]
+            );
+            }
+
+        function openModal(url) {
+            var modal = new bootstrap.Modal(document.getElementById('url-modal'));
+            document.getElementById("paste-url").value = url;
+
+            modal.show();
+        }
+
+        function copyToClipboard() {
+            var copyText = document.getElementById("paste-url");
+            navigator.clipboard.writeText(copyText.value);
+
+            var popoverButton = document.getElementById('copy-url-btn');
+
+            // Create a new Popover instance
+            var popover = new bootstrap.Popover(popoverButton, {
+                content: 'Successfully Copied to clipboard!\nReturning to home page...',
+                placement: 'top',
+                trigger: 'manual',
+                customClass: 'bg-success'
+            });
+
+            // Show the popover
+            popover.show();
+
+            // Navigate home after 2 seconds
+            setTimeout(function () {
+                popover.hide();
+                window.location.href = "/";
+            }, 2000);
+        }
+
+
+    </script>
+
+{% endblock %}

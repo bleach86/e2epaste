@@ -1,0 +1,212 @@
+{% extends "layout" %}
+
+
+{% block page %}
+    <div class="spacer-50"></div>
+    <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
+        <div class="row">
+            <div class="col-md-12 rounded-2">
+                <h2 class="text-center mt-3">e2ePaste.XYZ</h2>
+                <div class="d-flex justify-content-center align-items-center mt-2 mb-2 paste-info">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-calendar-heart me-2"></i> 
+                        <span>Paste Date: <span id="paste-date"></span></span>
+                    </div>
+                    <div class="d-flex align-items-center ms-3">
+                        <i class="bi bi-eye me-2"></i> 
+                        <span>Views: {{ paste.views }}</span>
+                    </div>
+                    <div class="d-flex align-items-center ms-3">
+                        <i class="bi bi-eye-fill me-2"></i> 
+                        <span>Max Views: <span id="max-views"></span></span>
+                    </div>
+                    <div class="d-flex align-items-center ms-3">
+                        <i class="bi bi-clock me-2"></i> 
+                        <span>Expires: <span id="expire-date"></span></span>
+                    </div>
+                    <div class="d-flex align-items-center ms-3">
+                        <button 
+                        class="btn"
+                        data-bs-toggle="popover" 
+                        data-bs-trigger="focus"
+                        data-bs-custom-class="bg-success" 
+                        data-bs-content="Copied!" 
+                        onclick="copyToClipboard()"
+                        >
+                            <i class="bi bi-clipboard"></i>
+                            <span>Copy</span>
+                    </div>
+                </div>
+                <section id="view-section" class="h-100">
+                    <pre class="theme-atom-one-dark"><code id="view-area" class="form-control mt-4 paste-area focus-ring view-area"></code></pre>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script> 
+        var cipher_text = "{{ paste.content }}";
+        var iv = {{ paste.iv }};
+        var key = window.location.hash.substr(1);
+
+        const view_area = document.getElementById('view-area');
+
+        function copyToClipboard() {
+            navigator.clipboard.writeText(view_area.textContent);
+        }
+
+        async function decrypt() {
+            let iv_array = new Uint8Array(iv);
+            const importedKey = await importCryptoKey(key);
+            const encryptedArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(cipher_text));
+            const decrypted = await decryptText(encryptedArrayBuffer, importedKey, iv_array);
+
+            view_area.textContent = decrypted;
+        }
+        
+        
+        document.addEventListener('keydown', function(event) {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
+                event.preventDefault();
+                select_all_handler();
+            }
+        });
+
+        // Add event listener for contextmenu
+        view_area.addEventListener('onselectstart', function(event) {
+            event.preventDefault();
+            select_all_handler();
+        });
+
+        function select_all_handler() {
+            const selection = window.getSelection();
+            const range = document.createRange(); 
+            range.selectNodeContents(view_area);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        function decodeHtmlEntity(str) {
+            // Create a temporary DOM element to decode the entities
+            const txt = document.createElement("textarea");
+            txt.innerHTML = str;
+            return txt.value;
+        }
+
+        async function importCryptoKey(urlSafeBase64Key) {
+            const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
+            const kValue = atob(base64);
+            const jwk = {
+                kty: "oct",
+                k: kValue,
+                alg: "A256GCM",
+                ext: true,
+                key_ops: ["encrypt", "decrypt"],
+            };
+            return crypto.subtle.importKey(
+                "jwk",
+                jwk,
+                {
+                name: "AES-GCM",
+                },
+                true, // extractable
+                ["encrypt", "decrypt"]
+            );
+            }
+
+        function base64ToArrayBuffer(base64) {
+            const binary = atob(base64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes.buffer;
+            }
+
+        async function decryptText(encrypted, key, iv) {
+            const decrypted = await crypto.subtle.decrypt(
+                {
+                name: "AES-GCM",
+                iv: iv, // Initialization vector
+                },
+                key,
+                encrypted
+            );
+            const decoder = new TextDecoder();
+            return decoder.decode(decrypted);
+            }
+
+        function set_expire_date() {
+            let expire_el = document.getElementById("expire-date");
+            let timestamp = "{{ paste.expires }}";
+            
+            if (timestamp === "none") {
+                expire_el.innerText = " Never";
+                return;
+            }
+
+            expire_el.innerText = time_until(timestamp);
+        }
+
+        function time_until(timestamp) {
+            const now = new Date();
+            const difference = timestamp - now;
+
+            if (difference <= 0) {
+                return " Never";
+            }
+
+            const seconds = Math.floor(difference / 1000);
+
+            let interval = Math.floor(seconds / 31536000);
+            if (interval > 1) {
+                return interval + " years";
+            }
+            interval = Math.floor(seconds / 2592000);
+            if (interval > 1) {
+                return interval + " months";
+            }
+            interval = Math.floor(seconds / 86400);
+            if (interval > 1) {
+                return interval + " days";
+            }
+            interval = Math.floor(seconds / 3600);
+            if (interval > 1) {
+                return interval + " hours";
+            }
+            interval = Math.floor(seconds / 60);
+            if (interval > 1) {
+                return interval + " minutes";
+            }
+            return Math.floor(seconds) + " seconds";
+        }
+
+        function set_paste_date() {
+            let date_el = document.getElementById("paste-date");
+            let timestamp = "{{ paste.timestamp }}";
+            let date = new Date(timestamp * 1000);
+            let options = { year: 'numeric', month: 'long', day: 'numeric' };
+            date_el.innerText = date.toLocaleDateString('en-US', options);
+        }
+
+        function set_max_views() {
+            let max_views_el = document.getElementById("max-views");
+            let max_views = "{{ paste.max_views }}";
+            if (max_views === "0" || max_views === "none") {
+                max_views_el.innerText = "∞";
+                return;
+            }
+            max_views_el.innerText = max_views;
+        }
+
+        decrypt();
+        hljs.highlightAll();
+        set_expire_date();
+        set_paste_date();
+        set_max_views();
+
+    </script>
+
+{% endblock %}
+
