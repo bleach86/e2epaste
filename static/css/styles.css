@@ -45,6 +45,8 @@
   font-size: small;
 }
 
-/* .accordion-button:not(.collapsed) {
-  background-color: #f8f9fa !important;
-} */
+@media screen and (max-width: 768px) {
+  .paste-info {
+    font-size: x-small;
+  }
+}
