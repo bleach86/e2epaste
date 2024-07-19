@@ -43,6 +43,10 @@
             </div>
         </div>
     </div>
+    <button  type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
+        <i class="bi bi-arrow-up"></i>
+    </button>
+
 
     <script> 
         var cipher_text = "{{ paste.content }}";
@@ -62,6 +66,16 @@
             const decrypted = await decryptText(encryptedArrayBuffer, importedKey, iv_array);
 
             view_area.textContent = decrypted;
+        }
+
+        let back_to_top = document.getElementById("btn-back-to-top");
+
+        // When the user clicks on the button, scroll to the top of the document
+        back_to_top.addEventListener("click", backToTop);
+
+        function backToTop() {
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
         }
         
         

@@ -51,6 +51,10 @@
 
     </div>
 
+    <button  type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
+        <i class="bi bi-arrow-up"></i>
+    </button>
+
     <div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-lLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -79,6 +83,17 @@
 
         const tx = document.getElementById("paste-area");
         tx.addEventListener("input", OnInput, false);
+
+        //Get the button
+        let back_to_top = document.getElementById("btn-back-to-top");
+
+        // When the user clicks on the button, scroll to the top of the document
+        back_to_top.addEventListener("click", backToTop);
+
+        function backToTop() {
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+        }
 
         function OnInput() {
         this.style.height = "auto";
