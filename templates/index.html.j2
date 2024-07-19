@@ -41,7 +41,12 @@
 
             <div class="form-group mt-4 col-sm-3">
                 <button id="submit-paste" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important">Submit New Paste</button>
+                <button id="loading-button" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important;display:none;" type="button" disabled>
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span role="status">Encrypting Paste...</span>
+                </button>
             </div>
+            
         </div>
 
     </div>
@@ -93,6 +98,8 @@
         .getElementById("submit-paste")
         .addEventListener("click", async function () {
             const text = document.getElementById("paste-area").value;
+            const loading_button = document.getElementById("loading-button");
+            const submit_button = document.getElementById("submit-paste");
             
             if (text === "") {
                 return;
@@ -102,6 +109,9 @@
                 alert("Paste is too large. Please keep it under 1MB.");
                 return;
             }
+
+            loading_button.style.display = "block";
+            submit_button.style.display = "none";
 
             const expire = document
             .getElementById("expireDropdown")
@@ -164,6 +174,8 @@
             console.log(data.id);
             let host = decodeHtmlEntity("{{ host }}");
             let url = `${host}/paste/${data.id}#${exportedKey}`;
+            loading_button.style.display = "none";
+            submit_button.style.display = "block";
             openModal(url);
 
             } else {
