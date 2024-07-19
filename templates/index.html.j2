@@ -124,8 +124,6 @@
             const encrypted = await encryptText(text, key, iv);
             const encryptedBase64 = arrayBufferToBase64(encrypted);
 
-            
-
             let timestamp = Date.now();
 
             let expireTime = 0;
@@ -164,7 +162,6 @@
             expires: expireTime,
             max_views: max_views,
             };
-            console.log(byteSize(paste.content));
             const response = await fetch("/api/submit_paste", {
             method: "POST",
             headers: {
