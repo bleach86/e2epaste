@@ -73,7 +73,7 @@
         </div>
     </div>
 
-    <script> 
+    <script>
         let paste_el = document.getElementById("paste-area");
         paste_el.value = "";
         paste_el.focus();
@@ -189,7 +189,7 @@
             if (data.id) {
             console.log(data.id);
             let host = decodeHtmlEntity("{{ host }}");
-            let url = `${host}/paste/${data.id}#${exportedKey}`;
+            let url = `${host}/share/${data.id}#${exportedKey}`;
             loading_button.style.display = "none";
             submit_button.style.display = "block";
             openModal(url);

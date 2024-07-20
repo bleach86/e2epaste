@@ -99,6 +99,15 @@ async fn upload(
     }
 }
 
+#[get("/share/<id>")]
+async fn filter_bots(_browser: Browser, id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
+    let site_stats: paste_db::SiteStats = db.get_site_stats();
+    Template::render(
+        "bot_filter",
+        context! {title: TITLE, paste_id: id.to_string(), host: HOST, site_stats},
+    )
+}
+
 #[get("/paste/<id>")]
 async fn retrieve(_browser: Browser, db: &State<Arc<PasteDB>>, id: &str) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -171,7 +180,7 @@ async fn rocket() -> _ {
     let rocket = rocket::build()
         .manage(db)
         .mount("/public", FileServer::from(relative!("static")))
-        .mount("/", routes![index, upload, retrieve, faq])
+        .mount("/", routes![index, upload, retrieve, faq, filter_bots])
         .attach(Template::fairing());
 
     // Spawn the background task

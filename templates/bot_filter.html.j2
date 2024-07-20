@@ -1,0 +1,11 @@
+{% extends "layout" %}
+
+{% block page %}
+
+
+<script>
+    let hash = window.location.hash;
+    window.location.href = "/paste/{{ paste_id }}" + hash;
+</script>
+
+{% endblock %}
