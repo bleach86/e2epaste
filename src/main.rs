@@ -6,10 +6,6 @@ mod paste_id;
 
 use rocket::fs::{relative, FileServer};
 use rocket::http::uri::Absolute;
-use rocket::http::Status;
-use rocket::request::FromRequest;
-use rocket::request::Outcome;
-use rocket::request::Request;
 use rocket::serde::json::Json;
 use rocket::tokio;
 use rocket::State;
@@ -38,26 +34,6 @@ pub struct IncomingPaste {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IncomingPasteRes {
     pub id: Option<String>,
-}
-
-struct Browser;
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for Browser {
-    type Error = ();
-
-    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        if let Some(agent) = request.headers().get_one("User-Agent") {
-            if agent.contains("Mozilla")
-                || agent.contains("Dalvik")
-                || agent.contains("Roku4640X")
-                || agent.contains("AppleTV")
-            {
-                return Outcome::Success(Browser);
-            }
-        }
-        Outcome::Error((Status::BadRequest, ()))
-    }
 }
 
 #[post("/api/submit_paste", format = "application/json", data = "<raw_paste>")]
@@ -100,7 +76,7 @@ async fn upload(
 }
 
 #[get("/share/<id>")]
-async fn filter_bots(_browser: Browser, id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
+async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "bot_filter",
@@ -109,7 +85,7 @@ async fn filter_bots(_browser: Browser, id: PasteId<'_>, db: &State<Arc<PasteDB>
 }
 
 #[get("/paste/<id>")]
-async fn retrieve(_browser: Browser, db: &State<Arc<PasteDB>>, id: &str) -> Template {
+async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     let mut paste_data: PasteData = match db.get_paste(id.to_string()) {
         Some(paste_data) => paste_data,
