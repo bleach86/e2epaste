@@ -190,7 +190,6 @@
             const data = await response.json();
 
             if (data.id) {
-            console.log(data.id);
             let host = decodeHtmlEntity("{{ host }}");
             let url = `${host}/share/${data.id}#${key_fragments.hashFragment}`;
             loading_button.style.display = "none";
@@ -222,9 +221,18 @@
             const keyArray = key.split('');
             const removedBytes = [];
 
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
             positions.forEach(pos => {
                 removedBytes.push({ position: pos.toString(16).padStart(2, '0'), byte: keyArray[pos] });
-                keyArray[pos] = '';
+
+                const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                let randomByte;
+                do {
+                    randomByte = alphabet[Math.floor(Math.random() * alphabet.length)];
+                } while (randomByte === keyArray[pos]);
+
+                keyArray[pos] = randomByte;
             });
 
             const serverKey = keyArray.join('');
