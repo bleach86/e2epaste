@@ -99,8 +99,8 @@
         }
 
         function OnInput() {
-        this.style.height = "auto";
-        this.style.height = this.scrollHeight + "px";
+        paste_el.style.height = "auto";
+        paste_el.style.height = this.scrollHeight + "px";
         }
 
         document.querySelectorAll(".dropdown-item").forEach((item) => {
@@ -374,6 +374,7 @@
             close_button.style.display = "none";
             copy_button.style.display = "block";
             copied = false;
+            OnInput();
 
         }
 
