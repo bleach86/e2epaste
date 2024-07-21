@@ -68,7 +68,9 @@
             </div>
             <div class="modal-footer">
                 <button id="copy-url-btn" type="button" class="btn btn-secondary" data-toggle="popover" onclick="copyToClipboard();">Copy URL</button>
+                <button id="close-url-btn" style="display:none;" type="button" class="btn btn-secondary" data-toggle="popover" onclick="closeModal();">Close</button>
             </div>
+
             </div>
         </div>
     </div>
@@ -81,8 +83,9 @@
         let max_views_el = document.getElementById("max-views");
         max_views_el.value = "0";
 
-        const tx = document.getElementById("paste-area");
-        tx.addEventListener("input", OnInput, false);
+        let urlModal;
+        let copied = false;
+        paste_el.addEventListener("input", OnInput, false);
 
         //Get the button
         let back_to_top = document.getElementById("btn-back-to-top");
@@ -359,10 +362,28 @@
             var modal = new bootstrap.Modal(document.getElementById('url-modal'));
             document.getElementById("paste-url").value = url;
 
+            urlModal = modal;
+
             modal.show();
         }
 
+        function closeModal() {
+            urlModal.hide();
+            let close_button = document.getElementById("close-url-btn");
+            let copy_button = document.getElementById("copy-url-btn");
+            close_button.style.display = "none";
+            copy_button.style.display = "block";
+            copied = false;
+
+        }
+
         function copyToClipboard() {
+
+            if (copied) {
+                closeModal();
+                return;
+            }
+
             var copyText = document.getElementById("paste-url");
             navigator.clipboard.writeText(copyText.value);
 
@@ -370,7 +391,7 @@
 
             // Create a new Popover instance
             var popover = new bootstrap.Popover(popoverButton, {
-                content: 'Successfully Copied to clipboard!\nReturning to home page...',
+                content: 'Successfully Copied to clipboard!',
                 placement: 'top',
                 trigger: 'manual',
                 customClass: 'bg-success'
@@ -378,12 +399,25 @@
 
             // Show the popover
             popover.show();
+            copied = true;
 
-            // Navigate home after 2 seconds
             setTimeout(function () {
                 popover.hide();
-                window.location.href = "/";
-            }, 2000);
+                paste_el.value = "";
+                max_views_el.value = "0";
+
+                const expire_el = document.getElementById("expireDropdown");
+                expire_el.setAttribute("data-value", "never");
+                expire_el.textContent = "Never";
+
+                paste_el.focus();
+
+                let close_button = document.getElementById("close-url-btn");
+                let copy_button = document.getElementById("copy-url-btn");
+                close_button.style.display = "block";
+                copy_button.style.display = "none";
+            }, 500);
+            
         }
 
 
