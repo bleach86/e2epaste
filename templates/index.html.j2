@@ -249,7 +249,7 @@
                 let randomByte;
                 let alphabetLength = alphabet.length;
                 do {
-                    randomByte = alphabet[getRandomInt(0, alphabetLength)];
+                    randomByte = alphabet[getRandomInt(0, alphabetLength - 1)];
                 } while (randomByte === keyArray[pos]);
 
                 keyArray[pos] = randomByte;
