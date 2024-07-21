@@ -225,8 +225,7 @@
 
             positions.forEach(pos => {
                 removedBytes.push({ position: pos.toString(16).padStart(2, '0'), byte: keyArray[pos] });
-
-                const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                
                 let randomByte;
                 do {
                     randomByte = alphabet[Math.floor(Math.random() * alphabet.length)];
