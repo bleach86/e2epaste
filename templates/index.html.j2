@@ -203,9 +203,29 @@
 
 
         function getRandomInt(min, max) {
+            // Ensure min and max are integers
             min = Math.ceil(min);
             max = Math.floor(max);
-            return Math.floor(Math.random() * (max - min + 1)) + min;
+
+            // Create a typed array to hold the random values
+            const range = max - min + 1;
+            const bytesNeeded = Math.ceil(Math.log2(range) / 8);
+            const maxByteValue = Math.pow(2, bytesNeeded * 8) - 1;
+            
+            if (range > maxByteValue) {
+                throw new Error('Range too large for random number generation');
+            }
+
+            const array = new Uint8Array(bytesNeeded);
+            let randomValue;
+
+            do {
+                // Generate random values and convert to a single integer
+                crypto.getRandomValues(array);
+                randomValue = array.reduce((acc, byte) => (acc << 8) | byte, 0);
+            } while (randomValue > maxByteValue - (maxByteValue % range));
+
+            return min + (randomValue % range);
         }
 
         function fragmentKey(key) {
@@ -225,10 +245,11 @@
 
             positions.forEach(pos => {
                 removedBytes.push({ position: pos.toString(16).padStart(2, '0'), byte: keyArray[pos] });
-                
+
                 let randomByte;
+                let alphabetLength = alphabet.length;
                 do {
-                    randomByte = alphabet[Math.floor(Math.random() * alphabet.length)];
+                    randomByte = alphabet[getRandomInt(0, alphabetLength)];
                 } while (randomByte === keyArray[pos]);
 
                 keyArray[pos] = randomByte;
