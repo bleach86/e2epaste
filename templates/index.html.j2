@@ -244,7 +244,7 @@
             const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
             positions.forEach(pos => {
-                removedBytes.push({ position: pos.toString(16).padStart(2, '0'), byte: keyArray[pos] });
+                removedBytes.push({ position: toUrlSafeBase64Char(pos), byte: keyArray[pos] });
 
                 let randomByte;
                 let alphabetLength = alphabet.length;
@@ -259,6 +259,19 @@
             const hashFragment = removedBytes.map(item => `${item.position}${item.byte}`).join('');
 
             return { serverKey, hashFragment };
+        }
+
+        function toUrlSafeBase64Char(pos) {
+            // URL-safe Base64 characters
+            const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+            // Ensure pos is within the range of 0 to 63
+            if (pos < 0 || pos >= 64) {
+                throw new Error('Position must be between 0 and 63');
+            }
+
+            // Return the corresponding Base64 character
+            return base64Chars.charAt(pos);
         }
 
         function generateIv() {

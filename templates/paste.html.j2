@@ -203,7 +203,11 @@
             const keyArray = Array(totalLength).fill('');
 
             // Parse the hashFragment into fragments
-            const fragments = hashFragment.match(/([0-9a-fA-F]{2})([A-Za-z0-9])/g);
+            const fragments = [];
+
+            for (let i = 0; i < hashFragment.length; i += 2) {
+                fragments.push(hashFragment.slice(i, i + 2));
+                }
 
             if (!fragments) {
                 throw new Error('Invalid hashFragment format');
@@ -211,8 +215,8 @@
 
             // Place the fragments in their respective positions
             fragments.forEach(fragment => {
-                const position = parseInt(fragment.slice(0, 2), 16);
-                const byte = fragment.slice(2);
+                const position = fromUrlSafeBase64Char(fragment[0]);
+                const byte = fragment[1];
 
                 if (position >= 0 && position < totalLength) {
                     keyArray[position] = byte;
@@ -240,6 +244,19 @@
 
             return reconstructedKey;
         }
+
+        function fromUrlSafeBase64Char(char) {
+            const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            // Find the index of the character in the Base64 character set
+            const pos = base64Chars.indexOf(char);
+
+            // Ensure the character is valid
+            if (pos === -1) {
+                throw new Error('Invalid Base64 character');
+            }
+
+            return pos;
+            }
 
         function set_paste_date() {
             let date_el = document.getElementById("paste-date");
