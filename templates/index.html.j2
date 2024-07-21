@@ -171,11 +171,14 @@
 
             const iv_array = Array.from(iv);
 
+            let key_fragments = fragmentKey(exportedKey);
+
             const paste = {
             content: encryptedBase64,
             iv: iv_array,
             expires: expireTime,
             max_views: max_views,
+            key_fragment: key_fragments.serverKey,
             };
             const response = await fetch("/api/submit_paste", {
             method: "POST",
@@ -189,7 +192,7 @@
             if (data.id) {
             console.log(data.id);
             let host = decodeHtmlEntity("{{ host }}");
-            let url = `${host}/share/${data.id}#${exportedKey}`;
+            let url = `${host}/share/${data.id}#${key_fragments.hashFragment}`;
             loading_button.style.display = "none";
             submit_button.style.display = "block";
             openModal(url);
@@ -198,6 +201,37 @@
             alert("Failed to create paste");
             }
         });
+
+
+        function getRandomInt(min, max) {
+            min = Math.ceil(min);
+            max = Math.floor(max);
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function fragmentKey(key) {
+            const keyLength = key.length;
+            const numPositions = getRandomInt(6, 10);
+            const positions = new Set();
+
+            
+            while (positions.size < numPositions) {
+                positions.add(getRandomInt(0, keyLength - 1));
+            }
+
+            const keyArray = key.split('');
+            const removedBytes = [];
+
+            positions.forEach(pos => {
+                removedBytes.push({ position: pos.toString(16).padStart(2, '0'), byte: keyArray[pos] });
+                keyArray[pos] = '';
+            });
+
+            const serverKey = keyArray.join('');
+            const hashFragment = removedBytes.map(item => `${item.position}${item.byte}`).join('');
+
+            return { serverKey, hashFragment };
+        }
 
         function generateIv() {
             return crypto.getRandomValues(new Uint8Array(12));

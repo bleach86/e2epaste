@@ -51,7 +51,8 @@
     <script> 
         var cipher_text = "{{ paste.content }}";
         var iv = {{ paste.iv }};
-        var key = window.location.hash.substr(1);
+        var keyFragment = window.location.hash.substr(1);
+        var serverKey = "{{ paste.key_fragment }}";
 
         const view_area = document.getElementById('view-area');
 
@@ -60,6 +61,7 @@
         }
 
         async function decrypt() {
+            const key = reconstructKey(serverKey, keyFragment);
             let iv_array = new Uint8Array(iv);
             const importedKey = await importCryptoKey(key);
             const encryptedArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(cipher_text));
@@ -194,6 +196,47 @@
                 return interval + " minutes";
             }
             return Math.floor(seconds) + " seconds";
+        }
+
+        function reconstructKey(serverKey, hashFragment) {
+            const totalLength = 58;
+            const keyArray = Array(totalLength).fill('');
+
+            // Parse the hashFragment into fragments
+            const fragments = hashFragment.match(/([0-9a-fA-F]{2})([A-Za-z0-9])/g);
+
+            if (!fragments) {
+                throw new Error('Invalid hashFragment format');
+            }
+
+            // Place the fragments in their respective positions
+            fragments.forEach(fragment => {
+                const position = parseInt(fragment.slice(0, 2), 16);
+                const byte = fragment.slice(2);
+
+                if (position >= 0 && position < totalLength) {
+                    keyArray[position] = byte;
+                } else {
+                    throw new Error('Position out of bounds');
+                }
+            });
+
+            // Fill the remaining empty positions with characters from the server key
+            let serverKeyIndex = 0;
+            for (let i = 0; i < totalLength; i++) {
+                if (keyArray[i] === '') {
+                    if (serverKeyIndex < serverKey.length) {
+                        keyArray[i] = serverKey[serverKeyIndex++];
+                    } else {
+                        throw new Error('Server key is too short to fill the array');
+                    }
+                }
+            }
+
+            // Join the array to form the reconstructed key
+            const reconstructedKey = keyArray.join('');
+
+            return reconstructedKey;
         }
 
         function set_paste_date() {

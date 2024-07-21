@@ -29,6 +29,7 @@ pub struct IncomingPaste {
     pub iv: Vec<u8>,
     pub expires: Option<u64>,
     pub max_views: Option<u64>,
+    pub key_fragment: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -54,6 +55,7 @@ async fn upload(
     let paste_data: PasteData = PasteData {
         content: paste.content,
         iv: paste.iv,
+        key_fragment: paste.key_fragment,
         id: id.clone(),
         timestamp: now.timestamp(),
         expires: paste.expires,

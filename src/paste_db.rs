@@ -11,6 +11,7 @@ use crate::paste_id::PasteId;
 pub struct PasteData<'a> {
     pub content: String,
     pub iv: Vec<u8>,
+    pub key_fragment: String,
     pub id: PasteId<'a>,
     pub timestamp: i64,
     pub expires: Option<u64>,
