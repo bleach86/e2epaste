@@ -496,6 +496,14 @@
                 expire_el.setAttribute("data-value", "never");
                 expire_el.textContent = "Never";
 
+                paste_password.value = "";
+                paste_title.value = "";
+
+                const display_el = document.getElementById("displayDropdown");
+                display_el.setAttribute("data-value", "plaintext");
+                display_el.textContent = "Plaintext";
+
+
                 paste_el.focus();
 
                 let close_button = document.getElementById("close-url-btn");
