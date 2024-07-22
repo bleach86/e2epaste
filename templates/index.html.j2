@@ -16,7 +16,7 @@
             <div class="row">
                 <div class="col-md-3" style="font-size:8pt">
                     <div class="form-group mb-3">
-                        <label class="mb-1" for="paste-title">Title:</label>
+                        <label class="mb-1" for="paste-title">Title (Max 64 Chars):</label>
                         <input type="input" id="paste-title" class="form-control border border-light" style="--bs-border-width:0.5px" value="" placeholder="Untitled">
                     </div>
                     <div class="form-group mb-3">
@@ -239,6 +239,8 @@
             const pw_hash = password === "" ? null : iv_details.hashHexString;
             const title = paste_title.value === "" ? "Untitled" : paste_title.value;
 
+            let truncated_title = title.substring(0, 64);
+
             const paste = {
                 content: encryptedBase64,
                 iv: iv_array,
@@ -246,7 +248,7 @@
                 max_views: max_views,
                 key_fragment: key_fragments.serverKey,
                 password_hash: pw_hash,
-                title,
+                title: truncated_title,
                 syntax: syntax,
             };
             const response = await fetch("/api/submit_paste", {
