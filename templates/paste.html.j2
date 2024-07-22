@@ -6,15 +6,22 @@
     <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
         <div class="row">
             <div class="col-md-12 rounded-2">
-                <h2 class="text-center mt-3">e2ePaste.XYZ</h2>
-                <div class="d-flex justify-content-center align-items-center mt-2 mb-2 paste-info">
+                
+                <div class="d-flex flex-column">
+                    <h2 class="text-center mt-3">e2ePaste.XYZ</h2>
+                    
+                </div>
+
+                <h4 class="text-center mt-3 paste-info">{{ paste.title }}</h4>
+                
+                <div class="d-flex justify-content-center align-items-center mb-2 paste-info">
                     <div class="d-flex align-items-center">
                         <i class="bi bi-calendar-heart me-2"></i> 
                         <span>Paste Date: <span id="paste-date"></span></span>
                     </div>
                     <div class="d-flex align-items-center ms-3">
                         <i class="bi bi-eye me-2"></i> 
-                        <span>Views: {{ paste.views }}</span>
+                        <span id="views">Views: {{ paste.views }}</span>
                     </div>
                     <div class="d-flex align-items-center ms-3">
                         <i class="bi bi-eye-fill me-2"></i> 
@@ -38,7 +45,7 @@
                     </div>
                 </div>
                 <section id="view-section" class="h-100">
-                    <pre class="theme-atom-one-dark"><code id="view-area" class="form-control mt-4 paste-area focus-ring view-area"></code></pre>
+                    <pre class="theme-atom-one-dark"><code id="view-area" class="form-control mt-4 paste-area focus-ring view-area language-{{ paste.syntax }}"></code></pre>
                 </section>
             </div>
         </div>
@@ -47,52 +54,111 @@
         <i class="bi bi-arrow-up"></i>
     </button>
 
+    <div class="modal fade" id="password-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="password-modal-Label" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info">
+                    <h1 class="modal-title fs-5 text-dark" id="password-modal-Label">Password Protected Paste</h1>
+                </div>
+                <div class="modal-body">
+                    <p>Please enter the password in order to view the paste content:</p>
+                    <div class="input-group mb-3">
+                          <button class="btn btn-outline-secondary" type="button" id="show-pass-button"><i id="show-pass-icon" class="bi bi-eye"></i></button>
+                        <input onkeydown="if(event.key === 'Enter') { decryptWithPassword(); }" type="password" class="form-control" id="password-input" placeholder="Password">
+                    </div>
+
+                    <div id="password-error" class="text-danger mt-2 bg-danger text-dark p-2 rounded-1" style="display: none;">Incorrect password. Please try again.</div>
+                </div>
+                <div class="modal-footer">
+                    <button id="submit-password-btn" type="button" class="btn btn-outline-light" onclick="decryptWithPassword();">Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script> 
         var cipher_text = "{{ paste.content }}";
         var iv = {{ paste.iv }};
         var keyFragment = window.location.hash.substr(1);
         var serverKey = "{{ paste.key_fragment }}";
+        var pw_hash = "{{ paste.password_hash }}";
+        var title = "{{ paste.title }}";
+
+        var password = "";
 
         const view_area = document.getElementById('view-area');
+
+        var passwordModal;
+
+        function openPasswordModal() {
+            let modal = new bootstrap.Modal(document.getElementById('password-modal'));
+            passwordModal = modal;
+            const password_input = document.getElementById('password-input');
+            passwordModal.show();
+
+            setTimeout(() => {
+                password_input.focus();
+                let show_pass_button = document.getElementById('show-pass-button');
+                show_pass_button.addEventListener('click', showPassword);
+            }, 500);
+        }
+
+        function closePasswordModal() {
+            passwordModal.hide();
+        }
 
         function copyToClipboard() {
             navigator.clipboard.writeText(view_area.textContent);
         }
 
+        async function decryptWithPassword() {
+            const password_input = document.getElementById('password-input').value.trim();
+            const isValid = await checkPassword(password_input);
+
+            if (isValid) {
+                closePasswordModal();
+                password = password_input;
+                decrypt();
+                setTimeout(async () => {
+                    hljs.highlightAll();
+                    await markAsViewed();
+                }, 500);
+
+                
+            } else {
+                let passError = document.getElementById('password-error');
+
+                passError.style.display = 'block';
+
+                setTimeout(() => {
+                    passError.style.display = 'none';
+                }, 3000);
+
+            }
+        }
+
         async function decrypt() {
             const key = reconstructKey(serverKey, keyFragment);
-            let iv_array = new Uint8Array(iv);
+            const salt = new Uint8Array(iv);
+
+            let iv_array = await generateIv(password, salt).then((iv) => {
+                return iv.iv;
+            });
+
             const importedKey = await importCryptoKey(key);
             const encryptedArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(cipher_text));
             const decrypted = await decryptText(encryptedArrayBuffer, importedKey, iv_array);
 
             view_area.textContent = decrypted;
+            view_area.style.height = "100%";
         }
 
         let back_to_top = document.getElementById("btn-back-to-top");
-
-        // When the user clicks on the button, scroll to the top of the document
-        back_to_top.addEventListener("click", backToTop);
 
         function backToTop() {
             document.body.scrollTop = 0;
             document.documentElement.scrollTop = 0;
         }
-        
-        
-        document.addEventListener('keydown', function(event) {
-            if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
-                event.preventDefault();
-                select_all_handler();
-            }
-        });
-
-        // Add event listener for contextmenu
-        view_area.addEventListener('onselectstart', function(event) {
-            event.preventDefault();
-            select_all_handler();
-        });
 
         function select_all_handler() {
             const selection = window.getSelection();
@@ -107,6 +173,21 @@
             const txt = document.createElement("textarea");
             txt.innerHTML = str;
             return txt.value;
+        }
+
+        function showPassword() {
+            let password_input = document.getElementById('password-input');
+            let show_pass_icon = document.getElementById('show-pass-icon');
+
+            if (password_input.type === "password") {
+                password_input.type = "text";
+                show_pass_icon.classList.remove("bi-eye");
+                show_pass_icon.classList.add("bi-eye-slash");
+            } else {
+                password_input.type = "password";
+                show_pass_icon.classList.remove("bi-eye-slash");
+                show_pass_icon.classList.add("bi-eye");
+            }
         }
 
         async function importCryptoKey(urlSafeBase64Key) {
@@ -276,11 +357,90 @@
             max_views_el.innerText = max_views;
         }
 
-        decrypt();
-        hljs.highlightAll();
-        set_expire_date();
-        set_paste_date();
-        set_max_views();
+        async function generateIv(text, salt) {
+            // Convert text to ArrayBuffer
+            const encoder = new TextEncoder();
+            const textBuffer = encoder.encode(text);
+
+            // Concatenate text and salt buffers
+            const combinedBuffer = new Uint8Array(textBuffer.length + salt.length);
+            combinedBuffer.set(textBuffer);
+            combinedBuffer.set(salt, textBuffer.length);
+
+            // Hash the concatenated buffer using SHA-256
+            const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBuffer);
+
+            // Convert hash buffer to hex string
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
+
+            // Return the first 12 bytes of the hash as the IV and the hash as hex string
+            return { iv: new Uint8Array(hashBuffer).slice(0, 12), hashHexString };
+            }
+
+        
+        async function checkPassword(password) {
+            const encoder = new TextEncoder();
+            const passwordBuffer = encoder.encode(password);
+            const salt = new Uint8Array(iv);
+            const { _, hashHexString } = await generateIv(password, salt);
+            return hashHexString === pw_hash;
+        }
+
+        async function markAsViewed() {
+            const response = await fetch('/api/advance-views/{{ paste.id }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                let paste_views = document.getElementById('views');
+                let total_views = document.getElementById('total-views');
+
+                paste_views.innerText = "Views: " + data.views;
+                total_views.innerText = data.total_views;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            set_expire_date();
+            set_paste_date();
+            set_max_views();
+            if (pw_hash !== "none") {
+                openPasswordModal();
+            } else {
+                decrypt();
+                setTimeout(async () => {
+                    hljs.highlightAll();
+                    await markAsViewed();
+                }, 500);
+
+                
+ 
+            }
+
+
+            document.addEventListener('keydown', function(event) {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
+                    event.preventDefault();
+                    select_all_handler();
+                }
+            });
+
+            // Add event listener for contextmenu
+            view_area.addEventListener('onselectstart', function(event) {
+                event.preventDefault();
+                select_all_handler();
+            });
+
+            // When the user clicks on the button, scroll to the top of the document
+            back_to_top.addEventListener("click", backToTop);
+        })
 
     </script>
 

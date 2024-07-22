@@ -17,6 +17,9 @@ pub struct PasteData<'a> {
     pub expires: Option<u64>,
     pub views: u64,
     pub max_views: Option<u64>,
+    pub password_hash: Option<String>,
+    pub title: String,
+    pub syntax: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

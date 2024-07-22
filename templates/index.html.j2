@@ -12,50 +12,81 @@
             </div>
         </div>
 
-        <div class="mt-4 pb-3 row  display-flex flex-column" style="font-size:8pt">
-            
-            <div class="form-group col-sm-3">
-                <label class="mb-1" for="expireDropdown">Expiration:</label>
-                <div class="dropdown">
-                    <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="never">
-                        Never
-                    </button>
+        <div class="container mt-4 pb-3">
+            <div class="row">
+                <div class="col-md-3" style="font-size:8pt">
+                    <div class="form-group mb-3">
+                        <label class="mb-1" for="paste-title">Title:</label>
+                        <input type="input" id="paste-title" class="form-control border border-light" style="--bs-border-width:0.5px" value="" placeholder="Untitled">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="mb-1" for="max-views">Max Views (0 for unlimited):</label>
+                        <input type="number" min="0" max="999999999999" id="max-views" class="form-control border border-light" style="--bs-border-width:0.5px" value="0">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="mb-1" for="displayDropdown">Display Options:</label>
+                        <div class="dropdown">
+                            <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="displayDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="plaintext">
+                                Plaintext
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="displayDropdown">
+                                <li><a class="dropdown-item display-dropdown" href="#" data-value="plaintext">Plaintext</a></li>
+                                <li class="text-center mt-2 text-secondary" style="font-size:6pt;">Syntax Highlighting<hr class="dropdown-divider"></li>
+                                
+                                {% for language in languages %}
+                                    <li><a class="dropdown-item display-dropdown" href="#" data-value="{{ language[0] }}">{{ language[1] }}</a></li>
+                                {% endfor %}
+                                
+                            </ul>
+                        </div>
+                    </div>
+                </div>
 
-                    <ul class="dropdown-menu" aria-labelledby="expireDropdown">
-                        <li><a class="dropdown-item" href="#" data-value="never">Never</a></li>
-                        <li><a class="dropdown-item" href="#" data-value="1hour">1 Hour</a></li>
-                        <li><a class="dropdown-item" href="#" data-value="1day">1 Day</a></li>
-                        <li><a class="dropdown-item" href="#" data-value="1week">1 Week</a></li>
-                        <li><a class="dropdown-item" href="#" data-value="2weeks">2 Weeks</a></li>
-                        <li><a class="dropdown-item" href="#" data-value="1month">1 Month</a></li>
-                        <li><a class="dropdown-item" href="#" data-value="6months">6 Months</a></li>
-                        <li><a class="dropdown-item" href="#" data-value="1year">1 Year</a></li>
-                    </ul>
+                <div class="col-md-3" style="font-size:8pt">
+                    <div class="form-group mb-3">
+                        <label class="mb-1" for="expireDropdown">Expiration:</label>
+                        <div class="dropdown">
+                            <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="never">
+                                Never
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="expireDropdown">
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="never">Never</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1hour">1 Hour</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1day">1 Day</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1week">1 Week</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="2weeks">2 Weeks</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1month">1 Month</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="6months">6 Months</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1year">1 Year</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="mb-1" for="paste-password">Password:</label>
+                        <input type="input" id="paste-password" class="form-control border border-light" style="--bs-border-width:0.5px" value="" placeholder="Optional">
+                    </div>
+                    
                 </div>
             </div>
-
-            <div class="form-group mt-3 col-sm-3">
-                <label class="mb-1"  for="max-views">Max Views (0 for unlimited):</label>
-                <input type="number" min="0" max="999999999999" id="max-views" class="form-control border border-light" style="--bs-border-width:0.5px" value="0">
-            </div>
-
-            <div class="form-group mt-4 col-sm-3">
-                <button id="submit-paste" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important">Submit New Paste</button>
+            <div class="form-group mt-4 col-md-2">
+                <button id="submit-paste" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important">Submit Paste</button>
                 <button id="loading-button" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important;display:none;" type="button" disabled>
                     <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
                     <span role="status">Encrypting Paste...</span>
                 </button>
             </div>
-            
         </div>
+
+    
+
 
     </div>
 
-    <button  type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
+    <button  type="button" class="btn btn-secondary btn-floating btn-lg z-1" id="btn-back-to-top">
         <i class="bi bi-arrow-up"></i>
     </button>
 
-    <div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-lLabel" aria-hidden="true">
+    <div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-l-Label" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
             <div class="modal-header bg-success">
@@ -87,6 +118,17 @@
         let copied = false;
         paste_el.addEventListener("input", OnInput, false);
 
+        // URL-safe Base64 characters
+        const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+        const paste_title = document.getElementById("paste-title");
+        paste_title.value = "";
+
+        const paste_password = document.getElementById("paste-password");
+        paste_password.value = "";
+
+
+
         //Get the button
         let back_to_top = document.getElementById("btn-back-to-top");
 
@@ -103,14 +145,23 @@
         paste_el.style.height = this.scrollHeight + "px";
         }
 
-        document.querySelectorAll(".dropdown-item").forEach((item) => {
-        item.addEventListener("click", function (event) {
-            event.preventDefault();  // Prevent the default action
-            let button = document.getElementById("expireDropdown");
-            button.textContent = this.textContent;
-            button.setAttribute("data-value", this.getAttribute("data-value"));
+        document.querySelectorAll(".dropdown-item.expire-dropdown").forEach((item) => {
+            item.addEventListener("click", function (event) {
+                event.preventDefault();  // Prevent the default action
+                let button = document.getElementById("expireDropdown");
+                button.textContent = this.textContent;
+                button.setAttribute("data-value", this.getAttribute("data-value"));
+            });
         });
-    });
+
+        document.querySelectorAll(".dropdown-item.display-dropdown").forEach((item) => {
+            item.addEventListener("click", function (event) {
+                event.preventDefault();  // Prevent the default action
+                let button = document.getElementById("displayDropdown");
+                button.textContent = this.textContent;
+                button.setAttribute("data-value", this.getAttribute("data-value"));
+            });
+        });
 
         document
         .getElementById("submit-paste")
@@ -133,11 +184,20 @@
             submit_button.style.display = "none";
 
             const expire = document
-            .getElementById("expireDropdown")
-            .getAttribute("data-value");
+                .getElementById("expireDropdown")
+                .getAttribute("data-value");
+
+            const syntax = document
+                .getElementById("displayDropdown")
+                .getAttribute("data-value");
+            
+            const password = document.getElementById("paste-password").value.trim();
+            const iv_details = await generateIv(password);
+            
+            
             let max_views = document.getElementById("max-views").value;
             const key = await generateKey();
-            const iv = generateIv();
+            const iv = iv_details.iv;
             const exportedKey = await exportCryptoKey(key);
             const encrypted = await encryptText(text, key, iv);
             const encryptedBase64 = arrayBufferToBase64(encrypted);
@@ -172,16 +232,22 @@
                 }
             }
 
-            const iv_array = Array.from(iv);
+            const iv_array = Array.from(iv_details.salt);
 
             let key_fragments = fragmentKey(exportedKey);
 
+            const pw_hash = password === "" ? null : iv_details.hashHexString;
+            const title = paste_title.value === "" ? "Untitled" : paste_title.value;
+
             const paste = {
-            content: encryptedBase64,
-            iv: iv_array,
-            expires: expireTime,
-            max_views: max_views,
-            key_fragment: key_fragments.serverKey,
+                content: encryptedBase64,
+                iv: iv_array,
+                expires: expireTime,
+                max_views: max_views,
+                key_fragment: key_fragments.serverKey,
+                password_hash: pw_hash,
+                title,
+                syntax: syntax,
             };
             const response = await fetch("/api/submit_paste", {
             method: "POST",
@@ -244,15 +310,13 @@
             const keyArray = key.split('');
             const removedBytes = [];
 
-            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
             positions.forEach(pos => {
                 removedBytes.push({ position: toUrlSafeBase64Char(pos), byte: keyArray[pos] });
 
                 let randomByte;
-                let alphabetLength = alphabet.length;
                 do {
-                    randomByte = alphabet[getRandomInt(0, alphabetLength - 1)];
+                    randomByte = base64Chars[getRandomInt(0, base64Chars.length - 1)];
                 } while (randomByte === keyArray[pos]);
 
                 keyArray[pos] = randomByte;
@@ -265,9 +329,6 @@
         }
 
         function toUrlSafeBase64Char(pos) {
-            // URL-safe Base64 characters
-            const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
             // Ensure pos is within the range of 0 to 63
             if (pos < 0 || pos >= 64) {
                 throw new Error('Position must be between 0 and 63');
@@ -277,9 +338,7 @@
             return base64Chars.charAt(pos);
         }
 
-        function generateIv() {
-            return crypto.getRandomValues(new Uint8Array(12));
-            }
+        
 
         function decodeHtmlEntity(str) {
             // Create a temporary DOM element to decode the entities
@@ -356,6 +415,30 @@
                 true, // extractable
                 ["encrypt", "decrypt"]
             );
+            }
+        
+        async function generateIv(text) {
+            // Generate a random 12-byte salt
+            const salt = crypto.getRandomValues(new Uint8Array(12));
+
+            // Convert text to ArrayBuffer
+            const encoder = new TextEncoder();
+            const textBuffer = encoder.encode(text);
+
+            // Concatenate text and salt buffers
+            const combinedBuffer = new Uint8Array(textBuffer.length + salt.length);
+            combinedBuffer.set(textBuffer);
+            combinedBuffer.set(salt, textBuffer.length);
+
+            // Hash the concatenated buffer using SHA-256
+            const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBuffer);
+
+            // Convert hash buffer to hex string
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
+
+            // Return the first 12 bytes of the hash as the IV, the salt, and the hash as hex string
+            return { iv: new Uint8Array(hashBuffer).slice(0, 12), salt, hashHexString };
             }
 
         function openModal(url) {

@@ -30,11 +30,21 @@ pub struct IncomingPaste {
     pub expires: Option<u64>,
     pub max_views: Option<u64>,
     pub key_fragment: String,
+    pub password_hash: Option<String>,
+    pub title: String,
+    pub syntax: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IncomingPasteRes {
     pub id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AdvanceViewsRes {
+    pub error: Option<String>,
+    pub views: Option<u64>,
+    pub total_views: Option<u64>,
 }
 
 #[post("/api/submit_paste", format = "application/json", data = "<raw_paste>")]
@@ -61,6 +71,9 @@ async fn upload(
         expires: paste.expires,
         views: 0,
         max_views: paste.max_views,
+        password_hash: paste.password_hash,
+        title: paste.title,
+        syntax: paste.syntax,
     };
 
     match db.set_paste(&paste_data) {
@@ -77,6 +90,48 @@ async fn upload(
     }
 }
 
+#[post("/api/advance-views/<id>")]
+async fn advance_views(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Json<AdvanceViewsRes> {
+    let mut paste_data: PasteData = match db.get_paste(id.to_string()) {
+        Some(paste_data) => paste_data,
+        None => {
+            return Json(AdvanceViewsRes {
+                error: Some("Paste not found".to_string()),
+                views: None,
+                total_views: None,
+            })
+        }
+    };
+
+    paste_data.views += 1;
+    let mut save_paste = true;
+
+    if let Some(max_views) = paste_data.max_views {
+        if paste_data.views >= max_views {
+            println!("Deleting paste with ID: {:?}", id);
+            db.delete_paste(id.to_string()).unwrap();
+            match paste_data.expires {
+                Some(expires) => db.delete_expired_index(expires).unwrap(),
+                None => {}
+            }
+            save_paste = false;
+        }
+    }
+
+    db.increment_views().unwrap();
+    if save_paste {
+        db.set_paste(&paste_data).unwrap();
+    }
+
+    let site_stats: paste_db::SiteStats = db.get_site_stats();
+
+    Json(AdvanceViewsRes {
+        error: None,
+        views: Some(paste_data.views),
+        total_views: Some(site_stats.views),
+    })
+}
+
 #[get("/share/<id>")]
 async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -89,23 +144,22 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
 #[get("/paste/<id>")]
 async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
-    let mut paste_data: PasteData = match db.get_paste(id.to_string()) {
+    let paste_data: PasteData = match db.get_paste(id.to_string()) {
         Some(paste_data) => paste_data,
         None => return Template::render("paste_not_found", context! {title: TITLE, site_stats}),
     };
 
-    paste_data.views += 1;
-    let mut save_paste = true;
+    let views: u64 = paste_data.views + 1;
 
     if let Some(max_views) = paste_data.max_views {
-        if paste_data.views >= max_views {
+        if views > max_views {
             println!("Deleting paste with ID: {}", id);
             db.delete_paste(id.to_string()).unwrap();
             match paste_data.expires {
                 Some(expires) => db.delete_expired_index(expires).unwrap(),
                 None => {}
             }
-            save_paste = false;
+            return Template::render("paste_not_found", context! {title: TITLE, site_stats});
         }
     }
 
@@ -117,11 +171,6 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
             db.delete_expired_index(expires).unwrap();
             return Template::render("paste_not_found", context! {title: TITLE, site_stats});
         }
-    }
-
-    db.increment_views().unwrap();
-    if save_paste {
-        db.set_paste(&paste_data).unwrap();
     }
 
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -146,7 +195,48 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
 #[get("/")]
 fn index(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
-    Template::render("index", context! {title: TITLE, site_stats, host: HOST})
+    let languages: Vec<(&str, &str)> = vec![
+        ("bash", "Bash"),
+        ("c", "C"),
+        ("cpp", "C++"),
+        ("csharp", "C#"),
+        ("css", "CSS"),
+        ("diff", "Diff"),
+        ("go", "Go"),
+        ("graphql", "GraphQL"),
+        ("ini", "INI"),
+        ("java", "Java"),
+        ("javascript", "JavaScript"),
+        ("json", "JSON"),
+        ("kotlin", "Kotlin"),
+        ("less", "Less"),
+        ("lua", "Lua"),
+        ("makefile", "Makefile"),
+        ("markdown", "Markdown"),
+        ("objectivec", "Objective-C"),
+        ("perl", "Perl"),
+        ("php", "PHP"),
+        ("php-template", "PHP Template"),
+        ("plaintext", "Plaintext"),
+        ("python", "Python"),
+        ("python-repl", "Python REPL"),
+        ("r", "R"),
+        ("ruby", "Ruby"),
+        ("rust", "Rust"),
+        ("scss", "SCSS"),
+        ("shell", "Shell"),
+        ("sql", "SQL"),
+        ("swift", "Swift"),
+        ("typescript", "TypeScript"),
+        ("vbnet", "VB.NET"),
+        ("wasm", "Wasm"),
+        ("xml", "XML"),
+        ("yaml", "YAML"),
+    ];
+    Template::render(
+        "index",
+        context! {title: TITLE, site_stats, host: HOST, languages},
+    )
 }
 
 #[launch]
@@ -158,7 +248,10 @@ async fn rocket() -> _ {
     let rocket = rocket::build()
         .manage(db)
         .mount("/public", FileServer::from(relative!("static")))
-        .mount("/", routes![index, upload, retrieve, faq, filter_bots])
+        .mount(
+            "/",
+            routes![index, upload, retrieve, faq, filter_bots, advance_views],
+        )
         .attach(Template::fairing());
 
     // Spawn the background task
