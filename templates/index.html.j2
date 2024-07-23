@@ -46,13 +46,14 @@
                     <div class="form-group mb-3">
                         <label class="mb-1" for="expireDropdown">Expiration:</label>
                         <div class="dropdown">
-                            <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="never">
-                                Never
+                            <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="3days">
+                                3 Days
                             </button>
                             <ul class="dropdown-menu" aria-labelledby="expireDropdown">
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="never">Never</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="10min">10 Minutes</a></li>
                                 <li><a class="dropdown-item expire-dropdown" href="#" data-value="1hour">1 Hour</a></li>
                                 <li><a class="dropdown-item expire-dropdown" href="#" data-value="1day">1 Day</a></li>
+                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="3days">3 Days</a></li>
                                 <li><a class="dropdown-item expire-dropdown" href="#" data-value="1week">1 Week</a></li>
                                 <li><a class="dropdown-item expire-dropdown" href="#" data-value="2weeks">2 Weeks</a></li>
                                 <li><a class="dropdown-item expire-dropdown" href="#" data-value="1month">1 Month</a></li>
@@ -207,10 +208,14 @@
             let timestamp = Date.now();
 
             let expireTime = 0;
-            if (expire === "1hour") {
+            if (expire === "10min") {
+                expireTime = 600 * 1000 + timestamp;
+            } else if (expire === "1hour") {
                 expireTime = 3600 * 1000 + timestamp;
             } else if (expire === "1day") {
                 expireTime = 86400 * 1000 + timestamp;
+            } else if (expire === "3days") {
+                expireTime = 259200 * 1000 + timestamp;
             } else if (expire === "1week") {
                 expireTime = 604800 * 1000 + timestamp;
             } else if (expire === "2weeks") {
@@ -222,7 +227,7 @@
             } else if (expire === "1year") {
                 expireTime = 31536000 * 1000 + timestamp;
             } else {
-                expireTime = null;
+                expireTime = 31536000 * 1000 + timestamp;
             }
 
             if (max_views === "" || max_views === "0" || max_views < 0) {
@@ -497,8 +502,8 @@
                 max_views_el.value = "0";
 
                 const expire_el = document.getElementById("expireDropdown");
-                expire_el.setAttribute("data-value", "never");
-                expire_el.textContent = "Never";
+                expire_el.setAttribute("data-value", "3days");
+                expire_el.textContent = "3 Days";
 
                 paste_password.value = "";
                 paste_title.value = "";

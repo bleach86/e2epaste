@@ -288,7 +288,7 @@
 
             for (let i = 0; i < hashFragment.length; i += 2) {
                 fragments.push(hashFragment.slice(i, i + 2));
-                }
+            }
 
             if (!fragments) {
                 throw new Error('Invalid hashFragment format');
@@ -337,7 +337,7 @@
             }
 
             return pos;
-            }
+        }
 
         function set_paste_date() {
             let date_el = document.getElementById("paste-date");

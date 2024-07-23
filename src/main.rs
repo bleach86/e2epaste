@@ -62,13 +62,21 @@ async fn upload(
     };
     let now: DateTime<Utc> = Utc::now();
 
+    let expires = match paste.expires {
+        Some(expires) => Some(expires),
+        None => Some(
+            now.timestamp_millis() as u64
+                + (Duration::from_secs(60 * 60 * 24 * 365).as_millis() as u64),
+        ),
+    };
+
     let paste_data: PasteData = PasteData {
         content: paste.content,
         iv: paste.iv,
         key_fragment: paste.key_fragment,
         id: id.clone(),
         timestamp: now.timestamp(),
-        expires: paste.expires,
+        expires,
         views: 0,
         max_views: paste.max_views,
         password_hash: paste.password_hash,
