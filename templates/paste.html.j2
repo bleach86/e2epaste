@@ -251,6 +251,48 @@
             const difference = timestamp - now;
 
             if (difference <= 0) {
+                return "Never";
+            }
+
+            const seconds = Math.floor(difference / 1000);
+
+            // Define the intervals in seconds
+            const intervals = [
+                { unit: "year", seconds: 31536000 },
+                { unit: "month", seconds: 2592000 },
+                { unit: "day", seconds: 86400 },
+                { unit: "hour", seconds: 3600 },
+                { unit: "minute", seconds: 60 },
+                { unit: "second", seconds: 1 },
+            ];
+
+            for (let i = 0; i < intervals.length; i++) {
+                const interval = intervals[i];
+                const count = Math.floor(seconds / interval.seconds);
+                const remainder = seconds % interval.seconds;
+
+                if (count >= 1) {
+                    if (i < intervals.length - 1) {
+                        // Check if we need to round up to the next interval
+                        const nextInterval = intervals[i + 1];
+                        if (remainder >= nextInterval.seconds / 2) {
+                            return (count + 1) + " " + interval.unit + ((count + 1) > 1 ? "s" : "");
+                        }
+                    }
+                    return count + " " + interval.unit + (count > 1 ? "s" : "");
+                }
+            }
+
+            // Fallback in case everything else fails
+            return Math.ceil(seconds) + " seconds";
+        }
+
+
+        {# function time_until(timestamp) {
+            const now = new Date();
+            const difference = timestamp - now;
+
+            if (difference <= 0) {
                 return " Never";
             }
 
@@ -277,7 +319,7 @@
                 return interval + " minutes";
             }
             return Math.floor(seconds) + " seconds";
-        }
+        } #}
 
         function reconstructKey(serverKey, hashFragment) {
             const totalLength = 58;
