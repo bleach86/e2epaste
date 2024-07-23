@@ -4,8 +4,12 @@ extern crate rocket;
 mod paste_db;
 mod paste_id;
 
+use rocket::fairing::Fairing;
 use rocket::fs::{relative, FileServer};
 use rocket::http::uri::Absolute;
+use rocket::http::Header;
+use rocket::request::Request;
+use rocket::response::Response;
 use rocket::serde::json::Json;
 use rocket::tokio;
 use rocket::State;
@@ -45,6 +49,24 @@ pub struct AdvanceViewsRes {
     pub error: Option<String>,
     pub views: Option<u64>,
     pub total_views: Option<u64>,
+}
+
+struct CacheControlFairing;
+
+#[rocket::async_trait]
+impl Fairing for CacheControlFairing {
+    fn info(&self) -> rocket::fairing::Info {
+        rocket::fairing::Info {
+            name: "Cache Control Fairing",
+            kind: rocket::fairing::Kind::Response,
+        }
+    }
+
+    async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
+        if request.uri().path().starts_with("/public/") {
+            response.set_header(Header::new("Cache-Control", "public, max-age=3600"));
+        }
+    }
 }
 
 #[post("/api/submit_paste", format = "application/json", data = "<raw_paste>")]
@@ -260,7 +282,8 @@ async fn rocket() -> _ {
             "/",
             routes![index, upload, retrieve, faq, filter_bots, advance_views],
         )
-        .attach(Template::fairing());
+        .attach(Template::fairing())
+        .attach(CacheControlFairing);
 
     // Spawn the background task
     tokio::spawn(async move {
