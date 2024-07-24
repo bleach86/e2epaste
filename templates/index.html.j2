@@ -147,7 +147,7 @@
             item.addEventListener("click", function (event) {
                 event.preventDefault();  // Prevent the default action
                 let button = document.getElementById("expireDropdown");
-                button.textContent = this.textContent;
+                button.innerText = this.innerText;
                 button.setAttribute("data-value", this.getAttribute("data-value"));
             });
         });
@@ -156,7 +156,7 @@
             item.addEventListener("click", function (event) {
                 event.preventDefault();  // Prevent the default action
                 let button = document.getElementById("displayDropdown");
-                button.textContent = this.textContent;
+                button.innerText = this.innerText;
                 button.setAttribute("data-value", this.getAttribute("data-value"));
             });
         });
@@ -463,7 +463,7 @@
             copied = false;
             OnInput();
 
-            total_pastes.textContent = parseInt(total_pastes.textContent) + 1;
+            total_pastes.innerText = parseInt(total_pastes.innerText) + 1;
 
         }
 
@@ -498,14 +498,14 @@
 
                 const expire_el = document.getElementById("expireDropdown");
                 expire_el.setAttribute("data-value", "3days");
-                expire_el.textContent = "3 Days";
+                expire_el.innerText = "3 Days";
 
                 paste_password.value = "";
                 paste_title.value = "";
 
                 const display_el = document.getElementById("displayDropdown");
                 display_el.setAttribute("data-value", "plaintext");
-                display_el.textContent = "Plaintext";
+                display_el.innerText = "Plaintext";
 
 
                 paste_el.focus();
