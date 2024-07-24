@@ -5,7 +5,7 @@
     <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
         <div class="row">
             <div class="col-md-12 rounded-2">
-                <h2 class="text-center mt-3">e2ePaste.XYZ</h2>
+                <h2 class="text-center mt-3">{{ title }}</h2>
                 <section id="hello" class="h-100">
                     <textarea placeholder="Paste here..." id="paste-area" class="form-control mt-4 paste-area focus-ring"></textarea>
                 </section>
@@ -77,10 +77,6 @@
                 </button>
             </div>
         </div>
-
-    
-
-
     </div>
 
     <button  type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
@@ -129,7 +125,6 @@
 
         const paste_password = document.getElementById("paste-password");
         paste_password.value = "";
-
 
 
         //Get the button

@@ -24,7 +24,7 @@ use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
 
 const HOST: Absolute<'static> = uri!("https://e2epaste.xyz");
-const TITLE: &str = "e2ePaste";
+const TITLE: &str = "e2ePaste.XYZ";
 const ID_LENGTH: usize = 8;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -167,16 +167,23 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "bot_filter",
-        context! {title: TITLE, paste_id: id.to_string(), host: HOST, site_stats},
+        context! {title: TITLE, paste_id: id.to_string(), host: HOST, site_stats, year: Utc::now().year()},
     )
 }
 
 #[get("/paste/<id>")]
 async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
+    let now: DateTime<Utc> = chrono::Utc::now();
+
     let paste_data: PasteData = match db.get_paste(id.to_string()) {
         Some(paste_data) => paste_data,
-        None => return Template::render("paste_not_found", context! {title: TITLE, site_stats}),
+        None => {
+            return Template::render(
+                "paste_not_found",
+                context! {title: TITLE, site_stats, year: now.year()},
+            )
+        }
     };
 
     let views: u64 = paste_data.views + 1;
@@ -189,17 +196,23 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
                 Some(expires) => db.delete_expired_index(expires).unwrap(),
                 None => {}
             }
-            return Template::render("paste_not_found", context! {title: TITLE, site_stats});
+            return Template::render(
+                "paste_not_found",
+                context! {title: TITLE, site_stats, year: now.year()},
+            );
         }
     }
 
     if let Some(expires) = paste_data.expires {
-        let now: u64 = chrono::Utc::now().timestamp_millis() as u64;
-        if now >= expires {
+        let now_millis: u64 = now.timestamp_millis() as u64;
+        if now_millis as u64 >= expires {
             println!("Deleting paste with ID: {}", id);
             db.delete_paste(id.to_string()).unwrap();
             db.delete_expired_index(expires).unwrap();
-            return Template::render("paste_not_found", context! {title: TITLE, site_stats});
+            return Template::render(
+                "paste_not_found",
+                context! {title: TITLE, site_stats, year: now.year()},
+            );
         }
     }
 
@@ -212,6 +225,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
             paste: paste_data,
             host: HOST,
             site_stats,
+            year: now.year(),
         },
     )
 }
@@ -219,7 +233,10 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
 #[get("/faq")]
 fn faq(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
-    Template::render("faq", context! {title: TITLE, site_stats, host: HOST})
+    Template::render(
+        "faq",
+        context! {title: TITLE, site_stats, host: HOST, year: Utc::now().year()},
+    )
 }
 
 #[get("/")]
@@ -265,7 +282,7 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
     ];
     Template::render(
         "index",
-        context! {title: TITLE, site_stats, host: HOST, languages},
+        context! {title: TITLE, site_stats, host: HOST, languages, year: Utc::now().year()},
     )
 }
 
