@@ -218,6 +218,8 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
 
     let site_stats: paste_db::SiteStats = db.get_site_stats();
 
+    let formatted_lang = get_formatted_lang(&paste_data.syntax);
+
     Template::render(
         "paste",
         context! {
@@ -226,6 +228,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
             host: HOST,
             site_stats,
             year: now.year(),
+            formatted_lang,
         },
     )
 }
@@ -242,7 +245,25 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
 #[get("/")]
 fn index(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
-    let languages: Vec<(&str, &str)> = vec![
+    let languages: Vec<(&str, &str)> = get_languages();
+    Template::render(
+        "index",
+        context! {title: TITLE, site_stats, host: HOST, languages, year: Utc::now().year()},
+    )
+}
+
+fn get_formatted_lang(lang: &str) -> String {
+    let languages: Vec<(&str, &str)> = get_languages();
+    for (key, value) in languages {
+        if key == lang {
+            return value.to_string();
+        }
+    }
+    "Plaintext".to_string()
+}
+
+fn get_languages() -> Vec<(&'static str, &'static str)> {
+    vec![
         ("bash", "Bash"),
         ("c", "C"),
         ("cpp", "C++"),
@@ -279,11 +300,7 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
         ("wasm", "Wasm"),
         ("xml", "XML"),
         ("yaml", "YAML"),
-    ];
-    Template::render(
-        "index",
-        context! {title: TITLE, site_stats, host: HOST, languages, year: Utc::now().year()},
-    )
+    ]
 }
 
 #[launch]
