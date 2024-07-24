@@ -264,7 +264,7 @@
 
             if (data.id) {
             let host = decodeHtmlEntity("{{ host }}");
-            let url = `${host}/share/${data.id}#${key_fragments.hashFragment}`;
+            let url = `${host}/paste/${data.id}#${key_fragments.hashFragment}`;
             loading_button.style.display = "none";
             submit_button.style.display = "block";
             openModal(url);
