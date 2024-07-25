@@ -64,7 +64,7 @@ impl Fairing for CacheControlFairing {
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
         if request.uri().path().starts_with("/public/") {
-            response.set_header(Header::new("Cache-Control", "public, max-age=14400"));
+            response.set_header(Header::new("Cache-Control", "public, max-age=15552000"));
         }
     }
 }
