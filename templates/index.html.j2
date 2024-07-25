@@ -7,7 +7,7 @@
             <div class="col-md-12 rounded-2">
                 <h2 class="text-center mt-3">{{ title }}</h2>
                 <section id="hello" class="h-100">
-                    <textarea placeholder="Paste here..." id="paste-area" class="form-control mt-4 paste-area focus-ring"></textarea>
+                    <textarea placeholder="Paste here..." id="paste-area" class="form-control mt-4 paste-area focus-ring focus-ring-dark"></textarea>
                 </section>
             </div>
         </div>
@@ -139,8 +139,8 @@
         }
 
         function OnInput() {
-        paste_el.style.height = "auto";
-        paste_el.style.height = this.scrollHeight + "px";
+            paste_el.style.height = "auto";
+            paste_el.style.height = this.scrollHeight + "px";
         }
 
         document.querySelectorAll(".dropdown-item.expire-dropdown").forEach((item) => {

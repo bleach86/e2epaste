@@ -7,6 +7,7 @@ mod paste_id;
 use rocket::fairing::Fairing;
 use rocket::fs::{relative, FileServer};
 use rocket::http::uri::Absolute;
+use rocket::http::ContentType;
 use rocket::http::Header;
 use rocket::request::Request;
 use rocket::response::Response;
@@ -65,6 +66,27 @@ impl Fairing for CacheControlFairing {
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
         if request.uri().path().starts_with("/public/") {
             response.set_header(Header::new("Cache-Control", "public, max-age=15552000"));
+        }
+    }
+}
+
+pub struct WasmFairing;
+
+#[rocket::async_trait]
+impl Fairing for WasmFairing {
+    fn info(&self) -> rocket::fairing::Info {
+        rocket::fairing::Info {
+            name: "Wasm MIME Type Setter",
+            kind: rocket::fairing::Kind::Response,
+        }
+    }
+
+    async fn on_response<'r>(&self, _req: &'r Request<'_>, res: &mut Response<'r>) {
+        if let Some(path) = _req.uri().path().split('/').last() {
+            if path.ends_with(".wasm") {
+                println!("Path: {:?}", path);
+                res.set_header(ContentType::new("application", "wasm"));
+            }
         }
     }
 }
@@ -242,6 +264,15 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
     )
 }
 
+#[get("/tools/password")]
+async fn password_gen(db: &State<Arc<PasteDB>>) -> Template {
+    let site_stats: paste_db::SiteStats = db.get_site_stats();
+    Template::render(
+        "password_gen",
+        context! {title: TITLE, site_stats, host: HOST, year: Utc::now().year()},
+    )
+}
+
 #[get("/")]
 fn index(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -314,10 +345,19 @@ async fn rocket() -> _ {
         .mount("/public", FileServer::from(relative!("static")))
         .mount(
             "/",
-            routes![index, upload, retrieve, faq, filter_bots, advance_views],
+            routes![
+                index,
+                upload,
+                retrieve,
+                faq,
+                filter_bots,
+                advance_views,
+                password_gen
+            ],
         )
         .attach(Template::fairing())
-        .attach(CacheControlFairing);
+        .attach(CacheControlFairing)
+        .attach(WasmFairing);
 
     // Spawn the background task
     tokio::spawn(async move {
