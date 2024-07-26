@@ -273,6 +273,15 @@ async fn password_gen(db: &State<Arc<PasteDB>>) -> Template {
     )
 }
 
+#[get("/tools/strings")]
+async fn string_tools(db: &State<Arc<PasteDB>>) -> Template {
+    let site_stats: paste_db::SiteStats = db.get_site_stats();
+    Template::render(
+        "string_tools",
+        context! {title: TITLE, site_stats, host: HOST, year: Utc::now().year()},
+    )
+}
+
 #[get("/")]
 fn index(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -352,7 +361,8 @@ async fn rocket() -> _ {
                 faq,
                 filter_bots,
                 advance_views,
-                password_gen
+                password_gen,
+                string_tools
             ],
         )
         .attach(Template::fairing())

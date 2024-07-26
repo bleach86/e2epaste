@@ -22,6 +22,18 @@
   --bs-focus-ring-opacity: 0.1;
 }
 
+.base64-area {
+  margin-bottom: 10px;
+  overflow: auto;
+  overflow-wrap: break-word;
+  min-height: 125px !important;
+  width: 100%;
+  font-size: 10pt !important;
+  --bs-focus-ring-color: #fafafa;
+  --bs-focus-ring-width: 0.5px;
+  --bs-focus-ring-opacity: 0.1;
+}
+
 .form-control:focus {
   border-color: #fafafa !important;
 }

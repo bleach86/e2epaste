@@ -1,0 +1,390 @@
+{% extends "layout" %}
+
+{% block page %}
+    <div class="spacer-50"></div>
+    <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
+        <div class="row">
+            <h2 class="text-center mt-3">String Counter</h2>
+            <section>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">String Length Info</h4>
+                        <button onclick="clear_field_counter('byte-counter-input')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Count the length, bytes, words, lines, unique words, and unique characters in a string.</p>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="overflow:auto;" placeholder="Enter string to be counted here..." class="form-control mt-4 paste-area focus-ring focus-ring-dark" id="byte-counter-input" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <ul class="list-group mt-4">
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Length
+                                        <span id="string-length" class="badge text-bg-info rounded-pill">0</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Bytes
+                                        <span id="string-bytes" class="badge text-bg-info rounded-pill">0</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Words
+                                        <span id="string-words" class="badge text-bg-info rounded-pill">0</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Lines
+                                        <span id="string-lines" class="badge text-bg-info rounded-pill">0</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Unique Words
+                                        <span id="string-uwords" class="badge text-bg-info rounded-pill">0</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        Unique Characters
+                                        <span id="string-uchars" class="badge text-bg-info rounded-pill">0</span>
+                                    </li>
+                                </ul>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <div class="row">
+            <h2 class="text-center mt-5">Base64</h2>
+            <section>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Base64 Encoding</h4>
+                        <button onclick="clear_field('base64-encode-in', 'base64-encode-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Encode strings into Base64.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter string to be Base64 encoded here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="base64-encode-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Base64 encoded output will go here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="base64-encode-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="encode-base64" class="btn btn-outline-light">
+                        Encode Text
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('base64-encode-out', this)">
+                        Copy
+                    </button>
+                </div>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Base64 Decoding</h4>
+                        <button onclick="clear_field('base64-decode-in', 'base64-decode-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Decode Base64 into Text.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter Base64 to be decoded into text here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="base64-decode-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Decoded Base64 content goes here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="base64-decode-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="decode-base64" class="btn btn-outline-light">
+                        Decode Base64
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('base64-decode-out', this)">
+                        Copy
+                    </button>
+                </div>
+            </section>
+        </div>
+        <div class="row">
+            <h2 class="text-center mt-5">Hex</h2>
+            <section>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Hex Encoding</h4>
+                        <button onclick="clear_field('hex-encode-in', 'hex-encode-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Encode strings into Hex.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter string to be Hex encoded here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="hex-encode-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Hex encoded output will go here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="hex-encode-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="encode-hex" class="btn btn-outline-light">
+                        Encode Text
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('hex-encode-out', this)">
+                        Copy
+                    </button>
+                </div>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Hex Decoding</h4>
+                        <button onclick="clear_field('hex-decode-in', 'hex-decode-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Decode Hex into Text.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter Hex to be decoded into text here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="hex-decode-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Decoded Hex content goes here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="hex-decode-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="decode-hex" class="btn btn-outline-light">
+                        Decode Hex
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('hex-decode-out', this)">
+                        Copy
+                    </button>
+                </div>
+            </section>
+        </div>
+        <div class="row">
+            <h2 class="text-center mt-5">Binary</h2>
+            <section>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Binary Encoding</h4>
+                        <button onclick="clear_field('binary-encode-in', 'binary-encode-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Encode strings into Binary.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter string to be Binary encoded here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="binary-encode-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Binary encoded output will go here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="binary-encode-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="encode-binary" class="btn btn-outline-light">
+                        Encode Text
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('binary-encode-out', this)">
+                        Copy
+                    </button>
+                </div>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Binary Decoding</h4>
+                        <button onclick="clear_field('binary-decode-in', 'binary-decode-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Decode Binary into Text.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter Binary to be decoded into text here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="binary-decode-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Decoded Binary content goes here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="binary-decode-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="decode-binary" class="btn btn-outline-light">
+                        Decode Binary
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('binary-decode-out', this)">
+                        Copy
+                    </button>
+                </div>
+            </section>
+        </div>
+        <div class="row">
+            <h2 class="text-center mt-5">Reverse a String</h2>
+            <section>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Reverse a String</h4>
+                        <button onclick="clear_field('reverse-in', 'reverse-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Reverse the direction the characters of a string are going.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter string to be reversed..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="reverse-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="The reversed string will go here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="reverse-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="reverse-button" class="btn btn-outline-light">
+                        Reverse Text
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('reverse-out', this)">
+                        Copy
+                    </button>
+                </div>
+            </section>
+        </div>
+        <div class="row">
+            <h2 class="text-center mt-5">Random Case</h2>
+            <section>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Random String Case</h4>
+                        <button onclick="clear_field('random-in', 'random-out')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Each character is randomly made upper or lower case.</p>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="Enter string to have case randomized..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="random-in" rows="10"></textarea>
+                            </section>
+                        </div>
+                        <div class="col-md-6 rounded-2">
+                            <section id="" class="">
+                                <textarea style="" placeholder="The randomized case string will go here..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="random-out" rows="10" disabled></textarea>
+                            </section>
+                        </div>
+                    </div>
+                    <button id="random-button" class="btn btn-outline-light">
+                        Randomize Case
+                    </button>
+                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('random-out', this)">
+                        Copy
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <div class="row">
+            <h2 class="text-center mt-5">Count String in String</h2>
+            <section>
+                <div class="alert alert-secondary mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="text-light alert-heading">Count Occurrences of substring in string.</h4>
+                        <button onclick="clear_field_substr('substring-input', 'search-string-input', 'str-in-str-count')" id="" class="btn btn-dark">
+                            <i class="bi bi-hurricane"></i>
+                        </button>
+                    </div>
+                    <p class="text-secondary" style="font-size:small;">Returns the number of times a substring is found in a string.</p>
+                    <hr>
+                    <div class="mb-3">
+                        <input type="text" placeholder="Enter substring to count..." class="form-control mt-4" id="substring-input">
+                    </div>
+                    <div class="mb-3">
+                        <textarea style="" placeholder="Enter string to search within..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="search-string-input" rows="10"></textarea>
+                    </div>
+                    <button id="count-button" class="btn btn-outline-light">
+                        Count Occurrences
+                    </button>
+                    <h3 class="position-relative my-3"><span id="str-in-str-count" class="badge text-bg-secondary">0</span></h3>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <button  type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
+        <i class="bi bi-arrow-up"></i>
+    </button>
+
+    <script src="/public/js/string-tools.js"></script>
+    <script>
+        //Get the button
+        let back_to_top = document.getElementById("btn-back-to-top");
+
+        // When the user clicks on the button, scroll to the top of the document
+        back_to_top.addEventListener("click", backToTop);
+
+        function backToTop() {
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+        }
+
+        function copyToClipboard(id, popoverButton) {
+            var copyText = document.getElementById(id);
+            navigator.clipboard.writeText(copyText.value);
+
+            // Create a new Popover instance
+            var popover = new bootstrap.Popover(popoverButton, {
+                content: 'Successfully Copied to clipboard!',
+                placement: 'top',
+                trigger: 'manual',
+                customClass: 'bg-success'
+            });
+
+            // Show the popover
+            popover.show();
+
+            setTimeout(function () {
+                popover.hide();
+            }, 1500);
+            
+        }
+
+        function clear_field(input_id, output_id) {
+            document.getElementById(input_id).value = "";
+            document.getElementById(output_id).value = "";
+        }
+
+        function clear_field_counter(input_id) {
+            document.getElementById(input_id).value = "";
+            set_string_info("");
+        }
+
+        function clear_field_substr(input_id, output_id, count_id) {
+            document.getElementById(input_id).value = "";
+            document.getElementById(output_id).value = "";
+            document.getElementById(count_id).textContent = "0";
+        }
+
+    </script>
+{% endblock %}
