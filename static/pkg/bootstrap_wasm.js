@@ -43,7 +43,7 @@
 /******/
 /******/ 	// script path function
 /******/ 	function jsonpScriptSrc(chunkId) {
-/******/ 		return __webpack_require__.p + "" + chunkId + ".bootstrap_wasm.js" + "v=1.3"
+/******/ 		return __webpack_require__.p + "" + chunkId + ".bootstrap_wasm.js" + "?v=1.3"
 /******/ 	}
 /******/
 /******/ 	// object to store loaded and loading wasm modules
