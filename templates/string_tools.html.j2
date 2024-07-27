@@ -354,7 +354,13 @@
                         <input type="text" placeholder="Enter substring to count..." class="form-control mt-4" id="substring-input">
                     </div>
                     <div class="mb-3">
-                        <textarea style="" placeholder="Enter string to search within..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="search-string-input" rows="10"></textarea>
+                        <div contenteditable="true" style="" placeholder="Enter string to search within..." class="form-control mt-4 base64-area focus-ring focus-ring-dark" id="search-string-input" rows="10"></div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input bg-secondary my-3" type="checkbox" value="" id="use-case" checked>
+                        <label style="font-size:small;" class="form-check-label text-secondary my-3" for="flexCheckDefault">
+                            Case Sensitive
+                        </label>
                     </div>
                     <button id="count-button" class="btn btn-outline-light">
                         Count Occurrences
@@ -415,7 +421,7 @@
 
         function clear_field_substr(input_id, output_id, count_id) {
             document.getElementById(input_id).value = "";
-            document.getElementById(output_id).value = "";
+            document.getElementById(output_id).innerHTML = "";
             document.getElementById(count_id).textContent = "0";
         }
 

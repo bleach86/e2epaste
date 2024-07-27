@@ -42,6 +42,7 @@ const substr_input = document.getElementById("substring-input");
 const search_str_input = document.getElementById("search-string-input");
 const substr_output_count = document.getElementById("str-in-str-count");
 const count_button = document.getElementById("count-button");
+const use_case = document.getElementById("use-case");
 
 async function page_load() {
   while (window.get_string === undefined) {
@@ -75,9 +76,23 @@ async function page_load() {
 
   count_button.addEventListener("click", (e) => {
     let sub_str = substr_input.value;
-    let search_str = search_str_input.value;
-    let count = substr_in_str(search_str, sub_str);
-    substr_output_count.innerText = count;
+    let search_str = search_str_input.innerText;
+
+    let res = substr_in_str(search_str, sub_str, use_case.checked);
+
+    search_str_input.innerHTML = "";
+    search_str_input.innerHTML = res.modified_str;
+
+    search_str_input.querySelectorAll("span").forEach((span) => {
+      span.addEventListener("input", (e) => {
+        let input = e.target.value;
+        if (input === "") {
+          e.target.remove();
+        }
+      });
+    });
+
+    substr_output_count.innerText = res.count;
   });
 
   random_btn.addEventListener("click", (e) => {
