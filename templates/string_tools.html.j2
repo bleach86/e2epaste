@@ -7,11 +7,14 @@
         <div class="row">
             <h1 class="text-center mt-5">String Tools</h1>
             <p class="text-center text-secondary mb-5" style="">A collection of client side string tools to manipulate and analyze strings.</p>
-            <h2 class="text-center mt-3">String Counter</h2>
+            <h2 id="string-counter" class="text-center mt-3">String Counter</h2>
             <section>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">String Length Info</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">String Length Info</h4>
+                            <a href="#string-counter" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field_counter('byte-counter-input')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -59,11 +62,14 @@
             </section>
         </div>
         <div class="row">
-            <h2 class="text-center mt-5">Base64</h2>
+            <h2 id="base64-encoding" class="text-center mt-5">Base64</h2>
             <section>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Base64 Encoding</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Base64 Encoding</h4>
+                            <a href="#base64-encoding" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('base64-encode-in', 'base64-encode-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -85,13 +91,16 @@
                     <button id="encode-base64" class="btn btn-outline-light">
                         Encode Text
                     </button>
-                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('base64-encode-out', this)">
+                    <button id="base64-decoding" data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('base64-encode-out', this)">
                         Copy
                     </button>
                 </div>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Base64 Decoding</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Base64 Decoding</h4>
+                            <a href="#base64-decoding" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('base64-decode-in', 'base64-decode-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -120,11 +129,14 @@
             </section>
         </div>
         <div class="row">
-            <h2 class="text-center mt-5">Hex</h2>
+            <h2 id="hex-encoding" class="text-center mt-5">Hex</h2>
             <section>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Hex Encoding</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Hex Encoding</h4>
+                            <a href="#hex-encoding" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('hex-encode-in', 'hex-encode-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -146,13 +158,16 @@
                     <button id="encode-hex" class="btn btn-outline-light">
                         Encode Text
                     </button>
-                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('hex-encode-out', this)">
+                    <button id="hex-decoding" data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('hex-encode-out', this)">
                         Copy
                     </button>
                 </div>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Hex Decoding</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Hex Decoding</h4>
+                            <a href="#hex-decoding" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('hex-decode-in', 'hex-decode-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -181,11 +196,14 @@
             </section>
         </div>
         <div class="row">
-            <h2 class="text-center mt-5">Binary</h2>
+            <h2 id="binary-encoding" class="text-center mt-5">Binary</h2>
             <section>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Binary Encoding</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Binary Encoding</h4>
+                            <a href="#binary-encoding" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('binary-encode-in', 'binary-encode-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -207,13 +225,16 @@
                     <button id="encode-binary" class="btn btn-outline-light">
                         Encode Text
                     </button>
-                    <button data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('binary-encode-out', this)">
+                    <button id="binary-decoding" data-toggle="popover" class="btn btn-outline-light" onclick="copyToClipboard('binary-encode-out', this)">
                         Copy
                     </button>
                 </div>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Binary Decoding</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Binary Decoding</h4>
+                            <a href="#binary-decoding" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('binary-decode-in', 'binary-decode-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -242,11 +263,14 @@
             </section>
         </div>
         <div class="row">
-            <h2 class="text-center mt-5">Reverse a String</h2>
+            <h2 id="reverse-string" class="text-center mt-5">Reverse a String</h2>
             <section>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Reverse a String</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Reverse a String</h4>
+                            <a href="#reverse-string" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('reverse-in', 'reverse-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -275,11 +299,14 @@
             </section>
         </div>
         <div class="row">
-            <h2 class="text-center mt-5">Random Case</h2>
+            <h2 id="random-case" class="text-center mt-5">Random Case</h2>
             <section>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Random String Case</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Random String Case</h4>
+                            <a href="#random-case" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field('random-in', 'random-out')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
@@ -309,11 +336,14 @@
         </div>
 
         <div class="row">
-            <h2 class="text-center mt-5">Count String in String</h2>
+            <h2 id="substring-occurance" class="text-center mt-5">Count String in String</h2>
             <section>
                 <div class="alert alert-secondary mt-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="text-light alert-heading">Count Occurrences of substring in string.</h4>
+                        <div class="d-flex flex-row">
+                            <h4 class="text-light alert-heading">Count Occurrences of substring in string.</h4>
+                            <a href="#substring-occurance" class="link-info"><i class="bi bi-hash fs-1 position-relative" style="bottom:0.5em;"></i></a>
+                        </div>
                         <button onclick="clear_field_substr('substring-input', 'search-string-input', 'str-in-str-count')" id="" class="btn btn-dark">
                             <i class="bi bi-hurricane"></i>
                         </button>
