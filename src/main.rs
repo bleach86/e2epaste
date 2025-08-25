@@ -4,8 +4,9 @@ extern crate rocket;
 mod paste_db;
 mod paste_id;
 
+use crate::rocket::data::ToByteUnit;
 use rocket::fairing::Fairing;
-use rocket::fs::{relative, FileServer};
+use rocket::fs::{relative, FileServer, NamedFile};
 use rocket::http::uri::Absolute;
 use rocket::http::ContentType;
 use rocket::http::Header;
@@ -13,7 +14,9 @@ use rocket::request::Request;
 use rocket::response::Response;
 use rocket::serde::json::Json;
 use rocket::tokio;
+use rocket::tokio::fs::File;
 use rocket::State;
+use rocket::{post, Data};
 use rocket_dyn_templates::{context, Template};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -38,11 +41,18 @@ pub struct IncomingPaste {
     pub password_hash: Option<String>,
     pub title: String,
     pub syntax: String,
+    pub file_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IncomingPasteRes {
     pub id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DownloadAttachmentRes {
+    pub error: Option<String>,
+    pub file: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -126,11 +136,17 @@ async fn upload(
         password_hash: paste.password_hash,
         title: paste.title,
         syntax: paste.syntax,
+        file_name: paste.file_name,
     };
 
     match db.set_paste(&paste_data) {
         Ok(_) => {
-            db.increment_pastes().unwrap();
+            match db.increment_pastes() {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Error incrementing pastes: {:?}", e);
+                }
+            };
             Json(IncomingPasteRes {
                 id: Some(id.to_string()),
             })
@@ -156,24 +172,39 @@ async fn advance_views(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Json<Advanc
     };
 
     paste_data.views += 1;
-    let mut save_paste = true;
 
     if let Some(max_views) = paste_data.max_views {
         if paste_data.views >= max_views {
-            println!("Deleting paste with ID: {:?}", id);
-            db.delete_paste(id.to_string()).unwrap();
             match paste_data.expires {
-                Some(expires) => db.delete_expired_index(expires).unwrap(),
+                Some(expires) => match db.delete_expired_index(expires) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("Error deleting expired index: {:?}", e);
+                    }
+                },
                 None => {}
             }
-            save_paste = false;
+
+            let now: DateTime<Utc> = Utc::now();
+            let twelve_hours_from_now = now + chrono::Duration::hours(12);
+
+            paste_data.expires = Some(twelve_hours_from_now.timestamp_millis() as u64);
         }
     }
 
-    db.increment_views().unwrap();
-    if save_paste {
-        db.set_paste(&paste_data).unwrap();
-    }
+    match db.increment_views() {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("Error incrementing views: {:?}", e);
+        }
+    };
+
+    match db.set_paste(&paste_data) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("Error saving paste: {:?}", e);
+        }
+    };
 
     let site_stats: paste_db::SiteStats = db.get_site_stats();
 
@@ -191,6 +222,18 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
         "bot_filter",
         context! {title: TITLE, paste_id: id.to_string(), host: HOST, site_stats, year: Utc::now().year()},
     )
+}
+
+#[post("/api/upload-attachment/<id>", data = "<data>")]
+async fn upload_attachment(data: Data<'_>, id: PasteId<'_>) -> std::io::Result<&'static str> {
+    let mut file = File::create(format!("./file_store/{}.bin", id.to_string())).await?;
+    data.open(100_u64.megabytes()).stream_to(&mut file).await?;
+    Ok("Upload successful")
+}
+#[get("/api/download-attachment/<id>")]
+async fn download_attachment(id: PasteId<'_>) -> Option<NamedFile> {
+    let file_path = format!("./file_store/{}.bin", id.to_string());
+    NamedFile::open(file_path).await.ok()
 }
 
 #[get("/paste/<id>")]
@@ -213,9 +256,19 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
     if let Some(max_views) = paste_data.max_views {
         if views > max_views {
             println!("Deleting paste with ID: {}", id);
-            db.delete_paste(id.to_string()).unwrap();
+            match db.delete_paste(id.to_string()).await {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Error deleting paste: {:?}", e);
+                }
+            };
             match paste_data.expires {
-                Some(expires) => db.delete_expired_index(expires).unwrap(),
+                Some(expires) => match db.delete_expired_index(expires) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("Error deleting expired index: {:?}", e);
+                    }
+                },
                 None => {}
             }
             return Template::render(
@@ -229,8 +282,18 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
         let now_millis: u64 = now.timestamp_millis() as u64;
         if now_millis as u64 >= expires {
             println!("Deleting paste with ID: {}", id);
-            db.delete_paste(id.to_string()).unwrap();
-            db.delete_expired_index(expires).unwrap();
+            match db.delete_paste(id.to_string()).await {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Error deleting paste: {:?}", e);
+                }
+            };
+            match db.delete_expired_index(expires) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Error deleting expired index: {:?}", e);
+                }
+            };
             return Template::render(
                 "paste_not_found",
                 context! {title: TITLE, site_stats, year: now.year()},
@@ -362,7 +425,9 @@ async fn rocket() -> _ {
                 filter_bots,
                 advance_views,
                 password_gen,
-                string_tools
+                string_tools,
+                download_attachment,
+                upload_attachment
             ],
         )
         .attach(Template::fairing())
@@ -373,7 +438,12 @@ async fn rocket() -> _ {
     tokio::spawn(async move {
         let db_clone_task = db_clone.clone();
         loop {
-            db_clone_task.remove_expired_paste().await.unwrap();
+            match db_clone_task.remove_expired_paste().await {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Error removing expired paste: {:?}", e);
+                }
+            }
             tokio::time::sleep(Duration::from_secs(60 * 15)).await;
         }
     });

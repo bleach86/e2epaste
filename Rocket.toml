@@ -4,4 +4,4 @@ port = 8001
 
 
 [default.limits]
-json = "3 MiB"
+json = "100 MiB"

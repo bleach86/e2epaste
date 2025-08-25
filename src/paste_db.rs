@@ -1,4 +1,5 @@
 extern crate sled;
+use core::time;
 use rocket::tokio;
 use serde::{Deserialize, Serialize};
 use sled::{Db, Result, Tree};
@@ -20,9 +21,10 @@ pub struct PasteData<'a> {
     pub password_hash: Option<String>,
     pub title: String,
     pub syntax: String,
+    pub file_name: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct SiteStats {
     pub pastes: u64,
     pub views: u64,
@@ -65,23 +67,50 @@ impl PasteDB {
             }
             None => {}
         }
-        let content: Vec<u8> = serde_json::to_vec(&paste_data).unwrap();
+        let content: Vec<u8> = match serde_json::to_vec(&paste_data) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error serializing paste data: {:?}", e);
+                return Err(sled::Error::Unsupported("Serialization error".into()));
+            }
+        };
         self.paste_db.insert(id.to_string().as_bytes(), content)?;
         Ok(())
     }
 
     pub fn get_paste(&self, id: String) -> Option<PasteData<'static>> {
-        let content_opt: Option<sled::IVec> = self.paste_db.get(id.as_bytes()).unwrap();
+        let content_opt: Option<sled::IVec> = match self.paste_db.get(id.as_bytes()) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error retrieving paste: {:?}", e);
+                return None;
+            }
+        };
         let content: sled::IVec = match content_opt {
             Some(content) => content,
             None => return None,
         };
-        let paste_data: PasteData<'static> = serde_json::from_slice(&content).unwrap();
+        let paste_data: PasteData<'static> = match serde_json::from_slice(&content) {
+            Ok(paste_data) => paste_data,
+            Err(e) => {
+                eprintln!("Error deserializing paste data: {:?}", e);
+                return None;
+            }
+        };
         Some(paste_data)
     }
 
-    pub fn delete_paste(&self, id: String) -> Result<()> {
+    pub async fn delete_paste(&self, id: String) -> Result<()> {
         self.paste_db.remove(id.as_bytes())?;
+
+        let path = format!("./file_store/{}.bin", id);
+        match tokio::fs::remove_file(path).await {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Error deleting file: {:?}", e);
+            }
+        }
+
         Ok(())
     }
 
@@ -102,14 +131,48 @@ impl PasteDB {
         for result in self.expire_index.range(..=now.to_be_bytes()) {
             match result {
                 Ok((expires, id)) => {
-                    let id: String = String::from_utf8(id.to_vec()).unwrap();
+                    let id: String = match String::from_utf8(id.to_vec()) {
+                        Ok(id) => id,
+                        Err(e) => {
+                            eprintln!("Error converting ID to string: {:?}", e);
+                            continue;
+                        }
+                    };
+
+                    let paste = match self.get_paste(id.clone()) {
+                        Some(paste) => paste,
+                        None => {
+                            eprintln!("Error retrieving paste: {:?}", id);
+                            continue;
+                        }
+                    };
+
+                    let timestamp = paste.timestamp as u64 * 1000;
+                    let duration = now.saturating_sub(timestamp);
+
+                    let one_day = chrono::Duration::days(1).num_milliseconds() as u64;
+
+                    if duration < one_day {
+                        continue;
+                    }
+
                     let bytes: [u8; 8] = expires
                         .as_ref()
                         .try_into()
                         .expect("slice with incorrect length");
                     let expires = u64::from_be_bytes(bytes);
-                    self.delete_paste(id).unwrap();
-                    self.delete_expired_index(expires).unwrap();
+                    match self.delete_paste(id).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("Error deleting paste: {:?}", e);
+                        }
+                    };
+                    match self.delete_expired_index(expires) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("Error deleting expired index: {:?}", e);
+                        }
+                    };
                 }
                 Err(e) => {
                     eprintln!("Error removing expired paste: {:?}", e);
@@ -124,22 +187,45 @@ impl PasteDB {
     }
 
     pub fn set_site_stats(&self, site_stats: &SiteStats) -> Result<()> {
-        let content: Vec<u8> = serde_json::to_vec(&site_stats).unwrap();
+        let content: Vec<u8> = match serde_json::to_vec(&site_stats) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error serializing site stats: {:?}", e);
+                return Err(sled::Error::Unsupported("Serialization error".into()));
+            }
+        };
         self.site_stats.insert(b"site_stats", content)?;
         Ok(())
     }
 
     pub fn get_site_stats(&self) -> SiteStats {
-        let content_opt: Option<sled::IVec> = self.site_stats.get(b"site_stats").unwrap();
+        let content_opt: Option<sled::IVec> = match self.site_stats.get(b"site_stats") {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error retrieving site stats: {:?}", e);
+                return SiteStats::default();
+            }
+        };
         let content: SiteStats = match content_opt {
-            Some(content) => serde_json::from_slice(&content).unwrap(),
+            Some(content) => match serde_json::from_slice(&content) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!("Error deserializing site stats: {:?}", e);
+                    return SiteStats::default();
+                }
+            },
             None => {
                 let site_stats: SiteStats = SiteStats {
                     pastes: 0,
                     views: 0,
                 };
 
-                self.set_site_stats(&site_stats).unwrap();
+                match self.set_site_stats(&site_stats) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("Error setting site stats: {:?}", e);
+                    }
+                };
                 site_stats
             }
         };

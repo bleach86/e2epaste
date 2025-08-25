@@ -1,91 +1,113 @@
 {% extends "layout" %}
 
 {% block page %}
-    <div class="spacer-50"></div>
-    <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
-        <div class="row">
-            <div class="col-md-12 rounded-2">
-                <h2 class="text-center mt-3">{{ title }}</h2>
-                <section id="hello" class="h-100">
-                    <textarea placeholder="Paste here..." id="paste-area" class="form-control mt-4 paste-area focus-ring focus-ring-dark"></textarea>
-                </section>
-            </div>
-        </div>
-
-        <div class="container mt-4 pb-3">
-            <div class="row">
-                <div class="col-md-3" style="font-size:8pt">
-                    <div class="form-group mb-3">
-                        <label class="mb-1" for="paste-title">Title (Max 64 Chars):</label>
-                        <input type="input" id="paste-title" class="form-control border border-light" style="--bs-border-width:0.5px" value="" placeholder="Untitled">
-                    </div>
-                    <div class="form-group mb-3">
-                        <label class="mb-1" for="max-views">Max Views (0 for unlimited):</label>
-                        <input type="number" min="0" max="999999999999" id="max-views" class="form-control border border-light" style="--bs-border-width:0.5px" value="0">
-                    </div>
-                    <div class="form-group mb-3">
-                        <label class="mb-1" for="displayDropdown">Display Options:</label>
-                        <div class="dropdown">
-                            <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="displayDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="plaintext">
-                                Plaintext
-                            </button>
-                            <ul class="dropdown-menu" aria-labelledby="displayDropdown">
-                                <li><a class="dropdown-item display-dropdown" href="#" data-value="plaintext">Plaintext</a></li>
-                                <li class="text-center mt-2 text-secondary" style="font-size:6pt;">Syntax Highlighting<hr class="dropdown-divider"></li>
-                                
-                                {% for language in languages %}
-                                    <li><a class="dropdown-item display-dropdown" href="#" data-value="{{ language[0] }}">{{ language[1] }}</a></li>
-                                {% endfor %}
-                                
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-3" style="font-size:8pt">
-                    <div class="form-group mb-3">
-                        <label class="mb-1" for="expireDropdown">Expiration:</label>
-                        <div class="dropdown">
-                            <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-value="3days">
-                                3 Days
-                            </button>
-                            <ul class="dropdown-menu" aria-labelledby="expireDropdown">
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="10min">10 Minutes</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1hour">1 Hour</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1day">1 Day</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="3days">3 Days</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1week">1 Week</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="2weeks">2 Weeks</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1month">1 Month</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="6months">6 Months</a></li>
-                                <li><a class="dropdown-item expire-dropdown" href="#" data-value="1year">1 Year</a></li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="form-group mb-3">
-                        <label class="mb-1" for="paste-password">Password:</label>
-                        <input type="input" id="paste-password" class="form-control border border-light" style="--bs-border-width:0.5px" value="" placeholder="Optional">
-                    </div>
-                    
-                </div>
-            </div>
-            <div class="form-group mt-4 col-md-2 col-5">
-                <button id="submit-paste" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important">Submit Paste</button>
-                <button id="loading-button" class="btn btn-dark btn-outline-light w-100 fs-6" style="--bs-border-width:0.5px;font-size:10pt !important;display:none;" type="button" disabled>
-                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-                    <span role="status">Encrypting Paste...</span>
-                </button>
-            </div>
+<div class="spacer-50"></div>
+<div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
+    <div class="row">
+        <div class="col-md-12 rounded-2">
+            <h2 class="text-center mt-3">{{ title }}</h2>
+            <section id="hello" class="h-100">
+                <textarea placeholder="Paste here..." id="paste-area"
+                    class="form-control mt-4 paste-area focus-ring focus-ring-dark"></textarea>
+            </section>
         </div>
     </div>
 
-    <button  type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
-        <i class="bi bi-arrow-up"></i>
-    </button>
+    <div class="container mt-4 pb-3">
+        <div class="row">
+            <div class="col-md-3" style="font-size:8pt">
+                <div class="form-group mb-3">
+                    <label class="mb-1" for="paste-title">Title (Max 64 Chars):</label>
+                    <input type="input" id="paste-title" class="form-control border border-light"
+                        style="--bs-border-width:0.5px" value="" placeholder="Untitled">
+                </div>
+                <div class="form-group mb-3">
+                    <label class="mb-1" for="max-views">Max Views (0 for unlimited):</label>
+                    <input type="number" min="0" max="999999999999" id="max-views"
+                        class="form-control border border-light" style="--bs-border-width:0.5px" value="0">
+                </div>
+                <div class="form-group mb-3">
+                    <label class="mb-1" for="displayDropdown">Display Options:</label>
+                    <div class="dropdown">
+                        <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6"
+                            style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="displayDropdown"
+                            data-bs-toggle="dropdown" aria-expanded="false" data-value="plaintext">
+                            Plaintext
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="displayDropdown">
+                            <li><a class="dropdown-item display-dropdown" href="#" data-value="plaintext">Plaintext</a>
+                            </li>
+                            <li class="text-center mt-2 text-secondary" style="font-size:6pt;">Syntax Highlighting
+                                <hr class="dropdown-divider">
+                            </li>
 
-    <div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-l-Label" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
+                            {% for language in languages %}
+                            <li><a class="dropdown-item display-dropdown" href="#" data-value="{{ language[0] }}">{{
+                                    language[1] }}</a></li>
+                            {% endfor %}
+
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3" style="font-size:8pt">
+                <div class="form-group mb-3">
+                    <label class="mb-1" for="expireDropdown">Expiration:</label>
+                    <div class="dropdown">
+                        <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6"
+                            style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown"
+                            data-bs-toggle="dropdown" aria-expanded="false" data-value="3days">
+                            3 Days
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="expireDropdown">
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="10min">10 Minutes</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1hour">1 Hour</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1day">1 Day</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="3days">3 Days</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1week">1 Week</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="2weeks">2 Weeks</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1month">1 Month</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="6months">6 Months</a></li>
+                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1year">1 Year</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="mb-1" for="paste-password">Password:</label>
+                    <input type="input" id="paste-password" class="form-control border border-light"
+                        style="--bs-border-width:0.5px" value="" placeholder="Optional">
+                </div>
+
+
+                <div class="form-group mb-3">
+                    <label for="fileInput" class="mb-1">Add a file (25MB max):</label>
+                    <input style="--bs-border-width:0.5px" class="form-control border border-light" type="file"
+                        id="fileInput">
+                </div>
+
+            </div>
+        </div>
+        <div class="form-group mt-4 col-md-2 col-5">
+            <button id="submit-paste" class="btn btn-dark btn-outline-light w-100 fs-6"
+                style="--bs-border-width:0.5px;font-size:10pt !important">Submit Paste</button>
+            <button id="loading-button" class="btn btn-dark btn-outline-light w-100 fs-6"
+                style="--bs-border-width:0.5px;font-size:10pt !important;display:none;" type="button" disabled>
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span role="status">Encrypting Paste...</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<button type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
+    <i class="bi bi-arrow-up"></i>
+</button>
+
+<div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-l-Label"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
             <div class="modal-header bg-success">
                 <h1 class="modal-title fs-5" id="url-modal-Label">Paste Success!</h1>
                 <button type="button" class="btn-close" onclick="copyToClipboard();" aria-label="Close"></button>
@@ -95,79 +117,110 @@
                 <input class="w-100 rounded-2" style="font-size: 10pt;" id="paste-url" disabled>
             </div>
             <div class="modal-footer">
-                <button id="copy-url-btn" type="button" class="btn btn-secondary" data-toggle="popover" onclick="copyToClipboard();">Copy URL</button>
-                <button id="close-url-btn" style="display:none;" type="button" class="btn btn-secondary" data-toggle="popover" onclick="closeModal();">Close</button>
+                <button id="copy-url-btn" type="button" class="btn btn-secondary" data-toggle="popover"
+                    onclick="copyToClipboard();">Copy URL</button>
+                <button id="close-url-btn" style="display:none;" type="button" class="btn btn-secondary"
+                    data-toggle="popover" onclick="closeModal();">Close</button>
             </div>
 
-            </div>
         </div>
     </div>
+</div>
 
-    <script>
-        let paste_el = document.getElementById("paste-area");
-        paste_el.value = "";
-        paste_el.focus();
+<script>
+    let paste_el = document.getElementById("paste-area");
+    paste_el.value = "";
+    paste_el.focus();
 
-        tabOverride.set(paste_el);
+    tabOverride.set(paste_el);
 
-        let max_views_el = document.getElementById("max-views");
-        max_views_el.value = "0";
+    let max_views_el = document.getElementById("max-views");
+    max_views_el.value = "0";
 
-        let urlModal;
-        let copied = false;
-        paste_el.addEventListener("input", OnInput, false);
+    let urlModal;
+    let copied = false;
+    paste_el.addEventListener("input", OnInput, false);
 
-        // URL-safe Base64 characters
-        const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    // URL-safe Base64 characters
+    const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
-        const paste_title = document.getElementById("paste-title");
-        paste_title.value = "";
+    const paste_title = document.getElementById("paste-title");
+    paste_title.value = "";
 
-        const paste_password = document.getElementById("paste-password");
-        paste_password.value = "";
+    const paste_password = document.getElementById("paste-password");
+    paste_password.value = "";
+
+    const fileInput = document.getElementById("fileInput");
+    fileInput.value = "";
+
+    let fileData;
+    let fileName;
+
+    fileInput.addEventListener("change", function () {
+        processFile(event);
+    });
 
 
-        //Get the button
-        let back_to_top = document.getElementById("btn-back-to-top");
+    function processFile(evt) {
+        var file = evt.target.files[0],
+            reader = new FileReader();
 
-        // When the user clicks on the button, scroll to the top of the document
-        back_to_top.addEventListener("click", backToTop);
-
-        function backToTop() {
-            document.body.scrollTop = 0;
-            document.documentElement.scrollTop = 0;
+        if (file.size > 26214400) {
+            alert("File is too large. Please keep it under 25MB.");
+            fileInput.value = "";
+            return;
         }
 
-        function OnInput() {
-            paste_el.style.height = "auto";
-            paste_el.style.height = this.scrollHeight + "px";
+        reader.onload = function (e) {
+            var data = e.target.result;
+            fileData = data;
+            fileName = file.name;
         }
 
-        document.querySelectorAll(".dropdown-item.expire-dropdown").forEach((item) => {
-            item.addEventListener("click", function (event) {
-                event.preventDefault();  // Prevent the default action
-                let button = document.getElementById("expireDropdown");
-                button.innerText = this.innerText;
-                button.setAttribute("data-value", this.getAttribute("data-value"));
-            });
-        });
+        reader.readAsArrayBuffer(file);
+    }
 
-        document.querySelectorAll(".dropdown-item.display-dropdown").forEach((item) => {
-            item.addEventListener("click", function (event) {
-                event.preventDefault();  // Prevent the default action
-                let button = document.getElementById("displayDropdown");
-                button.innerText = this.innerText;
-                button.setAttribute("data-value", this.getAttribute("data-value"));
-            });
-        });
+    //Get the button
+    let back_to_top = document.getElementById("btn-back-to-top");
 
-        document
+    // When the user clicks on the button, scroll to the top of the document
+    back_to_top.addEventListener("click", backToTop);
+
+    function backToTop() {
+        document.body.scrollTop = 0;
+        document.documentElement.scrollTop = 0;
+    }
+
+    function OnInput() {
+        paste_el.style.height = "auto";
+        paste_el.style.height = this.scrollHeight + "px";
+    }
+
+    document.querySelectorAll(".dropdown-item.expire-dropdown").forEach((item) => {
+        item.addEventListener("click", function (event) {
+            event.preventDefault();  // Prevent the default action
+            let button = document.getElementById("expireDropdown");
+            button.innerText = this.innerText;
+            button.setAttribute("data-value", this.getAttribute("data-value"));
+        });
+    });
+
+    document.querySelectorAll(".dropdown-item.display-dropdown").forEach((item) => {
+        item.addEventListener("click", function (event) {
+            event.preventDefault();  // Prevent the default action
+            let button = document.getElementById("displayDropdown");
+            button.innerText = this.innerText;
+            button.setAttribute("data-value", this.getAttribute("data-value"));
+        });
+    });
+
+    document
         .getElementById("submit-paste")
         .addEventListener("click", async function () {
             const text = document.getElementById("paste-area").value;
             const loading_button = document.getElementById("loading-button");
             const submit_button = document.getElementById("submit-paste");
-            
+
             if (text === "") {
                 return;
             }
@@ -188,17 +241,25 @@
             const syntax = document
                 .getElementById("displayDropdown")
                 .getAttribute("data-value");
-            
+
             const password = document.getElementById("paste-password").value.trim();
             const iv_details = await generateIv(password);
-            
-            
+
+
             let max_views = document.getElementById("max-views").value;
             const key = await generateKey();
             const iv = iv_details.iv;
             const exportedKey = await exportCryptoKey(key);
             const encrypted = await encryptText(text, key, iv);
             const encryptedBase64 = arrayBufferToBase64(encrypted);
+            let encryptedFile = null;
+            let encryptedFileName = null;
+
+            if (fileData) {
+                encryptedFile = await encryptFile(fileData, key, iv);
+                const cipher_name = await encryptText(fileName, key, iv);
+                encryptedFileName = arrayBufferToBase64(cipher_name);
+            }
 
             let timestamp = Date.now();
 
@@ -252,273 +313,303 @@
                 password_hash: pw_hash,
                 title: truncated_title,
                 syntax: syntax,
+                file_name: fileData ? encryptedFileName : null,
             };
+
             const response = await fetch("/api/submit_paste", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(paste),
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(paste),
             });
             const data = await response.json();
 
             if (data.id) {
-            let host = decodeHtmlEntity("{{ host }}");
-            let url = `${host}/paste/${data.id}#${key_fragments.hashFragment}`;
-            loading_button.style.display = "none";
-            submit_button.style.display = "block";
-            openModal(url);
+
+                // File upload
+                if (fileData) {
+                    await uploadEncryptedFile(encryptedFile, data.id);
+                }
+
+                let host = decodeHtmlEntity("{{ host }}");
+                let url = `${host}/paste/${data.id}#${key_fragments.hashFragment}`;
+                loading_button.style.display = "none";
+                submit_button.style.display = "block";
+                openModal(url);
 
             } else {
-            alert("Failed to create paste");
+                alert("Failed to create paste");
             }
         });
 
 
-        function getRandomInt(min, max) {
-            // Ensure min and max are integers
-            min = Math.ceil(min);
-            max = Math.floor(max);
+    function getRandomInt(min, max) {
+        // Ensure min and max are integers
+        min = Math.ceil(min);
+        max = Math.floor(max);
 
-            // Create a typed array to hold the random values
-            const range = max - min + 1;
-            const bytesNeeded = Math.ceil(Math.log2(range) / 8);
-            const maxByteValue = Math.pow(2, bytesNeeded * 8) - 1;
-            
-            if (range > maxByteValue) {
-                throw new Error('Range too large for random number generation');
-            }
+        // Create a typed array to hold the random values
+        const range = max - min + 1;
+        const bytesNeeded = Math.ceil(Math.log2(range) / 8);
+        const maxByteValue = Math.pow(2, bytesNeeded * 8) - 1;
 
-            const array = new Uint8Array(bytesNeeded);
-            let randomValue;
+        if (range > maxByteValue) {
+            throw new Error('Range too large for random number generation');
+        }
 
+        const array = new Uint8Array(bytesNeeded);
+        let randomValue;
+
+        do {
+            // Generate random values and convert to a single integer
+            crypto.getRandomValues(array);
+            randomValue = array.reduce((acc, byte) => (acc << 8) | byte, 0);
+        } while (randomValue > maxByteValue - (maxByteValue % range));
+
+        return min + (randomValue % range);
+    }
+
+    function fragmentKey(key) {
+        const keyLength = key.length;
+        const numPositions = getRandomInt(6, 10);
+        const positions = new Set();
+
+
+        while (positions.size < numPositions) {
+            positions.add(getRandomInt(0, keyLength - 1));
+        }
+
+        const keyArray = key.split('');
+        const removedBytes = [];
+
+
+        positions.forEach(pos => {
+            removedBytes.push({ position: toUrlSafeBase64Char(pos), byte: keyArray[pos] });
+
+            let randomByte;
             do {
-                // Generate random values and convert to a single integer
-                crypto.getRandomValues(array);
-                randomValue = array.reduce((acc, byte) => (acc << 8) | byte, 0);
-            } while (randomValue > maxByteValue - (maxByteValue % range));
+                randomByte = base64Chars[getRandomInt(0, base64Chars.length - 1)];
+            } while (randomByte === keyArray[pos]);
 
-            return min + (randomValue % range);
+            keyArray[pos] = randomByte;
+        });
+
+        const serverKey = keyArray.join('');
+        const hashFragment = removedBytes.map(item => `${item.position}${item.byte}`).join('');
+
+        return { serverKey, hashFragment };
+    }
+
+    function toUrlSafeBase64Char(pos) {
+        // Ensure pos is within the range of 0 to 63
+        if (pos < 0 || pos >= 64) {
+            throw new Error('Position must be between 0 and 63');
         }
 
-        function fragmentKey(key) {
-            const keyLength = key.length;
-            const numPositions = getRandomInt(6, 10);
-            const positions = new Set();
-
-            
-            while (positions.size < numPositions) {
-                positions.add(getRandomInt(0, keyLength - 1));
-            }
-
-            const keyArray = key.split('');
-            const removedBytes = [];
+        // Return the corresponding Base64 character
+        return base64Chars.charAt(pos);
+    }
 
 
-            positions.forEach(pos => {
-                removedBytes.push({ position: toUrlSafeBase64Char(pos), byte: keyArray[pos] });
 
-                let randomByte;
-                do {
-                    randomByte = base64Chars[getRandomInt(0, base64Chars.length - 1)];
-                } while (randomByte === keyArray[pos]);
+    function decodeHtmlEntity(str) {
+        // Create a temporary DOM element to decode the entities
+        const txt = document.createElement("textarea");
+        txt.innerHTML = str;
+        return txt.value;
+    }
 
-                keyArray[pos] = randomByte;
-            });
+    function byteSize(str) {
+        const encoder = new TextEncoder();
+        const encoded = encoder.encode(str);
+        return encoded.byteLength;
+    }
 
-            const serverKey = keyArray.join('');
-            const hashFragment = removedBytes.map(item => `${item.position}${item.byte}`).join('');
-
-            return { serverKey, hashFragment };
-        }
-
-        function toUrlSafeBase64Char(pos) {
-            // Ensure pos is within the range of 0 to 63
-            if (pos < 0 || pos >= 64) {
-                throw new Error('Position must be between 0 and 63');
-            }
-
-            // Return the corresponding Base64 character
-            return base64Chars.charAt(pos);
-        }
-
-        
-
-        function decodeHtmlEntity(str) {
-            // Create a temporary DOM element to decode the entities
-            const txt = document.createElement("textarea");
-            txt.innerHTML = str;
-            return txt.value;
-        }
-
-        function byteSize(str) {
-            const encoder = new TextEncoder();
-            const encoded = encoder.encode(str);
-            return encoded.byteLength;
-        }
-
-        async function encryptText(text, key, iv) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(text);
-            const encrypted = await crypto.subtle.encrypt(
-                {
+    async function encryptText(text, key, iv) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+        const encrypted = await crypto.subtle.encrypt(
+            {
                 name: "AES-GCM",
                 iv: iv, // Initialization vector
-                },
-                key,
-                data
-            );
-            return new Uint8Array(encrypted);
-        }
+            },
+            key,
+            data
+        );
+        return new Uint8Array(encrypted);
+    }
 
-            async function generateKey() {
-            const key = await crypto.subtle.generateKey(
-                {
+    async function encryptFile(fileData, key, iv) {
+        const encrypted = await crypto.subtle.encrypt(
+            {
+                name: "AES-GCM",
+                iv: iv, // Initialization vector
+            },
+            key,
+            fileData
+        );
+        return new Uint8Array(encrypted);
+    }
+
+    async function uploadEncryptedFile(file, id) {
+        const res = await fetch(`/api/upload-attachment/${id}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/octet-stream",
+            },
+            body: file,
+        });
+    }
+
+    async function generateKey() {
+        const key = await crypto.subtle.generateKey(
+            {
                 name: "AES-GCM",
                 length: 256,
-                },
-                true, // extractable
-                ["encrypt", "decrypt"]
-            );
-            return key;
-            }
+            },
+            true, // extractable
+            ["encrypt", "decrypt"]
+        );
+        return key;
+    }
 
-            function arrayBufferToBase64(buffer) {
-            let binary = "";
-            const bytes = new Uint8Array(buffer);
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return btoa(binary);
-            }
+    function arrayBufferToBase64(buffer) {
+        let binary = "";
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
 
-            async function exportCryptoKey(key) {
-            const jwk = await crypto.subtle.exportKey("jwk", key);
-            const kValue = jwk.k;
-            const base64 = btoa(kValue);
-            return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-            }
+    async function exportCryptoKey(key) {
+        const jwk = await crypto.subtle.exportKey("jwk", key);
+        const kValue = jwk.k;
+        const base64 = btoa(kValue);
+        return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
 
-            async function importCryptoKey(urlSafeBase64Key) {
-            const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
-            const kValue = atob(base64);
-            const jwk = {
-                kty: "oct",
-                k: kValue,
-                alg: "A256GCM",
-                ext: true,
-                key_ops: ["encrypt", "decrypt"],
-            };
-            return crypto.subtle.importKey(
-                "jwk",
-                jwk,
-                {
+    async function importCryptoKey(urlSafeBase64Key) {
+        const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
+        const kValue = atob(base64);
+        const jwk = {
+            kty: "oct",
+            k: kValue,
+            alg: "A256GCM",
+            ext: true,
+            key_ops: ["encrypt", "decrypt"],
+        };
+        return crypto.subtle.importKey(
+            "jwk",
+            jwk,
+            {
                 name: "AES-GCM",
-                },
-                true, // extractable
-                ["encrypt", "decrypt"]
-            );
-            }
-        
-        async function generateIv(text) {
-            // Generate a random 12-byte salt
-            const salt = crypto.getRandomValues(new Uint8Array(12));
+            },
+            true, // extractable
+            ["encrypt", "decrypt"]
+        );
+    }
 
-            // Convert text to ArrayBuffer
-            const encoder = new TextEncoder();
-            const textBuffer = encoder.encode(text);
+    async function generateIv(text) {
+        // Generate a random 12-byte salt
+        const salt = crypto.getRandomValues(new Uint8Array(12));
 
-            // Concatenate text and salt buffers
-            const combinedBuffer = new Uint8Array(textBuffer.length + salt.length);
-            combinedBuffer.set(textBuffer);
-            combinedBuffer.set(salt, textBuffer.length);
+        // Convert text to ArrayBuffer
+        const encoder = new TextEncoder();
+        const textBuffer = encoder.encode(text);
 
-            // Hash the concatenated buffer using SHA-256
-            const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBuffer);
+        // Concatenate text and salt buffers
+        const combinedBuffer = new Uint8Array(textBuffer.length + salt.length);
+        combinedBuffer.set(textBuffer);
+        combinedBuffer.set(salt, textBuffer.length);
 
-            // Convert hash buffer to hex string
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
+        // Hash the concatenated buffer using SHA-256
+        const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBuffer);
 
-            // Return the first 12 bytes of the hash as the IV, the salt, and the hash as hex string
-            return { iv: new Uint8Array(hashBuffer).slice(0, 12), salt, hashHexString };
-            }
+        // Convert hash buffer to hex string
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
 
-        function openModal(url) {
-            var modal = new bootstrap.Modal(document.getElementById('url-modal'));
-            document.getElementById("paste-url").value = url;
+        // Return the first 12 bytes of the hash as the IV, the salt, and the hash as hex string
+        return { iv: new Uint8Array(hashBuffer).slice(0, 12), salt, hashHexString };
+    }
 
-            urlModal = modal;
+    function openModal(url) {
+        var modal = new bootstrap.Modal(document.getElementById('url-modal'));
+        document.getElementById("paste-url").value = url;
 
-            modal.show();
+        urlModal = modal;
+
+        modal.show();
+    }
+
+    function closeModal() {
+        urlModal.hide();
+        let close_button = document.getElementById("close-url-btn");
+        let copy_button = document.getElementById("copy-url-btn");
+        close_button.style.display = "none";
+        copy_button.style.display = "block";
+        copied = false;
+        OnInput();
+
+        total_pastes.innerText = parseInt(total_pastes.innerText) + 1;
+
+    }
+
+    function copyToClipboard() {
+
+        if (copied) {
+            closeModal();
+            return;
         }
 
-        function closeModal() {
-            urlModal.hide();
+        var copyText = document.getElementById("paste-url");
+        navigator.clipboard.writeText(copyText.value);
+
+        var popoverButton = document.getElementById('copy-url-btn');
+
+        // Create a new Popover instance
+        var popover = new bootstrap.Popover(popoverButton, {
+            content: 'Successfully Copied to clipboard!',
+            placement: 'top',
+            trigger: 'manual',
+            customClass: 'bg-success'
+        });
+
+        // Show the popover
+        popover.show();
+        copied = true;
+
+        setTimeout(function () {
+            popover.hide();
+            paste_el.value = "";
+            max_views_el.value = "0";
+
+            const expire_el = document.getElementById("expireDropdown");
+            expire_el.setAttribute("data-value", "3days");
+            expire_el.innerText = "3 Days";
+
+            paste_password.value = "";
+            paste_title.value = "";
+
+            const display_el = document.getElementById("displayDropdown");
+            display_el.setAttribute("data-value", "plaintext");
+            display_el.innerText = "Plaintext";
+
+
+            paste_el.focus();
+
             let close_button = document.getElementById("close-url-btn");
             let copy_button = document.getElementById("copy-url-btn");
-            close_button.style.display = "none";
-            copy_button.style.display = "block";
-            copied = false;
-            OnInput();
+            close_button.style.display = "block";
+            copy_button.style.display = "none";
+        }, 500);
 
-            total_pastes.innerText = parseInt(total_pastes.innerText) + 1;
-
-        }
-
-        function copyToClipboard() {
-
-            if (copied) {
-                closeModal();
-                return;
-            }
-
-            var copyText = document.getElementById("paste-url");
-            navigator.clipboard.writeText(copyText.value);
-
-            var popoverButton = document.getElementById('copy-url-btn');
-
-            // Create a new Popover instance
-            var popover = new bootstrap.Popover(popoverButton, {
-                content: 'Successfully Copied to clipboard!',
-                placement: 'top',
-                trigger: 'manual',
-                customClass: 'bg-success'
-            });
-
-            // Show the popover
-            popover.show();
-            copied = true;
-
-            setTimeout(function () {
-                popover.hide();
-                paste_el.value = "";
-                max_views_el.value = "0";
-
-                const expire_el = document.getElementById("expireDropdown");
-                expire_el.setAttribute("data-value", "3days");
-                expire_el.innerText = "3 Days";
-
-                paste_password.value = "";
-                paste_title.value = "";
-
-                const display_el = document.getElementById("displayDropdown");
-                display_el.setAttribute("data-value", "plaintext");
-                display_el.innerText = "Plaintext";
+    }
 
 
-                paste_el.focus();
-
-                let close_button = document.getElementById("close-url-btn");
-                let copy_button = document.getElementById("copy-url-btn");
-                close_button.style.display = "block";
-                copy_button.style.display = "none";
-            }, 500);
-            
-        }
-
-
-    </script>
+</script>
 
 {% endblock %}
