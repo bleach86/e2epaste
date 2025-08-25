@@ -2,492 +2,593 @@
 
 
 {% block page %}
-    <div class="spacer-50"></div>
-    <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
-        <div class="row">
-            <div class="col-md-12 rounded-2">
-                
-                <div class="d-flex flex-column">
-                    <h2 class="text-center mt-3">{{ title }}</h2>
-                    
-                </div>
+<div class="spacer-50"></div>
+<div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
+    <div class="row">
+        <div class="col-md-12 rounded-2">
 
-                <h4 class="text-center mt-3 paste-info">{{ paste.title }}</h4>
-                
-                <div class="d-flex justify-content-center align-items-center mb-2 paste-info">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-calendar-heart me-2"></i> 
-                        <span>Paste Date: <span id="paste-date"></span></span>
-                    </div>
-                    <div class="d-flex align-items-center ms-3">
-                        <i class="bi bi-eye me-2"></i> 
-                        <span id="views">Views: {{ paste.views }}</span>
-                    </div>
-                    <div class="d-flex align-items-center ms-3">
-                        <i class="bi bi-eye-fill me-2"></i> 
-                        <span>Max Views: <span id="max-views"></span></span>
-                    </div>
-                    <div class="d-flex align-items-center ms-3">
-                        <i class="bi bi-clock me-2"></i> 
-                        <span>Expires: <span id="expire-date"></span></span>
-                    </div>
-                    <div class="d-flex align-items-center ms-3">
-                        <button 
-                        class="btn"
-                        data-bs-toggle="popover" 
-                        data-bs-trigger="focus"
-                        data-bs-custom-class="bg-success" 
-                        data-bs-content="Copied!" 
-                        onclick="copyToClipboard()"
-                        >
-                            <i class="bi bi-clipboard"></i>
-                            <span>Copy</span>
-                    </div>
-                </div>
-                <section id="view-section" class="h-100">
-                    <pre class="theme-atom-one-dark"><span class="badge text-bg-info text-dark lang-info position-relative float-end me-3 opacity-50" style="top:3em;">{{ formatted_lang }}</span><code id="view-area" class="form-control mt-4 pt-4 paste-area focus-ring view-area language-{{ paste.syntax }}"></code></pre>
-                </section>
+            <div class="d-flex flex-column">
+                <h2 class="text-center mt-3">{{ title }}</h2>
+
             </div>
-        </div>
-    </div>
-    <button  type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
-        <i class="bi bi-arrow-up"></i>
-    </button>
 
-    <div class="modal fade" id="password-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="password-modal-Label" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-info">
-                    <h1 class="modal-title fs-5 text-dark" id="password-modal-Label">Password Protected Paste</h1>
-                </div>
-                <div class="modal-body">
-                    <p>Please enter the password in order to view the paste content:</p>
-                    <div class="input-group mb-3">
-                          <button class="btn btn-outline-secondary" type="button" id="show-pass-button"><i id="show-pass-icon" class="bi bi-eye"></i></button>
-                        <input onkeydown="if(event.key === 'Enter') { decryptWithPassword(); }" type="password" class="form-control" id="password-input" placeholder="Password">
-                    </div>
+            <h4 class="text-center mt-3 paste-info">{{ paste.title }}</h4>
 
-                    <div id="password-error" class="text-danger mt-2 bg-danger text-dark p-2 rounded-1" style="display: none;">Incorrect password. Please try again.</div>
+            <div class="d-flex justify-content-center align-items-center mb-2 paste-info">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-calendar-heart me-2"></i>
+                    <span>Paste Date: <span id="paste-date"></span></span>
                 </div>
-                <div class="modal-footer d-flex justify-content-between">
-                    <a class="link-secondary" style="font-size:small;" href="/">Take me Home</a>
-                    <button id="submit-password-btn" type="button" class="btn btn-outline-light" onclick="decryptWithPassword();">Submit</button>
+                <div class="d-flex align-items-center ms-3">
+                    <i class="bi bi-eye me-2"></i>
+                    <span id="views">Views: {{ paste.views }}</span>
+                </div>
+                <div class="d-flex align-items-center ms-3">
+                    <i class="bi bi-eye-fill me-2"></i>
+                    <span>Max Views: <span id="max-views"></span></span>
+                </div>
+                <div class="d-flex align-items-center ms-3">
+                    <i class="bi bi-clock me-2"></i>
+                    <span>Expires: <span id="expire-date"></span></span>
+                </div>
+                <div class="d-flex align-items-center ms-3">
+                    <button class="btn" data-bs-toggle="popover" data-bs-trigger="focus"
+                        data-bs-custom-class="bg-success" data-bs-content="Copied!" onclick="copyToClipboard()">
+                        <i class="bi bi-clipboard"></i>
+                        <span>Copy</span>
                 </div>
             </div>
+            <section id="view-section" class="h-100">
+                <pre
+                    class="theme-atom-one-dark"><span class="badge text-bg-info text-dark lang-info position-relative float-end me-3 opacity-50" style="top:3em;">{{ formatted_lang }}</span><code id="view-area" class="form-control mt-4 pt-4 paste-area focus-ring view-area language-{{ paste.syntax }}"></code></pre>
+            </section>
         </div>
     </div>
 
-    <script src="/public/js/highlight.min.js"></script>
+    <div id="attachment-section" class="d-flex py-2 d-none">
+        <label for="download-link" class="mt-2">Attachment:</label>
+        <a id="download-link" class="btn btn-link">{{ paste.file_name }}</a>
+        <span id="download-spinner" class="d-none btn" role="status">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span id="download-status">Downloading encrypted file from server...</span>
+        </span>
 
-    <script> 
-        var cipher_text = "{{ paste.content }}";
-        var iv = {{ paste.iv }};
-        var keyFragment = window.location.hash.substr(1);
-        var serverKey = "{{ paste.key_fragment }}";
-        var pw_hash = "{{ paste.password_hash }}";
-        var title = "{{ paste.title }}";
+    </div>
 
-        var password = "";
+</div>
+<button type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
+    <i class="bi bi-arrow-up"></i>
+</button>
 
-        const view_area = document.getElementById('view-area');
+<div class="modal fade" id="password-modal" data-bs-backdrop="static" tabindex="-1"
+    aria-labelledby="password-modal-Label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-info">
+                <h1 class="modal-title fs-5 text-dark" id="password-modal-Label">Password Protected Paste</h1>
+            </div>
+            <div class="modal-body">
+                <p>Please enter the password in order to view the paste content:</p>
+                <div class="input-group mb-3">
+                    <button class="btn btn-outline-secondary" type="button" id="show-pass-button"><i id="show-pass-icon"
+                            class="bi bi-eye"></i></button>
+                    <input onkeydown="if(event.key === 'Enter') { decryptWithPassword(); }" type="password"
+                        class="form-control" id="password-input" placeholder="Password">
+                </div>
 
-        var passwordModal;
+                <div id="password-error" class="text-danger mt-2 bg-danger text-dark p-2 rounded-1"
+                    style="display: none;">Incorrect password. Please try again.</div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <a class="link-secondary" style="font-size:small;" href="/">Take me Home</a>
+                <button id="submit-password-btn" type="button" class="btn btn-outline-light"
+                    onclick="decryptWithPassword();">Submit</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-        function openPasswordModal() {
-            let modal = new bootstrap.Modal(document.getElementById('password-modal'));
-            passwordModal = modal;
-            const password_input = document.getElementById('password-input');
-            passwordModal.show();
+<script src="/public/js/highlight.min.js"></script>
+
+<script>
+    var cipher_text = "{{ paste.content }}";
+    var iv = {{ paste.iv }};
+    var keyFragment = window.location.hash.substr(1);
+    var serverKey = "{{ paste.key_fragment }}";
+    var pw_hash = "{{ paste.password_hash }}";
+    var title = "{{ paste.title }}";
+
+    var fileName = "{{ paste.file_name }}";
+
+    var password = "";
+
+    const view_area = document.getElementById('view-area');
+
+    var passwordModal;
+
+    function openPasswordModal() {
+        let modal = new bootstrap.Modal(document.getElementById('password-modal'));
+        passwordModal = modal;
+        const password_input = document.getElementById('password-input');
+        passwordModal.show();
+
+        setTimeout(() => {
+            password_input.focus();
+            let show_pass_button = document.getElementById('show-pass-button');
+            show_pass_button.addEventListener('click', showPassword);
+        }, 500);
+    }
+
+    function closePasswordModal() {
+        passwordModal.hide();
+    }
+
+    function copyToClipboard() {
+        navigator.clipboard.writeText(view_area.textContent);
+    }
+
+    async function decryptWithPassword() {
+        const password_input = document.getElementById('password-input').value.trim();
+        const isValid = await checkPassword(password_input);
+
+        if (isValid) {
+            closePasswordModal();
+            password = password_input;
+            decrypt();
+            setTimeout(async () => {
+                hljs.highlightAll();
+                await markAsViewed();
+            }, 50);
+
+
+        } else {
+            let passError = document.getElementById('password-error');
+
+            passError.style.display = 'block';
 
             setTimeout(() => {
-                password_input.focus();
-                let show_pass_button = document.getElementById('show-pass-button');
-                show_pass_button.addEventListener('click', showPassword);
-            }, 500);
+                passError.style.display = 'none';
+            }, 3000);
+
+        }
+    }
+
+    async function decrypt() {
+        const key = reconstructKey(serverKey, keyFragment);
+        const salt = new Uint8Array(iv);
+
+        let iv_array = await generateIv(password, salt).then((iv) => {
+            return iv.iv;
+        });
+
+        const importedKey = await importCryptoKey(key);
+        const encryptedArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(cipher_text));
+        const decrypted = await decryptText(encryptedArrayBuffer, importedKey, iv_array);
+
+        view_area.textContent = decrypted;
+        view_area.style.height = "100%";
+
+        if (fileName && fileName.toLowerCase() !== "none" && fileName !== "null") {
+            const attachmentSection = document.getElementById('attachment-section');
+            attachmentSection.classList.remove('d-none');
+
+            const downloadLink = document.getElementById('download-link');
+            const fileNameArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(fileName));
+            const decryptedFileName = await decryptText(fileNameArrayBuffer, importedKey, iv_array);
+
+            downloadLink.textContent = decryptedFileName;
+            fileName = decryptedFileName;
         }
 
-        function closePasswordModal() {
-            passwordModal.hide();
+    }
+
+
+    const downloadLink = document.getElementById('download-link');
+
+    downloadLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+
+        const downloadSpinner = document.getElementById('download-spinner');
+        downloadSpinner.classList.remove('d-none');
+
+        const downloadLink = document.getElementById('download-link');
+        downloadLink.classList.add('d-none');
+
+        // fetch raw binary
+        const res = await fetch(`/api/download-attachment/{{ paste.id }}`);
+        if (!res.ok) {
+            alert("Download failed");
+            return;
         }
 
-        function copyToClipboard() {
-            navigator.clipboard.writeText(view_area.textContent);
+        const buffer = await res.arrayBuffer();
+        const fileBytes = new Uint8Array(buffer);
+
+        await decryptFile(fileBytes); // pass Uint8Array directly
+    });
+
+
+
+    async function decryptFile(file) {
+        if (!file) {
+            return;
         }
 
-        async function decryptWithPassword() {
-            const password_input = document.getElementById('password-input').value.trim();
-            const isValid = await checkPassword(password_input);
+        const downloadStatus = document.getElementById('download-status');
 
-            if (isValid) {
-                closePasswordModal();
-                password = password_input;
-                decrypt();
-                setTimeout(async () => {
-                    hljs.highlightAll();
-                    await markAsViewed();
-                }, 50);
+        downloadStatus.textContent = "Decrypting file...";
 
-                
-            } else {
-                let passError = document.getElementById('password-error');
+        const key = reconstructKey(serverKey, keyFragment);
+        const salt = new Uint8Array(iv);
 
-                passError.style.display = 'block';
+        let iv_array = await generateIv(password, salt).then((iv) => iv.iv);
 
-                setTimeout(() => {
-                    passError.style.display = 'none';
-                }, 3000);
-
-            }
-        }
-
-        async function decrypt() {
-            const key = reconstructKey(serverKey, keyFragment);
-            const salt = new Uint8Array(iv);
-
-            let iv_array = await generateIv(password, salt).then((iv) => {
-                return iv.iv;
-            });
-
-            const importedKey = await importCryptoKey(key);
-            const encryptedArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(cipher_text));
-            const decrypted = await decryptText(encryptedArrayBuffer, importedKey, iv_array);
-
-            view_area.textContent = decrypted;
-            view_area.style.height = "100%";
-        }
-
-        let back_to_top = document.getElementById("btn-back-to-top");
-
-        function backToTop() {
-            document.body.scrollTop = 0;
-            document.documentElement.scrollTop = 0;
-        }
-
-        function select_all_handler() {
-            const selection = window.getSelection();
-            const range = document.createRange(); 
-            range.selectNodeContents(view_area);
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }
-
-        function decodeHtmlEntity(str) {
-            // Create a temporary DOM element to decode the entities
-            const txt = document.createElement("textarea");
-            txt.innerHTML = str;
-            return txt.value;
-        }
-
-        function showPassword() {
-            let password_input = document.getElementById('password-input');
-            let show_pass_icon = document.getElementById('show-pass-icon');
-
-            if (password_input.type === "password") {
-                password_input.type = "text";
-                show_pass_icon.classList.remove("bi-eye");
-                show_pass_icon.classList.add("bi-eye-slash");
-            } else {
-                password_input.type = "password";
-                show_pass_icon.classList.remove("bi-eye-slash");
-                show_pass_icon.classList.add("bi-eye");
-            }
-        }
-
-        async function importCryptoKey(urlSafeBase64Key) {
-            const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
-            const kValue = atob(base64);
-            const jwk = {
-                kty: "oct",
-                k: kValue,
-                alg: "A256GCM",
-                ext: true,
-                key_ops: ["encrypt", "decrypt"],
-            };
-            return crypto.subtle.importKey(
-                "jwk",
-                jwk,
-                {
+        const importedKey = await importCryptoKey(key);
+        const encryptedArrayBuffer = new Uint8Array(file).buffer;
+        const decrypted = await crypto.subtle.decrypt(
+            {
                 name: "AES-GCM",
-                },
-                true, // extractable
-                ["encrypt", "decrypt"]
-            );
-            }
+                iv: iv_array, // Initialization vector
+            },
+            importedKey,
+            encryptedArrayBuffer
+        );
 
-        function base64ToArrayBuffer(base64) {
-            const binary = atob(base64);
-            const len = binary.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
-            return bytes.buffer;
-            }
+        if (decrypted) {
+            const blob = new Blob([decrypted], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
 
-        async function decryptText(encrypted, key, iv) {
-            const decrypted = await crypto.subtle.decrypt(
-                {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            const downloadSpinner = document.getElementById('download-spinner');
+            downloadSpinner.classList.add('d-none');
+
+            const downloadLink = document.getElementById('download-link');
+            downloadLink.classList.remove('d-none');
+            downloadStatus.textContent = "Downloading encrypted file from server...";
+
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+    }
+
+
+    let back_to_top = document.getElementById("btn-back-to-top");
+
+    function backToTop() {
+        document.body.scrollTop = 0;
+        document.documentElement.scrollTop = 0;
+    }
+
+    function select_all_handler() {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(view_area);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    function decodeHtmlEntity(str) {
+        // Create a temporary DOM element to decode the entities
+        const txt = document.createElement("textarea");
+        txt.innerHTML = str;
+        return txt.value;
+    }
+
+    function showPassword() {
+        let password_input = document.getElementById('password-input');
+        let show_pass_icon = document.getElementById('show-pass-icon');
+
+        if (password_input.type === "password") {
+            password_input.type = "text";
+            show_pass_icon.classList.remove("bi-eye");
+            show_pass_icon.classList.add("bi-eye-slash");
+        } else {
+            password_input.type = "password";
+            show_pass_icon.classList.remove("bi-eye-slash");
+            show_pass_icon.classList.add("bi-eye");
+        }
+    }
+
+    async function importCryptoKey(urlSafeBase64Key) {
+        const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
+        const kValue = atob(base64);
+        const jwk = {
+            kty: "oct",
+            k: kValue,
+            alg: "A256GCM",
+            ext: true,
+            key_ops: ["encrypt", "decrypt"],
+        };
+        return crypto.subtle.importKey(
+            "jwk",
+            jwk,
+            {
+                name: "AES-GCM",
+            },
+            true, // extractable
+            ["encrypt", "decrypt"]
+        );
+    }
+
+    function base64ToArrayBuffer(base64) {
+        const binary = atob(base64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    async function decryptText(encrypted, key, iv) {
+        const decrypted = await crypto.subtle.decrypt(
+            {
                 name: "AES-GCM",
                 iv: iv, // Initialization vector
-                },
-                key,
-                encrypted
-            );
-            const decoder = new TextDecoder();
-            return decoder.decode(decrypted);
-            }
+            },
+            key,
+            encrypted
+        );
+        const decoder = new TextDecoder();
+        return decoder.decode(decrypted);
+    }
 
-        function set_expire_date() {
-            let expire_el = document.getElementById("expire-date");
-            let timestamp = "{{ paste.expires }}";
-            
-            if (timestamp === "none") {
-                expire_el.innerText = " Never";
-                return;
-            }
+    function set_expire_date() {
+        let expire_el = document.getElementById("expire-date");
+        let timestamp = "{{ paste.expires }}";
 
-            expire_el.innerText = time_until(timestamp);
+        if (timestamp === "none") {
+            expire_el.innerText = " Never";
+            return;
         }
 
-        function time_until(timestamp) {
-            const now = new Date();
-            const difference = timestamp - now;
+        expire_el.innerText = time_until(timestamp);
+    }
 
-            if (difference <= 0) {
-                return "Never";
-            }
+    function time_until(timestamp) {
+        const now = new Date();
+        const difference = timestamp - now;
 
-            const seconds = Math.floor(difference / 1000);
+        if (difference <= 0) {
+            return "Never";
+        }
 
-            // Define the intervals in seconds
-            const intervals = [
-                { unit: "year", seconds: 31536000 },
-                { unit: "month", seconds: 2592000 },
-                { unit: "day", seconds: 86400 },
-                { unit: "hour", seconds: 3600 },
-                { unit: "minute", seconds: 60 },
-                { unit: "second", seconds: 1 },
-            ];
+        const seconds = Math.floor(difference / 1000);
 
-            for (let i = 0; i < intervals.length; i++) {
-                const interval = intervals[i];
-                const count = Math.floor(seconds / interval.seconds);
-                const remainder = seconds % interval.seconds;
+        // Define the intervals in seconds
+        const intervals = [
+            { unit: "year", seconds: 31536000 },
+            { unit: "month", seconds: 2592000 },
+            { unit: "day", seconds: 86400 },
+            { unit: "hour", seconds: 3600 },
+            { unit: "minute", seconds: 60 },
+            { unit: "second", seconds: 1 },
+        ];
 
-                if (count >= 1) {
-                    if (i < intervals.length - 1) {
-                        // Check if we need to round up to the next interval
-                        const nextInterval = intervals[i + 1];
-                        if (remainder >= nextInterval.seconds / 2) {
-                            return (count + 1) + " " + interval.unit + ((count + 1) > 1 ? "s" : "");
-                        }
+        for (let i = 0; i < intervals.length; i++) {
+            const interval = intervals[i];
+            const count = Math.floor(seconds / interval.seconds);
+            const remainder = seconds % interval.seconds;
+
+            if (count >= 1) {
+                if (i < intervals.length - 1) {
+                    // Check if we need to round up to the next interval
+                    const nextInterval = intervals[i + 1];
+                    if (remainder >= nextInterval.seconds / 2) {
+                        return (count + 1) + " " + interval.unit + ((count + 1) > 1 ? "s" : "");
                     }
-                    return count + " " + interval.unit + (count > 1 ? "s" : "");
                 }
-            }
-
-            // Fallback in case everything else fails
-            return Math.ceil(seconds) + " seconds";
-        }
-
-
-        {# function time_until(timestamp) {
-            const now = new Date();
-            const difference = timestamp - now;
-
-            if (difference <= 0) {
-                return " Never";
-            }
-
-            const seconds = Math.floor(difference / 1000);
-
-            let interval = Math.floor(seconds / 31536000);
-            if (interval > 1) {
-                return interval + " years";
-            }
-            interval = Math.floor(seconds / 2592000);
-            if (interval > 1) {
-                return interval + " months";
-            }
-            interval = Math.floor(seconds / 86400);
-            if (interval > 1) {
-                return interval + " days";
-            }
-            interval = Math.floor(seconds / 3600);
-            if (interval > 1) {
-                return interval + " hours";
-            }
-            interval = Math.floor(seconds / 60);
-            if (interval > 1) {
-                return interval + " minutes";
-            }
-            return Math.floor(seconds) + " seconds";
-        } #}
-
-        function reconstructKey(serverKey, hashFragment) {
-            const totalLength = 58;
-            const keyArray = Array(totalLength).fill('');
-
-            // Parse the hashFragment into fragments
-            const fragments = [];
-
-            for (let i = 0; i < hashFragment.length; i += 2) {
-                fragments.push(hashFragment.slice(i, i + 2));
-            }
-
-            if (!fragments) {
-                throw new Error('Invalid hashFragment format');
-            }
-
-            // Place the fragments in their respective positions
-            fragments.forEach(fragment => {
-                const position = fromUrlSafeBase64Char(fragment[0]);
-                const byte = fragment[1];
-
-                if (position >= 0 && position < totalLength) {
-                    keyArray[position] = byte;
-                } else {
-                    throw new Error('Position out of bounds');
-                }
-            });
-
-            // Fill the remaining empty positions with characters from the server key
-            let serverKeyIndex = 0;
-            for (let i = 0; i < totalLength; i++) {
-                if (keyArray[i] === '') {
-                    if (serverKeyIndex < serverKey.length) {
-                        keyArray[i] = serverKey[serverKeyIndex++];
-                    } else {
-                        throw new Error('Server key is too short to fill the array');
-                    }
-                } else{
-                    serverKeyIndex++;
-                }
-            }
-
-            // Join the array to form the reconstructed key
-            const reconstructedKey = keyArray.join('');
-
-            return reconstructedKey;
-        }
-
-        function fromUrlSafeBase64Char(char) {
-            const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            // Find the index of the character in the Base64 character set
-            const pos = base64Chars.indexOf(char);
-
-            // Ensure the character is valid
-            if (pos === -1) {
-                throw new Error('Invalid Base64 character');
-            }
-
-            return pos;
-        }
-
-        function set_paste_date() {
-            let date_el = document.getElementById("paste-date");
-            let timestamp = "{{ paste.timestamp }}";
-            let date = new Date(timestamp * 1000);
-            let options = { year: 'numeric', month: 'long', day: 'numeric' };
-            date_el.innerText = date.toLocaleDateString('en-US', options);
-        }
-
-        function set_max_views() {
-            let max_views_el = document.getElementById("max-views");
-            let max_views = "{{ paste.max_views }}";
-            if (max_views === "0" || max_views === "none") {
-                max_views_el.innerText = "∞";
-                return;
-            }
-            max_views_el.innerText = max_views;
-        }
-
-        async function generateIv(text, salt) {
-            // Convert text to ArrayBuffer
-            const encoder = new TextEncoder();
-            const textBuffer = encoder.encode(text);
-
-            // Concatenate text and salt buffers
-            const combinedBuffer = new Uint8Array(textBuffer.length + salt.length);
-            combinedBuffer.set(textBuffer);
-            combinedBuffer.set(salt, textBuffer.length);
-
-            // Hash the concatenated buffer using SHA-256
-            const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBuffer);
-
-            // Convert hash buffer to hex string
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
-
-            // Return the first 12 bytes of the hash as the IV and the hash as hex string
-            return { iv: new Uint8Array(hashBuffer).slice(0, 12), hashHexString };
-            }
-
-        
-        async function checkPassword(password) {
-            const encoder = new TextEncoder();
-            const passwordBuffer = encoder.encode(password);
-            const salt = new Uint8Array(iv);
-            const { _, hashHexString } = await generateIv(password, salt);
-            return hashHexString === pw_hash;
-        }
-
-        async function markAsViewed() {
-            const response = await fetch('/api/advance-views/{{ paste.id }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                let paste_views = document.getElementById('views');
-                let total_views = document.getElementById('total-views');
-
-                paste_views.innerText = "Views: " + data.views;
-                total_views.innerText = data.total_views;
+                return count + " " + interval.unit + (count > 1 ? "s" : "");
             }
         }
 
-        document.addEventListener('DOMContentLoaded', async function() {
-            set_expire_date();
-            set_paste_date();
-            set_max_views();
-            if (pw_hash !== "none") {
-                openPasswordModal();
+        // Fallback in case everything else fails
+        return Math.ceil(seconds) + " seconds";
+    }
+
+
+    function time_until(timestamp) {
+        const now = new Date();
+        const difference = timestamp - now;
+
+        if (difference <= 0) {
+            return " Never";
+        }
+
+        const seconds = Math.floor(difference / 1000);
+
+        let interval = Math.floor(seconds / 31536000);
+        if (interval > 1) {
+            return interval + " years";
+        }
+        interval = Math.floor(seconds / 2592000);
+        if (interval > 1) {
+            return interval + " months";
+        }
+        interval = Math.floor(seconds / 86400);
+        if (interval > 1) {
+            return interval + " days";
+        }
+        interval = Math.floor(seconds / 3600);
+        if (interval > 1) {
+            return interval + " hours";
+        }
+        interval = Math.floor(seconds / 60);
+        if (interval > 1) {
+            return interval + " minutes";
+        }
+        return Math.floor(seconds) + " seconds";
+
+    }
+
+    function reconstructKey(serverKey, hashFragment) {
+        const totalLength = 58;
+        const keyArray = Array(totalLength).fill('');
+
+        // Parse the hashFragment into fragments
+        const fragments = [];
+
+        for (let i = 0; i < hashFragment.length; i += 2) {
+            fragments.push(hashFragment.slice(i, i + 2));
+        }
+
+        if (!fragments) {
+            throw new Error('Invalid hashFragment format');
+        }
+
+        // Place the fragments in their respective positions
+        fragments.forEach(fragment => {
+            const position = fromUrlSafeBase64Char(fragment[0]);
+            const byte = fragment[1];
+
+            if (position >= 0 && position < totalLength) {
+                keyArray[position] = byte;
             } else {
-                decrypt();
-                setTimeout(async () => {
-                    hljs.highlightAll();
-                    await markAsViewed();
-                }, 50);
-
-                
- 
+                throw new Error('Position out of bounds');
             }
+        });
 
-
-            document.addEventListener('keydown', function(event) {
-                if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
-                    event.preventDefault();
-                    select_all_handler();
+        // Fill the remaining empty positions with characters from the server key
+        let serverKeyIndex = 0;
+        for (let i = 0; i < totalLength; i++) {
+            if (keyArray[i] === '') {
+                if (serverKeyIndex < serverKey.length) {
+                    keyArray[i] = serverKey[serverKeyIndex++];
+                } else {
+                    throw new Error('Server key is too short to fill the array');
                 }
-            });
+            } else {
+                serverKeyIndex++;
+            }
+        }
 
-            // Add event listener for contextmenu
-            view_area.addEventListener('onselectstart', function(event) {
+        // Join the array to form the reconstructed key
+        const reconstructedKey = keyArray.join('');
+
+        return reconstructedKey;
+    }
+
+    function fromUrlSafeBase64Char(char) {
+        const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        // Find the index of the character in the Base64 character set
+        const pos = base64Chars.indexOf(char);
+
+        // Ensure the character is valid
+        if (pos === -1) {
+            throw new Error('Invalid Base64 character');
+        }
+
+        return pos;
+    }
+
+    function set_paste_date() {
+        let date_el = document.getElementById("paste-date");
+        let timestamp = "{{ paste.timestamp }}";
+        let date = new Date(timestamp * 1000);
+        let options = { year: 'numeric', month: 'long', day: 'numeric' };
+        date_el.innerText = date.toLocaleDateString('en-US', options);
+    }
+
+    function set_max_views() {
+        let max_views_el = document.getElementById("max-views");
+        let max_views = "{{ paste.max_views }}";
+        if (max_views === "0" || max_views === "none") {
+            max_views_el.innerText = "∞";
+            return;
+        }
+        max_views_el.innerText = max_views;
+    }
+
+    async function generateIv(text, salt) {
+        // Convert text to ArrayBuffer
+        const encoder = new TextEncoder();
+        const textBuffer = encoder.encode(text);
+
+        // Concatenate text and salt buffers
+        const combinedBuffer = new Uint8Array(textBuffer.length + salt.length);
+        combinedBuffer.set(textBuffer);
+        combinedBuffer.set(salt, textBuffer.length);
+
+        // Hash the concatenated buffer using SHA-256
+        const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBuffer);
+
+        // Convert hash buffer to hex string
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
+
+        // Return the first 12 bytes of the hash as the IV and the hash as hex string
+        return { iv: new Uint8Array(hashBuffer).slice(0, 12), hashHexString };
+    }
+
+
+    async function checkPassword(password) {
+        const encoder = new TextEncoder();
+        const passwordBuffer = encoder.encode(password);
+        const salt = new Uint8Array(iv);
+        const { _, hashHexString } = await generateIv(password, salt);
+        return hashHexString === pw_hash;
+    }
+
+    async function markAsViewed() {
+        const response = await fetch('/api/advance-views/{{ paste.id }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            let paste_views = document.getElementById('views');
+            let total_views = document.getElementById('total-views');
+
+            paste_views.innerText = "Views: " + data.views;
+            total_views.innerText = data.total_views;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        set_expire_date();
+        set_paste_date();
+        set_max_views();
+        if (pw_hash !== "none") {
+            openPasswordModal();
+        } else {
+            decrypt();
+            setTimeout(async () => {
+                hljs.highlightAll();
+                await markAsViewed();
+            }, 50);
+
+
+
+        }
+
+
+        document.addEventListener('keydown', function (event) {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
                 event.preventDefault();
                 select_all_handler();
-            });
+            }
+        });
 
-            // When the user clicks on the button, scroll to the top of the document
-            back_to_top.addEventListener("click", backToTop);
-        })
+        // Add event listener for contextmenu
+        view_area.addEventListener('onselectstart', function (event) {
+            event.preventDefault();
+            select_all_handler();
+        });
 
-    </script>
+        // When the user clicks on the button, scroll to the top of the document
+        back_to_top.addEventListener("click", backToTop);
+    })
+
+</script>
 
 {% endblock %}
-
