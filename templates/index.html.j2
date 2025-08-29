@@ -114,6 +114,7 @@
             </div>
             <div class="modal-body">
                 <p>Your paste has been created. Here is the URL:</p>
+                <div class="d-flex justify-content-center pb-3" id="qrcode-container"></div>
                 <input class="w-100 rounded-2" style="font-size: 10pt;" id="paste-url" disabled>
             </div>
             <div class="modal-footer">
@@ -127,6 +128,7 @@
     </div>
 </div>
 
+<script type="text/javascript" src="/public/js/qrcode.js"></script>
 <script>
     let paste_el = document.getElementById("paste-area");
     paste_el.value = "";
@@ -539,8 +541,16 @@
     function openModal(url) {
         var modal = new bootstrap.Modal(document.getElementById('url-modal'));
         document.getElementById("paste-url").value = url;
-
         urlModal = modal;
+
+        var typeNumber = 0;
+        var errorCorrectionLevel = 'M';
+        var qr = qrcode(typeNumber, errorCorrectionLevel);
+        qr.addData(url);
+        qr.make();
+        var cellSize = 4;
+        var margin = 2;
+        document.getElementById('qrcode-container').innerHTML = qr.createImgTag(cellSize, margin);
 
         modal.show();
     }

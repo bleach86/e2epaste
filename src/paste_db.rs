@@ -1,5 +1,4 @@
 extern crate sled;
-use core::time;
 use rocket::tokio;
 use serde::{Deserialize, Serialize};
 use sled::{Db, Result, Tree};
