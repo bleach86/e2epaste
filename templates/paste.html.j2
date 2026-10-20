@@ -42,6 +42,8 @@
             <button type="button" id="download-paste-btn" class="btn btn-quiet" disabled>{{ icons.icon("download") }} Download</button>
             <button type="button" id="wrap-btn" class="btn btn-quiet" aria-pressed="false" aria-label="Wrap long lines"
                 title="Wrap long lines">{{ icons.icon("wrap") }}</button>
+            {# Only in the browser that created the paste (js/delete_tokens.mjs). #}
+            <a id="delete-paste-btn" class="btn btn-quiet btn-quiet-danger" hidden>{{ icons.icon("eraser") }} Delete</a>
         </div>
     </div>
 
@@ -101,7 +103,10 @@
             </div>
 
             <div class="d-flex justify-content-between align-items-center gap-3">
-                <a class="small" href="/">Go to the home page</a>
+                <div class="d-flex flex-wrap gap-3">
+                    <a class="small" href="/">Go to the home page</a>
+                    <a class="small text-danger" id="password-delete-link" hidden>Delete this paste</a>
+                </div>
                 <button id="submit-password-btn" type="button" class="btn btn-accent">
                     <span class="unlock-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Unlock</span>
                     <span class="unlock-busy d-none align-items-center gap-2"><span

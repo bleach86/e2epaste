@@ -137,10 +137,14 @@
             {% endcall %}
 
             {% call faq("delete", "Can I delete a paste?") %}
-            <p class="mb-0">Yes. When you create a paste, the link dialog also has a delete link. Open it and confirm
-                to delete the paste and any attachment for good. Keep the delete link to yourself, since anyone who
-                has it can delete the paste. It's only shown once, so if you lose it, the paste stays until it
-                expires or reaches its view limit.</p>
+            <p>Yes. In the browser you created it in, the paste's page has a Delete button. Confirm to delete the
+                paste and any attachment for good.</p>
+            <p>That browser keeps the paste's delete token in its local storage until the paste expires. The token can
+                delete the paste but not read it; the key in the link is never stored. Clearing the site's data, or
+                using a private window, removes it.</p>
+            <p class="mb-0">From anywhere else, use the delete link from the link dialog. Keep it to yourself, since
+                anyone who has it can delete the paste. It's only shown once, so if you lose it and the browser
+                doesn't have the token, the paste stays until it expires or reaches its view limit.</p>
             {% endcall %}
 
             {% call faq("preview", "Why don't link previews show what's in my paste?") %}

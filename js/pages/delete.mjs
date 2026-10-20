@@ -1,10 +1,12 @@
 // The creator's delete link (delete.html.j2): /delete/<id>#<token>. The token
 // stays in the hash, which browsers don't send, until the creator confirms.
+// Without one, the token this browser kept when creating the paste is used.
 
+import { deleteTokenFor, forgetDeleteToken } from "../delete_tokens.mjs";
 import { readPageData } from "../ui.mjs";
 
 const { paste_id: pasteId } = readPageData();
-const token = window.location.hash.substring(1);
+const token = window.location.hash.substring(1) || deleteTokenFor(pasteId) || "";
 
 const button = document.getElementById("delete-btn");
 const errorEl = document.getElementById("delete-error");
@@ -40,6 +42,9 @@ button.addEventListener("click", async () => {
       method: "POST",
       headers: { "X-Delete-Token": token },
     });
+    if (response.ok || response.status === 404) {
+      forgetDeleteToken(pasteId);
+    }
     if (response.ok) {
       document.getElementById("delete-ask").hidden = true;
       document.getElementById("delete-done").hidden = false;

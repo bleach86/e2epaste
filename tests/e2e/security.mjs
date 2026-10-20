@@ -201,6 +201,64 @@ const plain = await createPaste({ text: "the quick brown fox" });
   await p.close();
 }
 
+// ------------------------------------- delete button in the creator's browser
+{
+  const STORAGE_KEY = "e2epaste.deleteTokens";
+  const stored = (p) => p.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "{}"), STORAGE_KEY);
+  const mine = await createPaste({ text: "mine to delete" });
+  const token = mine.deleteUrl.split("#")[1];
+
+  const p = await view(mine.url);
+  const entry = (await stored(p))[mine.id];
+  check("delete button: token kept until the paste expires", entry?.token === token && Math.abs(entry.expires - (Date.now() + 3 * 86400e3)) < 60e3, JSON.stringify(entry));
+  check("delete button: only the token is stored, not the key", !JSON.stringify(await stored(p)).includes(mine.secret));
+  const href = await p.$eval("#delete-paste-btn", (e) => (e.hidden ? null : e.getAttribute("href")));
+  check("delete button: shown to the creator", href === `/delete/${mine.id}#${token}`, href);
+
+  // Someone else with the link (another browser profile) doesn't get one.
+  const other = await browser.createBrowserContext();
+  const op = await other.newPage();
+  await op.goto(local(mine.url), { waitUntil: "networkidle0" });
+  await op.waitForFunction(() => !document.getElementById("decrypted-notice").hidden);
+  check("delete button: hidden from other viewers", await op.$eval("#delete-paste-btn", (e) => e.hidden));
+  await other.close();
+
+  await Promise.all([p.waitForNavigation({ waitUntil: "networkidle0" }), p.click("#delete-paste-btn")]);
+  await p.click("#delete-btn");
+  await p.waitForFunction(() => !document.getElementById("delete-done").hidden, { timeout: 10000 });
+  check("delete button: deletes the paste", (await api(`/paste/${mine.id}`)).status === 404);
+  check("delete button: token forgotten afterwards", !(mine.id in (await stored(p))));
+  await p.close();
+
+  // Password pastes: the password dialog covers the page, so it has the link.
+  const locked = await createPaste({ text: "locked", password: "hunter2" });
+  const lp = await newPage();
+  await lp.goto(local(locked.url), { waitUntil: "networkidle0" });
+  await lp.waitForSelector("#password-modal.show");
+  check("delete button: in the password dialog too", await lp.$eval("#password-delete-link", (e, id) => !e.hidden && e.getAttribute("href").startsWith(`/delete/${id}#`), locked.id));
+  // The delete page without a token in the link uses the kept one.
+  await lp.goto(`${BASE}/delete/${locked.id}`, { waitUntil: "networkidle0" });
+  await lp.click("#delete-btn");
+  await lp.waitForFunction(() => !document.getElementById("delete-done").hidden, { timeout: 10000 });
+  check("delete page: uses the kept token when the link has none", (await api(`/paste/${locked.id}`)).status === 404);
+
+  // Expired entries are ignored, and a broken store doesn't break the page.
+  const old = await createPaste({ text: "expired entry" });
+  await lp.evaluate((k, id) => {
+    const tokens = JSON.parse(localStorage.getItem(k));
+    tokens[id].expires = Date.now() - 1;
+    localStorage.setItem(k, JSON.stringify(tokens));
+  }, STORAGE_KEY, old.id);
+  await lp.goto(local(old.url), { waitUntil: "networkidle0" });
+  await lp.waitForFunction(() => !document.getElementById("decrypted-notice").hidden);
+  check("delete button: not shown once the paste would have expired", await lp.$eval("#delete-paste-btn", (e) => e.hidden));
+  await lp.evaluate((k) => localStorage.setItem(k, "{not json"), STORAGE_KEY);
+  await lp.reload({ waitUntil: "networkidle0" });
+  await lp.waitForFunction(() => !document.getElementById("decrypted-notice").hidden);
+  check("delete button: a broken store is ignored", await lp.$eval("#delete-paste-btn", (e) => e.hidden));
+  await lp.close();
+}
+
 // ----------------------------------------------------------------- admin
 {
   const reported = await createPaste({ text: "reported" });

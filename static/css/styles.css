@@ -708,6 +708,13 @@ html {
   --bs-btn-hover-border-color: var(--e2e-accent);
 }
 
+.btn-quiet-danger {
+  --bs-btn-hover-color: var(--e2e-danger);
+  --bs-btn-hover-border-color: var(--e2e-danger);
+  --bs-btn-active-color: var(--e2e-danger);
+  --bs-btn-active-border-color: var(--e2e-danger);
+}
+
 .btn-outline-accent {
   --bs-btn-color: var(--e2e-accent);
   --bs-btn-border-color: var(--e2e-accent);

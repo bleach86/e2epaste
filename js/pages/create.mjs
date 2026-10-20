@@ -11,6 +11,7 @@ import {
   encryptText,
   generateLinkSecret,
 } from "../crypto.mjs";
+import { rememberDeleteToken } from "../delete_tokens.mjs";
 import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable } from "../ui.mjs";
 
@@ -284,6 +285,7 @@ async function createPaste() {
   }
 
   const expire = selectedExpiry();
+  const lifetime = EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"];
   const views = maxViews();
   const password = passwordInput.value.trim();
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -313,7 +315,7 @@ async function createPaste() {
     iv: Array.from(iv),
     // A lifetime, not a time: the server works out when, so a wrong clock here
     // doesn't matter.
-    expires_in: EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"],
+    expires_in: lifetime,
     max_views: views,
     key_fragment: "", // v3 stores no key material on the server
     has_password: password !== "",
@@ -341,6 +343,9 @@ async function createPaste() {
   if (!data.id) {
     throw new Error("The server didn't accept the paste");
   }
+  // For the Delete button on the paste page, in this browser. Before the
+  // upload, so a paste whose attachment failed can still be deleted.
+  rememberDeleteToken(data.id, data.delete_token, lifetime);
   if (encryptedFile) {
     await uploadEncryptedFile(encryptedFile, data.id, data.upload_token);
   }

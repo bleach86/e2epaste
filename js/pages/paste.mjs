@@ -12,6 +12,7 @@ import {
   decryptText,
   getPasteSecrets,
 } from "../crypto.mjs";
+import { deleteTokenFor } from "../delete_tokens.mjs";
 import { AUTO, effectiveLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
 
@@ -391,6 +392,16 @@ document.addEventListener("keydown", (event) => {
     selection.addRange(range);
   }
 });
+
+// The creator's browser kept the delete token (js/delete_tokens.mjs); the
+// confirm page takes it from the hash, which isn't sent to the server.
+const deleteToken = deleteTokenFor(paste.id);
+if (deleteToken) {
+  for (const link of [document.getElementById("delete-paste-btn"), document.getElementById("password-delete-link")]) {
+    link.href = `/delete/${paste.id}#${deleteToken}`;
+    link.hidden = false;
+  }
+}
 
 // --- Start ------------------------------------------------------------------
 
