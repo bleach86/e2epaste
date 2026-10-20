@@ -189,7 +189,10 @@ submitButton.addEventListener("click", async () => {
   }
 
   const expireSeconds = EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"];
-  const title = titleInput.value === "" ? "Untitled" : titleInput.value;
+  // Encrypted like everything else; an empty title is shown as "Untitled".
+  // Cut by code point so the 64-character limit can't split an emoji.
+  const titleText = Array.from(titleInput.value).slice(0, 64).join("");
+  const title = await encryptText(titleText, key, await deriveIv(iv, "title"));
 
   const paste = {
     content: arrayBufferToBase64(encrypted),
@@ -199,7 +202,7 @@ submitButton.addEventListener("click", async () => {
     key_fragment: "", // v3 stores no key material on the server
     has_password: password !== "",
     version: PASTE_VERSION,
-    title: title.substring(0, 64),
+    title: arrayBufferToBase64(title),
     syntax,
     file_name: encryptedFileName,
   };

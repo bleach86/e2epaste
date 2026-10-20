@@ -12,7 +12,8 @@
 
             </div>
 
-            <h4 class="text-center mt-3 paste-info">{{ paste.title }}</h4>
+            {# v3 titles are encrypted; js/pages/paste.mjs fills them in after decrypting. #}
+            <h4 class="text-center mt-3 paste-info" id="paste-title">{% if paste.version < 3 %}{{ paste.title }}{% endif %}</h4>
 
             <div class="d-flex justify-content-center align-items-center mb-2 paste-info">
                 <div class="d-flex align-items-center">

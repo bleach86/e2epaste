@@ -3,7 +3,7 @@
 
 import {
   base64ToArrayBuffer,
-  decryptAttachmentPart,
+  decryptPart,
   decryptText,
   getPasteSecrets,
 } from "../crypto.mjs";
@@ -33,10 +33,22 @@ async function decrypt(password) {
   viewArea.textContent = text;
   viewArea.style.height = "100%";
 
+  // v3 titles are encrypted, so the server leaves the heading empty. A title
+  // that won't decrypt shouldn't stop the paste itself from showing.
+  if (paste.version >= 3) {
+    let title = "";
+    try {
+      title = new TextDecoder().decode(await decryptPart(secrets, "title", base64ToArrayBuffer(paste.title)));
+    } catch (e) {
+      console.error("Failed to decrypt title", e);
+    }
+    document.getElementById("paste-title").textContent = title || "Untitled";
+  }
+
   if (paste.file_name) {
     document.getElementById("attachment-section").classList.remove("d-none");
 
-    const nameBytes = await decryptAttachmentPart(
+    const nameBytes = await decryptPart(
       secrets,
       "file-name",
       base64ToArrayBuffer(paste.file_name),
@@ -128,7 +140,7 @@ downloadLink.addEventListener("click", async (event) => {
   }
 
   downloadStatus.textContent = "Decrypting file...";
-  const decrypted = await decryptAttachmentPart(pasteSecrets, "file", await res.arrayBuffer());
+  const decrypted = await decryptPart(pasteSecrets, "file", await res.arrayBuffer());
 
   const url = URL.createObjectURL(new Blob([decrypted], { type: "application/octet-stream" }));
   const a = document.createElement("a");

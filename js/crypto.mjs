@@ -8,7 +8,10 @@
 //       key's structure gives most of them away. Only decrypted.
 //   3 - the link holds a 128-bit random secret and the server stores no key
 //       material. The AES key is derived from the secret (and the password,
-//       if any) with HKDF.
+//       if any) with HKDF. The title is encrypted too.
+//
+// Each part of a paste (text, title, file name, file) is encrypted with its
+// own IV; see deriveIv.
 
 import { deflate, inflate } from "pako";
 
@@ -161,8 +164,9 @@ async function deriveKeyWithPassword(pasteKey, password, salt) {
 
 // --- IVs --------------------------------------------------------------------
 
-// Derives a separate AES-GCM IV for each part of a paste (text, file name,
-// file) so the same key + IV pair is never used twice.
+// Derives a separate AES-GCM IV for each part of a paste ("title",
+// "file-name", "file"; the text uses the base IV) so the same key + IV pair is
+// never used twice.
 export async function deriveIv(baseIv, label) {
   const input = concatBytes(baseIv, new TextEncoder().encode(label));
   const hash = await crypto.subtle.digest("SHA-256", input);
@@ -238,9 +242,10 @@ export async function getPasteSecrets(paste, linkHash, hasPassword, password) {
   return { key: pasteKey, iv: await legacyIv(password, salt), version: paste.version };
 }
 
-// Decrypts one attachment part ("file" or "file-name"). Attachments on v1
-// pastes may predate per-part IVs and use the paste IV, so retry with it.
-export async function decryptAttachmentPart(secrets, label, encrypted) {
+// Decrypts one part of a paste other than its text ("title", "file-name" or
+// "file"). Attachments on v1 pastes may predate per-part IVs and use the
+// paste IV, so retry with it.
+export async function decryptPart(secrets, label, encrypted) {
   try {
     return await decryptBytes(encrypted, secrets.key, await deriveIv(secrets.iv, label));
   } catch (e) {

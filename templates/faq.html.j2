@@ -57,8 +57,8 @@
             <ol>
                 <li>generates a random 128-bit secret,</li>
                 <li>derives an AES-256 key from it (with HKDF-SHA256),</li>
-                <li>compresses and encrypts the text, the file and the file's name with AES-256-GCM, using your
-                    browser's built-in Web Crypto API, and</li>
+                <li>compresses and encrypts the text, the title, the file and the file's name with AES-256-GCM,
+                    using your browser's built-in Web Crypto API, and</li>
                 <li>uploads only the encrypted result.</li>
             </ol>
             <p class="mb-0">The secret goes into the link after the <code>#</code>, like
@@ -68,10 +68,9 @@
             {% endcall %}
 
             {% call faq("server", "What can the server see?") %}
-            <p>The server stores the encrypted paste, which it can't read, plus some information it needs to work:</p>
+            <p>The server stores the encrypted paste, including its title and any attachment's name, none of which
+                it can read. It also stores some information it needs to work:</p>
             <ul>
-                <li>the <strong>title</strong>, which is <strong>not encrypted</strong>, so don't put anything
-                    private in it,</li>
                 <li>the syntax highlighting choice,</li>
                 <li>the size of the paste and attachment,</li>
                 <li>when it was created and when it expires,</li>
