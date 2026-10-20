@@ -6,16 +6,8 @@
         </div>
 
         <ul class="list-group list-group-flush d-flex justify-content-end mb-0 pe-2">
-            <li class="list-group-item border-0 footer-item">Total Pastes: <span id="total-pastes"></span></li>
-            <li class="list-group-item footer-item">Total Views: <span id="total-views"></span></li>
+            <li class="list-group-item border-0 footer-item">Total Pastes: <span id="total-pastes">{{ site_stats.pastes }}</span></li>
+            <li class="list-group-item footer-item">Total Views: <span id="total-views">{{ site_stats.views }}</span></li>
         </ul>
     </div>
 </footer>
-
-<script>
-    const total_pastes = document.getElementById('total-pastes');
-    const total_views = document.getElementById('total-views');
-
-    total_pastes.textContent = {{ site_stats.pastes }};
-    total_views.textContent = {{ site_stats.views }};
-</script>

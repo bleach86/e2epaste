@@ -44,7 +44,13 @@ pub struct IncomingPaste {
     pub expires: Option<u64>,
     pub max_views: Option<u64>,
     pub key_fragment: String,
+    // Only sent by v1 clients. v2 never sends a password hash.
+    #[serde(default)]
     pub password_hash: Option<String>,
+    #[serde(default)]
+    pub has_password: bool,
+    #[serde(default = "paste_db::legacy_version")]
+    pub version: u32,
     pub title: String,
     pub syntax: String,
     pub file_name: Option<String>,
@@ -327,7 +333,9 @@ async fn upload(
         expires,
         views: 0,
         max_views: paste.max_views,
+        has_password: paste.has_password || paste.password_hash.is_some(),
         password_hash: paste.password_hash,
+        version: paste.version,
         title: paste.title,
         syntax: paste.syntax,
         file_name: paste.file_name,
@@ -435,7 +443,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     let now: DateTime<Utc> = chrono::Utc::now();
 
-    let paste_data: PasteData = match db.get_paste(id.to_string()) {
+    let mut paste_data: PasteData = match db.get_paste(id.to_string()) {
         Some(paste_data) => paste_data,
         None => {
             return Template::render(
@@ -444,6 +452,11 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
             )
         }
     };
+
+    // Never send the password hash to the browser. A wrong password fails to
+    // decrypt, so the page only needs to know whether to ask for one.
+    let has_password: bool = paste_data.has_password || paste_data.password_hash.is_some();
+    paste_data.password_hash = None;
 
     let views: u64 = paste_data.views + 1;
 
@@ -504,6 +517,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
         context! {
             title: TITLE,
             paste: paste_data,
+            has_password,
             host: HOST,
             site_stats,
             year: now.year(),
@@ -627,7 +641,11 @@ async fn rocket() -> _ {
                 webrtc_websocket
             ],
         )
-        .attach(Template::fairing())
+        .attach(Template::custom(|engines| {
+            engines
+                .minijinja
+                .add_global("asset_version", env!("ASSET_VERSION"));
+        }))
         .attach(CacheControlFairing)
         .attach(WasmFairing);
 

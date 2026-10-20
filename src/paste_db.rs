@@ -17,10 +17,20 @@ pub struct PasteData<'a> {
     pub expires: Option<u64>,
     pub views: u64,
     pub max_views: Option<u64>,
+    // Only set on v1 pastes; never sent to the browser.
     pub password_hash: Option<String>,
+    #[serde(default)]
+    pub has_password: bool,
+    #[serde(default = "legacy_version")]
+    pub version: u32,
     pub title: String,
     pub syntax: String,
     pub file_name: Option<String>,
+}
+
+/// Pastes stored before the `version` field existed use the v1 format.
+pub fn legacy_version() -> u32 {
+    1
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

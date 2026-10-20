@@ -1,11 +1,9 @@
 {% extends "layout" %}
 
 {% block page %}
+{% endblock %}
 
-
-<script>
-    let hash = window.location.hash;
-    window.location.href = "/paste/{{ paste_id }}" + hash;
-</script>
-
+{% block scripts %}
+<script type="application/json" id="page-data">{{ {"paste_id": paste_id} | tojson }}</script>
+<script src="/public/js/dist/share.js?v={{ asset_version }}"></script>
 {% endblock %}

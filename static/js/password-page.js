@@ -127,6 +127,35 @@ function generatePassword(length, useSpecialChars) {
   return password;
 }
 
-window.get_password_strength = get_password_strength;
+function showCopiedPopover(button) {
+  const popover = new bootstrap.Popover(button, {
+    content: "Successfully Copied to clipboard!",
+    placement: "top",
+    trigger: "manual",
+    customClass: "bg-success",
+  });
+  popover.show();
+  setTimeout(() => popover.hide(), 1500);
+}
+
+if (pass_input_el) {
+  pass_input_el.value = "";
+}
+
+const copy_password_btn = document.getElementById("copy-password");
+if (copy_password_btn) {
+  copy_password_btn.addEventListener("click", () => {
+    navigator.clipboard.writeText(pass_el.value);
+    showCopiedPopover(copy_password_btn);
+  });
+}
+
+const clear_strength_btn = document.getElementById("clear-password-strength");
+if (clear_strength_btn) {
+  clear_strength_btn.addEventListener("click", () => {
+    pass_input_el.value = "";
+    get_password_strength("");
+  });
+}
 
 page_load();

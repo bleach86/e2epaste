@@ -21,11 +21,6 @@
     <link rel="stylesheet" href="/public/css/atom-one-dark.min.css">
     <link rel="stylesheet" href="/public/bootstrap-icons/font/bootstrap-icons.min.css">
     <script src="/public/js/taboverride.min.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/public/js/sw.js');
-        }
-    </script>
 </head>
 
 <body>
@@ -37,26 +32,8 @@
     </div>
 
     <script src="/public/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script type="module">
-        const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]')
-        const popoverList = [...popoverTriggerList].map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
-
-        window.onscroll = function () {
-            scrollFunction();
-        };
-
-        function scrollFunction() {
-            if (
-                document.body.scrollTop > 20 ||
-                document.documentElement.scrollTop > 20
-            ) {
-                back_to_top.style.display = "block";
-            } else {
-                back_to_top.style.display = "none";
-            }
-        }
-
-    </script>
+    <script src="/public/js/dist/common.js?v={{ asset_version }}"></script>
+    {% block scripts %}{% endblock %}
 </body>
 
 </html>

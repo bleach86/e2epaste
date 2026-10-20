@@ -1,0 +1,28 @@
+{
+  "name": "e2epaste",
+  "version": "1.0.0",
+  "description": "Fully End-to-End Encrypted Pastebin",
+  "scripts": {
+    "build": "webpack",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bleach86/e2epaste.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bleach86/e2epaste/issues"
+  },
+  "homepage": "https://github.com/bleach86/e2epaste#readme",
+  "dependencies": {
+    "pako": "^3.0.2"
+  },
+  "devDependencies": {
+    "webpack": "^5.112.0",
+    "webpack-cli": "^7.2.3"
+  }
+}

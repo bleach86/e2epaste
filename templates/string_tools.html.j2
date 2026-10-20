@@ -17,7 +17,7 @@
                         <a href="#string-counter" class="d-inline link-info link-opacity-25-hover link-opacity-50"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field_counter('byte-counter-input')" id="" class="btn btn-dark">
+                    <button data-clear="byte-counter-input" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -76,7 +76,7 @@
                         <a href="#base64-encoding" class="link-info link-opacity-25-hover link-opacity-50 d-inline"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('base64-encode-in', 'base64-encode-out')" id="" class="btn btn-dark">
+                    <button data-clear="base64-encode-in base64-encode-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -101,8 +101,7 @@
                 <button id="encode-base64" class="btn btn-outline-light">
                     Encode Text
                 </button>
-                <button id="base64-decoding" data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('base64-encode-out', this)">
+                <button id="base64-decoding" data-toggle="popover" class="btn btn-outline-light" data-copy="base64-encode-out">
                     Copy
                 </button>
             </div>
@@ -113,7 +112,7 @@
                         <a href="#base64-decoding" class="link-info link-opacity-25-hover link-opacity-50 d-inline"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('base64-decode-in', 'base64-decode-out')" id="" class="btn btn-dark">
+                    <button data-clear="base64-decode-in base64-decode-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -138,8 +137,7 @@
                 <button id="decode-base64" class="btn btn-outline-light">
                     Decode Base64
                 </button>
-                <button data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('base64-decode-out', this)">
+                <button data-toggle="popover" class="btn btn-outline-light" data-copy="base64-decode-out">
                     Copy
                 </button>
             </div>
@@ -155,7 +153,7 @@
                         <a href="#hex-encoding" class="link-info link-opacity-25-hover link-opacity-50 d-inline"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('hex-encode-in', 'hex-encode-out')" id="" class="btn btn-dark">
+                    <button data-clear="hex-encode-in hex-encode-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -180,8 +178,7 @@
                 <button id="encode-hex" class="btn btn-outline-light">
                     Encode Text
                 </button>
-                <button id="hex-decoding" data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('hex-encode-out', this)">
+                <button id="hex-decoding" data-toggle="popover" class="btn btn-outline-light" data-copy="hex-encode-out">
                     Copy
                 </button>
             </div>
@@ -192,7 +189,7 @@
                         <a href="#hex-decoding" class="link-info link-opacity-25-hover link-opacity-50 d-inline"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('hex-decode-in', 'hex-decode-out')" id="" class="btn btn-dark">
+                    <button data-clear="hex-decode-in hex-decode-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -217,8 +214,7 @@
                 <button id="decode-hex" class="btn btn-outline-light">
                     Decode Hex
                 </button>
-                <button data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('hex-decode-out', this)">
+                <button data-toggle="popover" class="btn btn-outline-light" data-copy="hex-decode-out">
                     Copy
                 </button>
             </div>
@@ -234,7 +230,7 @@
                         <a href="#binary-encoding" class="link-info link-opacity-25-hover link-opacity-50 d-inline"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('binary-encode-in', 'binary-encode-out')" id="" class="btn btn-dark">
+                    <button data-clear="binary-encode-in binary-encode-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -259,8 +255,7 @@
                 <button id="encode-binary" class="btn btn-outline-light">
                     Encode Text
                 </button>
-                <button id="binary-decoding" data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('binary-encode-out', this)">
+                <button id="binary-decoding" data-toggle="popover" class="btn btn-outline-light" data-copy="binary-encode-out">
                     Copy
                 </button>
             </div>
@@ -271,7 +266,7 @@
                         <a href="#binary-decoding" class="link-info link-opacity-25-hover link-opacity-50 d-inline"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('binary-decode-in', 'binary-decode-out')" id="" class="btn btn-dark">
+                    <button data-clear="binary-decode-in binary-decode-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -296,8 +291,7 @@
                 <button id="decode-binary" class="btn btn-outline-light">
                     Decode Binary
                 </button>
-                <button data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('binary-decode-out', this)">
+                <button data-toggle="popover" class="btn btn-outline-light" data-copy="binary-decode-out">
                     Copy
                 </button>
             </div>
@@ -313,7 +307,7 @@
                         <a href="#reverse-string" class="link-info link-opacity-25-hover link-opacity-50 d-inline"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('reverse-in', 'reverse-out')" id="" class="btn btn-dark">
+                    <button data-clear="reverse-in reverse-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -339,8 +333,7 @@
                 <button id="reverse-button" class="btn btn-outline-light">
                     Reverse Text
                 </button>
-                <button data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('reverse-out', this)">
+                <button data-toggle="popover" class="btn btn-outline-light" data-copy="reverse-out">
                     Copy
                 </button>
             </div>
@@ -356,7 +349,7 @@
                         <a href="#random-case" class="d-inline link-info link-opacity-25-hover link-opacity-50"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field('random-in', 'random-out')" id="" class="btn btn-dark">
+                    <button data-clear="random-in random-out" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -382,8 +375,7 @@
                 <button id="random-button" class="btn btn-outline-light">
                     Randomize Case
                 </button>
-                <button data-toggle="popover" class="btn btn-outline-light"
-                    onclick="copyToClipboard('random-out', this)">
+                <button data-toggle="popover" class="btn btn-outline-light" data-copy="random-out">
                     Copy
                 </button>
             </div>
@@ -401,8 +393,7 @@
                             class="d-inline link-info link-opacity-25-hover link-opacity-50"><i
                                 class="bi bi-hash fs-1 position-relative" style=""></i></a>
                     </div>
-                    <button onclick="clear_field_substr('substring-input', 'search-string-input', 'str-in-str-count')"
-                        id="" class="btn btn-dark">
+                    <button id="clear-substring" class="btn btn-dark">
                         <i class="bi bi-hurricane"></i>
                     </button>
                 </div>
@@ -438,55 +429,8 @@
     <i class="bi bi-arrow-up"></i>
 </button>
 
-<script src="/public/js/string-tools.js?v=1.10"></script>
-<script>
-    //Get the button
-    let back_to_top = document.getElementById("btn-back-to-top");
+{% endblock %}
 
-    // When the user clicks on the button, scroll to the top of the document
-    back_to_top.addEventListener("click", backToTop);
-
-    function backToTop() {
-        document.body.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-    }
-
-    function copyToClipboard(id, popoverButton) {
-        var copyText = document.getElementById(id);
-        navigator.clipboard.writeText(copyText.value);
-
-        // Create a new Popover instance
-        var popover = new bootstrap.Popover(popoverButton, {
-            content: 'Successfully Copied to clipboard!',
-            placement: 'top',
-            trigger: 'manual',
-            customClass: 'bg-success'
-        });
-
-        // Show the popover
-        popover.show();
-
-        setTimeout(function () {
-            popover.hide();
-        }, 1500);
-
-    }
-
-    function clear_field(input_id, output_id) {
-        document.getElementById(input_id).value = "";
-        document.getElementById(output_id).value = "";
-    }
-
-    function clear_field_counter(input_id) {
-        document.getElementById(input_id).value = "";
-        set_string_info("");
-    }
-
-    function clear_field_substr(input_id, output_id, count_id) {
-        document.getElementById(input_id).value = "";
-        document.getElementById(output_id).innerHTML = "";
-        document.getElementById(count_id).textContent = "0";
-    }
-
-</script>
+{% block scripts %}
+<script src="/public/js/string-tools.js?v=1.14"></script>
 {% endblock %}

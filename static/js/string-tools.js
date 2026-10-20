@@ -44,6 +44,11 @@ const substr_output_count = document.getElementById("str-in-str-count");
 const count_button = document.getElementById("count-button");
 const use_case = document.getElementById("use-case");
 
+const graphemeSegmenter =
+  typeof Intl !== "undefined" && Intl.Segmenter
+    ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
+    : null;
+
 async function page_load() {
   while (window.get_string === undefined) {
     await new Promise((r) => setTimeout(r, 100));
@@ -160,15 +165,37 @@ function set_string_info(input) {
   stringUchars.innerText = stringInfo.unique_chars;
 }
 
+// Split into user-perceived characters so emoji (incl. ZWJ sequences,
+// skin tones, flags) count as one. Falls back to code points.
+function graphemes(str) {
+  if (graphemeSegmenter) {
+    return Array.from(graphemeSegmenter.segment(str), (s) => s.segment);
+  }
+  return Array.from(str);
+}
+
 function get_string(input) {
-  let length = input.length;
+  let chars = graphemes(input);
+  let length = chars.length;
+
+  if (length === 0) {
+    return {
+      length: 0,
+      bytes: 0,
+      words: 0,
+      lines: 0,
+      unique_words: 0,
+      unique_chars: 0,
+    };
+  }
+
   let bytes = new Blob([input]).size;
   let words = input.trim().split(/\s+/).filter(Boolean).length;
   let lines = input.split(/\r\n|\r|\n/).length;
   let unique_words = new Set(
     input.trim().toLowerCase().split(/\s+/).filter(Boolean),
   ).size;
-  let unique_chars = new Set(input).size;
+  let unique_chars = new Set(chars).size;
 
   return {
     length,
@@ -198,7 +225,7 @@ function str_to_bin(str) {
 }
 
 function rev_str(str) {
-  return str.split("").reverse().join("");
+  return graphemes(str).reverse().join("");
 }
 
 function randBoolean() {
@@ -262,6 +289,41 @@ function hex_decode(hex) {
   return str;
 }
 
-window.set_string_info = set_string_info;
+function showCopiedPopover(button) {
+  const popover = new bootstrap.Popover(button, {
+    content: "Successfully Copied to clipboard!",
+    placement: "top",
+    trigger: "manual",
+    customClass: "bg-success",
+  });
+  popover.show();
+  setTimeout(() => popover.hide(), 1500);
+}
+
+// data-copy="<id>": copy that field's value.
+document.querySelectorAll("[data-copy]").forEach((button) => {
+  button.addEventListener("click", () => {
+    navigator.clipboard.writeText(document.getElementById(button.dataset.copy).value);
+    showCopiedPopover(button);
+  });
+});
+
+// data-clear="<id> [<id>...]": empty those fields.
+document.querySelectorAll("[data-clear]").forEach((button) => {
+  button.addEventListener("click", () => {
+    for (const id of button.dataset.clear.split(" ")) {
+      document.getElementById(id).value = "";
+    }
+    if (button.dataset.clear === "byte-counter-input") {
+      set_string_info("");
+    }
+  });
+});
+
+document.getElementById("clear-substring").addEventListener("click", () => {
+  substr_input.value = "";
+  search_str_input.innerHTML = "";
+  substr_output_count.textContent = "0";
+});
 
 page_load();
