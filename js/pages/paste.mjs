@@ -1,5 +1,10 @@
 // View-paste page (paste.html.j2). Rebuilds the key from the link (and the
-// password, if any), then decrypts in the browser.
+// password, if any), opens the paste through /api/open (which counts the
+// view), then decrypts in the browser.
+//
+// The page holds no paste content: for v3 pastes the server only sends it
+// after checking an access proof derived from the full link and password, so
+// a wrong password or a broken link uses no view.
 
 import {
   base64ToArrayBuffer,
@@ -9,7 +14,9 @@ import {
 } from "../crypto.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
 
-const { paste, has_password: hasPassword } = readPageData();
+// Details only; the encrypted content comes from /api/open.
+const { paste } = readPageData();
+const hasPassword = paste.has_password;
 const linkHash = window.location.hash.substring(1);
 
 // File extensions for "Download", by syntax-highlighting language.
@@ -36,6 +43,10 @@ const downloadStatus = document.getElementById("download-status");
 
 // Key and IV for this paste, set once decryption succeeds.
 let pasteSecrets = null;
+// The response from /api/open, once a view has been counted. Kept so a wrong
+// password on an old (v1/v2) paste, which opens without a proof, can be
+// retried without using another view.
+let opened = null;
 let pasteText = "";
 let pasteTitle = "";
 let fileName = null;
@@ -59,10 +70,52 @@ function showText(text) {
   }
 }
 
-// Throws if the password or link is wrong.
+// Why /api/open refused: "wrong-key" (link or password), "not-found",
+// "rate-limited" (with `retryAfter` seconds) or "failed".
+class OpenError extends Error {
+  constructor(kind, retryAfter = null) {
+    super(`Opening the paste failed: ${kind}`);
+    this.kind = kind;
+    this.retryAfter = retryAfter;
+  }
+}
+
+async function requestOpen(proof) {
+  const response = await fetch(`/api/open/${paste.id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ proof: proof ?? null }),
+  });
+  if (response.ok) {
+    return response.json();
+  }
+  const kinds = { 403: "wrong-key", 404: "not-found", 429: "rate-limited" };
+  const body = await response.json().catch(() => ({}));
+  throw new OpenError(kinds[response.status] ?? "failed", body.retry_after ?? null);
+}
+
+// "4 minutes", "30 seconds"
+function waitText(seconds) {
+  const minutes = Math.ceil(seconds / 60);
+  return seconds < 90 ? `${seconds} seconds` : `${minutes} minutes`;
+}
+
+// Throws an OpenError, or another error if the link or password is wrong.
 async function decrypt(password) {
-  const secrets = await getPasteSecrets(paste, linkHash, hasPassword, password);
-  const text = await decryptText(base64ToArrayBuffer(paste.content), secrets.key, secrets.iv);
+  let secrets;
+  if (paste.version >= 3) {
+    // The key and access proof come first: the server only sends the paste
+    // to a browser that proves it has the full link and password. A
+    // malformed link throws here, before anything is asked of the server.
+    secrets = await getPasteSecrets(paste, linkHash, hasPassword, password);
+    opened ??= await requestOpen(secrets.accessProof);
+  } else {
+    // v1/v2 keys need the key fragment the server sends with the paste.
+    opened ??= await requestOpen(null);
+    secrets = await getPasteSecrets({ ...paste, key_fragment: opened.key_fragment }, linkHash, hasPassword, password);
+  }
+
+  const text = await decryptText(base64ToArrayBuffer(opened.content), secrets.key, secrets.iv);
   pasteSecrets = secrets;
   showText(text);
 
@@ -72,45 +125,41 @@ async function decrypt(password) {
   if (paste.version >= 3) {
     let title = "";
     try {
-      title = new TextDecoder().decode(await decryptPart(secrets, "title", base64ToArrayBuffer(paste.title)));
+      title = new TextDecoder().decode(await decryptPart(secrets, "title", base64ToArrayBuffer(opened.title)));
     } catch (e) {
       console.error("Failed to decrypt title", e);
     }
     pasteTitle = title;
     titleEl.textContent = title || "Untitled";
   } else {
-    pasteTitle = paste.title;
+    pasteTitle = opened.title;
   }
 
-  if (paste.file_name) {
-    const nameBytes = await decryptPart(secrets, "file-name", base64ToArrayBuffer(paste.file_name));
+  if (opened.file_name) {
+    const nameBytes = await decryptPart(secrets, "file-name", base64ToArrayBuffer(opened.file_name));
     fileName = new TextDecoder().decode(nameBytes);
     document.getElementById("attachment-name").textContent = fileName;
     document.getElementById("attachment-section").hidden = false;
   }
 
+  showViews(opened.views);
+  document.getElementById("total-views").textContent = opened.total_views;
   document.getElementById("decrypted-notice").hidden = false;
   copyButton.disabled = false;
   downloadButton.disabled = false;
 }
 
-async function showPaste(password) {
-  await decrypt(password);
-  await markAsViewed();
-}
-
-async function markAsViewed() {
-  const response = await fetch(`/api/advance-views/${paste.id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  });
-
-  if (response.ok) {
-    const data = await response.json();
-    showViews(data.views);
-    document.getElementById("total-views").textContent = data.total_views;
-  }
+// For errors other than a wrong link or password.
+function showOpenError(error) {
+  const messages = {
+    "not-found": "This paste doesn't exist any more. It may have expired, been deleted, or reached its view limit.",
+    "rate-limited": `Too many failed attempts to open pastes from your network. Please try again in ${waitText(
+      error.retryAfter ?? 60,
+    )}.`,
+  };
+  document.getElementById("open-error-text").textContent =
+    messages[error.kind] ?? "The paste couldn't be opened. Please try again.";
+  document.getElementById("open-error").hidden = false;
 }
 
 // --- Password prompt --------------------------------------------------------
@@ -122,14 +171,25 @@ function setUnlocking(busy) {
   passwordSubmit.querySelector(".unlock-busy").classList.toggle("d-inline-flex", busy);
 }
 
+const WRONG_PASSWORD = "That password didn't work. Check it and try again.";
+
 async function decryptWithPassword() {
-  // There is no password hash to check against: a wrong password simply
-  // fails to decrypt.
+  // The server rejects a wrong password for v3 pastes (the access proof
+  // doesn't match); for older ones it simply fails to decrypt.
   passwordError.hidden = true;
   setUnlocking(true);
   try {
     await decrypt(passwordInput.value.trim());
   } catch (e) {
+    if (e instanceof OpenError && e.kind === "not-found") {
+      passwordModal.hide();
+      showOpenError(e);
+      return;
+    }
+    passwordError.textContent =
+      e instanceof OpenError && e.kind === "rate-limited"
+        ? `Too many wrong attempts. Please try again in ${waitText(e.retryAfter ?? 60)}.`
+        : WRONG_PASSWORD;
     passwordError.hidden = false;
     passwordInput.select();
     return;
@@ -138,7 +198,6 @@ async function decryptWithPassword() {
   }
 
   passwordModal.hide();
-  await markAsViewed();
 }
 
 function togglePasswordVisibility() {
@@ -206,7 +265,10 @@ function setAttachmentBusy(busy, status) {
 attachmentButton.addEventListener("click", async () => {
   setAttachmentBusy(true, "Downloading encrypted file...");
   try {
-    const res = await fetch(`/api/download-attachment/${paste.id}`);
+    // The ticket came with this view, from /api/open.
+    const res = await fetch(`/api/download-attachment/${paste.id}`, {
+      headers: { "X-Download-Ticket": opened.download_ticket },
+    });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
@@ -283,8 +345,12 @@ if (!cryptoAvailable()) {
   document.getElementById("password-modal").addEventListener("shown.bs.modal", () => passwordInput.focus());
   passwordModal.show();
 } else {
-  showPaste("").catch((e) => {
-    console.error("Failed to decrypt paste", e);
-    document.getElementById("decrypt-error").hidden = false;
+  decrypt("").catch((e) => {
+    console.error("Failed to open paste", e);
+    if (e instanceof OpenError && e.kind !== "wrong-key") {
+      showOpenError(e);
+    } else {
+      document.getElementById("decrypt-error").hidden = false;
+    }
   });
 }

@@ -15,9 +15,11 @@ if (!cryptoAvailable()) {
   }
 }
 
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/public/js/sw.js");
-}
+// Older versions registered a service worker that did nothing useful (its
+// scope covered no pages). Remove it from browsers that still have it.
+navigator.serviceWorker?.getRegistrations().then((registrations) => {
+  registrations.forEach((registration) => registration.unregister());
+});
 
 document
   .querySelectorAll('[data-bs-toggle="popover"]')

@@ -12,6 +12,10 @@
         <span>This paste couldn't be decrypted. Check that you have the complete link, including everything after
             the <code>#</code>.</span>
     </div>
+    <div id="open-error" class="notice notice-danger mb-3" role="alert" hidden>
+        {{ icons.icon("alert") }}
+        <span id="open-error-text"></span>
+    </div>
 
     <div class="paste-head">
         <div class="min-w-0">
@@ -69,8 +73,8 @@
                 <span class="dialog-badge">{{ icons.icon("lock") }}</span>
                 <div>
                     <h2 id="password-modal-title" class="h5 fw-bold mb-0">This paste is password protected</h2>
-                    <p class="mb-0 small text-secondary">Enter the password to decrypt it. It's checked in your
-                        browser and never sent anywhere.</p>
+                    <p class="mb-0 small text-secondary">Enter the password to decrypt it. The password itself
+                        never leaves your browser.</p>
                 </div>
             </div>
 
@@ -103,7 +107,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="application/json" id="page-data">{{ {"paste": paste, "has_password": has_password} | tojson }}</script>
+<script type="application/json" id="page-data">{{ {"paste": paste} | tojson }}</script>
 <script src="/public/js/highlight.min.js"></script>
 <script src="/public/js/dist/paste.js?v={{ asset_version }}"></script>
 {% endblock %}

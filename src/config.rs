@@ -39,6 +39,15 @@ pub struct AppConfig {
     /// Cap on the total size of all attachments.
     #[serde(default)]
     pub max_attachment_storage_mib: u64,
+
+    /// Failed attempts to open or delete a paste (wrong link, password or
+    /// delete token) allowed per IP per hour.
+    #[serde(default = "default_unlock_attempts_per_hour")]
+    pub unlock_attempts_per_hour: u64,
+
+    /// Enables /api/admin/ for the site's operator. Unset or empty: disabled.
+    #[serde(default)]
+    pub admin_token: Option<String>,
 }
 
 fn default_site_url() -> String {
@@ -69,12 +78,27 @@ fn default_min_free_disk_mib() -> u64 {
     1024
 }
 
+fn default_unlock_attempts_per_hour() -> u64 {
+    30
+}
+
+/// Shortest admin_token accepted; it's the only thing guarding admin actions.
+const MIN_ADMIN_TOKEN_LEN: usize = 32;
+
 pub const MIB: u64 = 1024 * 1024;
 
 impl AppConfig {
     pub fn from_figment(figment: &Figment) -> Result<Self, String> {
         let mut config: AppConfig = figment.extract().map_err(|e| e.to_string())?;
         config.site_url = normalize_site_url(&config.site_url)?;
+
+        config.admin_token = config.admin_token.take().filter(|token| !token.trim().is_empty());
+        if config.admin_token.as_ref().is_some_and(|token| token.len() < MIN_ADMIN_TOKEN_LEN) {
+            return Err(format!(
+                "admin_token must be at least {MIN_ADMIN_TOKEN_LEN} characters. Generate one with \
+                 `openssl rand -hex 32`."
+            ));
+        }
 
         if config.upload_mib_per_hour != 0 && config.upload_mib_per_hour < MAX_ATTACHMENT_MIB {
             return Err(format!(

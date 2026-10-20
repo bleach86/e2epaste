@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+mod access;
 mod api;
 mod assets;
 mod config;
@@ -8,16 +9,16 @@ mod migrate;
 mod paste_db;
 mod paste_id;
 mod rate_limit;
+mod secrets;
+mod security;
+mod tickets;
 mod tools;
 
 use rocket::data::ToByteUnit;
-use rocket::fairing::Fairing;
-use rocket::fs::{FileServer, NamedFile};
+use rocket::fs::FileServer;
 use rocket::http::ContentType;
-use rocket::http::Header;
 use rocket::http::Status;
 use rocket::request::Request;
-use rocket::response::Response;
 use rocket::serde::json::Json;
 use rocket::tokio;
 use rocket::State;
@@ -31,11 +32,11 @@ use chrono::prelude::*;
 
 use api::{ApiError, ClientIp};
 use config::{AppConfig, MAX_ATTACHMENT_MIB, MIB};
-use rate_limit::RateLimiter;
+use rate_limit::{RateLimiter, UnlockLimiter};
 use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
 
-const TITLE: &str = "e2ePaste.XYZ";
+pub(crate) const TITLE: &str = "e2ePaste.XYZ";
 const ID_LENGTH: usize = 8;
 
 /// Per-page <title>, meta description and link-preview text, rendered by
@@ -77,6 +78,12 @@ const PASTE_PAGE: PageMeta = PageMeta {
     canonical: None,
 };
 
+pub(crate) const DELETE_PAGE: PageMeta = PageMeta {
+    title: "Delete Paste - e2ePaste.XYZ",
+    description: "Delete a paste you created on e2ePaste.XYZ.",
+    canonical: None,
+};
+
 const NOT_FOUND_PAGE: PageMeta = PageMeta {
     title: "Paste Not Found - e2ePaste.XYZ",
     description: "This paste doesn't exist, has expired, or has reached its view limit.",
@@ -107,6 +114,10 @@ pub struct IncomingPaste {
     /// don't send it; they're allowed the maximum.
     #[serde(default)]
     pub file_size: Option<u64>,
+    /// SHA-256 (hex) of the access proof the browser derived from the link
+    /// (see access.rs). Older clients don't send one.
+    #[serde(default)]
+    pub access_hash: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -116,58 +127,9 @@ pub struct IncomingPasteRes {
     /// /api/upload-attachment.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upload_token: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DownloadAttachmentRes {
-    pub error: Option<String>,
-    pub file: Option<Vec<u8>>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AdvanceViewsRes {
-    pub error: Option<String>,
-    pub views: Option<u64>,
-    pub total_views: Option<u64>,
-}
-
-struct CacheControlFairing;
-
-#[rocket::async_trait]
-impl Fairing for CacheControlFairing {
-    fn info(&self) -> rocket::fairing::Info {
-        rocket::fairing::Info {
-            name: "Cache Control Fairing",
-            kind: rocket::fairing::Kind::Response,
-        }
-    }
-
-    async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
-        if request.uri().path().starts_with("/public/") {
-            response.set_header(Header::new("Cache-Control", "public, max-age=15552000"));
-        }
-    }
-}
-
-pub struct WasmFairing;
-
-#[rocket::async_trait]
-impl Fairing for WasmFairing {
-    fn info(&self) -> rocket::fairing::Info {
-        rocket::fairing::Info {
-            name: "Wasm MIME Type Setter",
-            kind: rocket::fairing::Kind::Response,
-        }
-    }
-
-    async fn on_response<'r>(&self, _req: &'r Request<'_>, res: &mut Response<'r>) {
-        if let Some(path) = _req.uri().path().split('/').last() {
-            if path.ends_with(".wasm") {
-                println!("Path: {:?}", path);
-                res.set_header(ContentType::new("application", "wasm"));
-            }
-        }
-    }
+    /// For the creator's delete link (/delete/<id>#<token>).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delete_token: Option<String>,
 }
 
 #[post("/api/submit_paste", format = "application/json", data = "<raw_paste>")]
@@ -179,6 +141,9 @@ async fn upload(
     raw_paste: Json<IncomingPaste>,
 ) -> Result<Json<IncomingPasteRes>, ApiError> {
     let paste: IncomingPaste = raw_paste.clone().into_inner();
+    if paste.access_hash.as_deref().is_some_and(|hash| !secrets::is_sha256_hex(hash)) {
+        return Err(Status::BadRequest.into());
+    }
 
     // The attachment's size is checked and charged now, so a paste is never
     // created whose attachment would then be refused.
@@ -217,9 +182,13 @@ async fn upload(
         title: paste.title,
         syntax: paste.syntax,
         file_name: paste.file_name,
+        access_hash: paste.access_hash,
+        delete_hash: None,
     };
+    let delete_token = secrets::new_token();
+    paste_data.delete_hash = secrets::hash_secret(&delete_token);
 
-    let upload_token: Option<String> = paste_data.file_name.is_some().then(new_upload_token);
+    let upload_token: Option<String> = paste_data.file_name.is_some().then(secrets::new_token);
     let upload = upload_token.as_deref().map(|token| (token, attachment_bytes));
 
     // A new random ID until one isn't taken.
@@ -229,20 +198,15 @@ async fn upload(
             Ok(false) => paste_data.id = PasteId::new(ID_LENGTH),
             Err(e) => {
                 eprintln!("Error saving paste: {e}");
-                return Ok(Json(IncomingPasteRes { id: None, upload_token: None }));
+                return Ok(Json(IncomingPasteRes { id: None, upload_token: None, delete_token: None }));
             }
         }
     }
     Ok(Json(IncomingPasteRes {
         id: Some(paste_data.id.to_string()),
         upload_token,
+        delete_token: Some(delete_token),
     }))
-}
-
-/// 256 random bits, hex encoded.
-fn new_upload_token() -> String {
-    let bytes: [u8; 32] = rand::random();
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// The X-Upload-Token header.
@@ -256,29 +220,6 @@ impl<'r> rocket::request::FromRequest<'r> for UploadToken {
         match req.headers().get_one("X-Upload-Token") {
             Some(token) => rocket::request::Outcome::Success(UploadToken(token.to_string())),
             None => rocket::request::Outcome::Error((Status::Forbidden, ())),
-        }
-    }
-}
-
-#[post("/api/advance-views/<id>")]
-async fn advance_views(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Json<AdvanceViewsRes> {
-    let error = |message: &str| {
-        Json(AdvanceViewsRes {
-            error: Some(message.to_string()),
-            views: None,
-            total_views: None,
-        })
-    };
-    match db.record_view(&id.to_string()) {
-        Ok(Some((views, total_views))) => Json(AdvanceViewsRes {
-            error: None,
-            views: Some(views),
-            total_views: Some(total_views),
-        }),
-        Ok(None) => error("Paste not found"),
-        Err(e) => {
-            eprintln!("Error counting view of {}: {e}", id.to_string());
-            error("Couldn't count the view")
         }
     }
 }
@@ -370,39 +311,28 @@ async fn upload_attachment(
     }
     Ok("Upload successful")
 }
-#[get("/api/download-attachment/<id>")]
-async fn download_attachment(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Option<NamedFile> {
-    NamedFile::open(db.attachment_path(&id.to_string())).await.ok()
-}
-
 #[get("/paste/<id>")]
 async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     let now: DateTime<Utc> = chrono::Utc::now();
 
-    let mut paste_data: PasteData = match db.get_paste(id) {
+    let paste_data: PasteData = match db.get_paste(id) {
         Some(paste_data) => paste_data,
         None => {
             return paste_not_found(site_stats, now.year());
         }
     };
 
-    // Never send the password hash to the browser. A wrong password fails to
-    // decrypt, so the page only needs to know whether to ask for one.
-    let has_password: bool = paste_data.has_password || paste_data.password_hash.is_some();
-    paste_data.password_hash = None;
-
-    let views: u64 = paste_data.views + 1;
-    let used_up = paste_data.max_views.is_some_and(|max_views| views > max_views);
-    let expired = paste_data
-        .expires
-        .is_some_and(|expires| now.timestamp_millis() as u64 >= expires);
-
-    if used_up || expired {
-        println!("Deleting paste with ID: {}", id);
+    if paste_data.expired() {
         if let Err(e) = db.delete_paste(id).await {
             eprintln!("Error deleting paste: {e}");
         }
+        return paste_not_found(site_stats, now.year());
+    }
+    // A used-up paste with an attachment is kept for a while so its last
+    // viewer can download the file (see PasteDB::open_paste). Loading the
+    // page mustn't delete it: that only needs the paste's ID.
+    if paste_data.used_up() {
         return paste_not_found(site_stats, now.year());
     }
 
@@ -415,8 +345,9 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
         context! {
             title: TITLE,
             page: PASTE_PAGE,
-            paste: paste_data,
-            has_password,
+            // Not the paste's content: the browser fetches that from
+            // /api/open/ with proof that it has the full link.
+            paste: access::PastePublic::new(&paste_data),
             site_stats,
             year: now.year(),
             formatted_lang,
@@ -510,7 +441,7 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
 #[get("/robots.txt")]
 fn robots(config: &State<AppConfig>) -> (ContentType, String) {
     let body = format!(
-        "User-agent: *\nDisallow: /paste/\nDisallow: /api/\n\nSitemap: {}/sitemap.xml\n",
+        "User-agent: *\nDisallow: /paste/\nDisallow: /delete/\nDisallow: /api/\n\nSitemap: {}/sitemap.xml\n",
         config.site_url
     );
     (ContentType::Plain, body)
@@ -605,6 +536,10 @@ async fn rocket() -> _ {
         config.upload_mib_per_hour * MIB,
     ));
     let limiter_clone = limiter.clone();
+    let unlocks = UnlockLimiter::new(config.unlock_attempts_per_hour);
+    let tickets = Arc::new(tickets::DownloadTickets::default());
+    let tickets_clone = tickets.clone();
+    let hsts = config.site_url.starts_with("https://");
     println!(
         "Site URL {}, data in {:?}, static files from {:?}",
         config.site_url, config.data_dir, config.static_dir
@@ -619,6 +554,11 @@ async fn rocket() -> _ {
         limit(config.min_free_disk_mib, "MiB"),
         limit(config.max_attachment_storage_mib, "MiB"),
     );
+    println!(
+        "Failed unlock attempts per IP: {}. Admin API: {}",
+        limit(config.unlock_attempts_per_hour, "an hour"),
+        if config.admin_token.is_some() { "on" } else { "off" },
+    );
     let site_url = config.site_url.clone();
     let static_dir = config.static_dir.clone();
 
@@ -627,6 +567,8 @@ async fn rocket() -> _ {
         .manage(db)
         .manage(config)
         .manage(limiter)
+        .manage(unlocks)
+        .manage(tickets)
         .mount("/public", FileServer::from(static_dir))
         .mount(
             "/",
@@ -638,11 +580,14 @@ async fn rocket() -> _ {
                 credits,
                 filter_bots,
                 share_short,
-                advance_views,
+                access::open,
+                access::delete_page,
+                access::delete,
+                access::admin_delete,
                 password_tools,
                 string_tools,
                 tool_page,
-                download_attachment,
+                access::download_attachment,
                 upload_attachment,
                 robots,
                 sitemap,
@@ -660,8 +605,7 @@ async fn rocket() -> _ {
                 rocket_dyn_templates::minijinja::Value::from_serialize(tools::listings()),
             );
         }))
-        .attach(CacheControlFairing)
-        .attach(WasmFairing);
+        .attach(security::SecurityHeaders { hsts });
 
     // Spawn the background task
     tokio::spawn(async move {
@@ -674,7 +618,10 @@ async fn rocket() -> _ {
                 }
             }
             limiter_clone.prune();
-            tokio::time::sleep(Duration::from_secs(60 * 15)).await;
+            tickets_clone.prune();
+            // Expired pastes can't be opened anyway; this removes them from
+            // disk promptly.
+            tokio::time::sleep(Duration::from_secs(60)).await;
         }
     });
 

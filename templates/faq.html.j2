@@ -74,7 +74,10 @@
                 <li>the size of the paste and attachment,</li>
                 <li>when it was created and when it expires,</li>
                 <li>how many times it has been viewed, and the view limit,</li>
-                <li>whether it has a password.</li>
+                <li>whether it has a password,</li>
+                <li>a fingerprint of a check value your browser derives from the link (and password), so the
+                    server can tell that someone has the full link before it sends them the paste. It can't be
+                    turned back into the link, the password or the key.</li>
             </ul>
             <p class="mb-0">Like any website, the server can also see the IP addresses that create and open pastes.</p>
             {% endcall %}
@@ -84,6 +87,9 @@
                 on both the link and the password, so someone who gets hold of the link still can't read it. The
                 password is never sent to the server; it's stretched with PBKDF2-SHA256 (600,000 rounds) in the
                 browser, which makes guessing it slow.</p>
+            <p>The server only hands out the encrypted paste to a browser that proves it has both the link and the
+                password, so nobody can download it to try passwords at their own pace. A wrong password doesn't use
+                up a view, and after repeated wrong attempts the server makes you wait.</p>
             <p class="mb-0">For the best protection, send the password through a different channel from the link,
                 for example the link by email and the password by text message. Need a strong one? Use the
                 <a href="/tools/password-generator">password generator</a>.</p>
@@ -122,14 +128,18 @@
             <p>Every paste expires, after anywhere from 10 minutes to 1 year (3 days by default). Expired pastes can't
                 be opened and are deleted from the server.</p>
             <p class="mb-0">A view limit caps how many times a paste can be opened; set it to 1 for "burn after
-                reading". A view is counted when someone opens the paste and it decrypts. After the last allowed view,
-                the paste can't be opened again and is deleted from the server within about 12 hours. Leave it at 0
-                for no limit.</p>
+                reading". The server counts a view each time it sends the paste to someone with the full link (and
+                the password, if there is one); a broken link or a wrong password doesn't use one. After the last
+                allowed view, the paste is deleted from the server straight away. If it has an attachment, only the
+                file is kept, for up to an hour, so the last viewer can download it. Leave the limit empty for no
+                limit.</p>
             {% endcall %}
 
             {% call faq("delete", "Can I delete a paste?") %}
-            <p class="mb-0">Not by hand at the moment. To make sure a paste disappears, give it a short expiry or a
-                view limit when you create it.</p>
+            <p class="mb-0">Yes. When you create a paste, the link dialog also has a delete link. Open it and confirm
+                to delete the paste and any attachment for good. Keep the delete link to yourself, since anyone who
+                has it can delete the paste. It's only shown once, so if you lose it, the paste stays until it
+                expires or reaches its view limit.</p>
             {% endcall %}
 
             {% call faq("preview", "Why don't link previews show what's in my paste?") %}

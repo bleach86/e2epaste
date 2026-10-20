@@ -5,7 +5,8 @@ import {
   PASTE_VERSION,
   arrayBufferToBase64,
   deriveIv,
-  deriveV3Key,
+  accessHash,
+  deriveV3Secrets,
   encryptBytes,
   encryptText,
   generateLinkSecret,
@@ -47,6 +48,7 @@ const passwordToggle = document.getElementById("toggle-password");
 const submitButton = document.getElementById("submit-paste");
 const urlModalEl = document.getElementById("url-modal");
 const copyUrlButton = document.getElementById("copy-url-btn");
+const copyDeleteButton = document.getElementById("copy-delete-btn");
 
 let fileData;
 let fileName;
@@ -261,7 +263,7 @@ async function createPaste() {
   // The secret only ever goes in the link's #fragment, which browsers never
   // send to the server. With a password, the key also depends on it.
   const linkSecret = generateLinkSecret();
-  const key = await deriveV3Key(linkSecret, iv, password === "" ? null : password);
+  const { key, accessProof } = await deriveV3Secrets(linkSecret, iv, password === "" ? null : password);
 
   const encrypted = await encryptText(text, key, iv);
   let encryptedFile = null;
@@ -291,6 +293,9 @@ async function createPaste() {
     file_name: encryptedFileName,
     // So the server can check it against the limits before creating anything.
     file_size: encryptedFile ? encryptedFile.byteLength : null,
+    // The server only sends the paste to a browser that has the proof; it
+    // keeps just this hash of it.
+    access_hash: await accessHash(accessProof),
   };
 
   const response = await fetch("/api/submit_paste", {
@@ -314,7 +319,7 @@ async function createPaste() {
   // page (robots.txt blocks /paste/) and it forwards browsers on. The origin
   // is the address this page was loaded from, so links work whatever
   // site_url is set to.
-  showLink(`${location.origin}/s/${data.id}#${linkSecret}`, {
+  showLink(`${location.origin}/s/${data.id}#${linkSecret}`, `${location.origin}/delete/${data.id}#${data.delete_token}`, {
     expiry: expiryLabel(expire),
     views,
     password: password !== "",
@@ -358,8 +363,10 @@ function chip(icon, text, warn = false) {
   return li;
 }
 
-function showLink(url, settings) {
+function showLink(url, deleteUrl, settings) {
   document.getElementById("paste-url").value = url;
+  document.getElementById("delete-url").value = deleteUrl;
+  urlModalEl.querySelector(".delete-details").open = false;
 
   const chips = [chip("clock", `Expires in ${settings.expiry}`)];
   if (settings.views === 1) {
@@ -385,23 +392,28 @@ function showLink(url, settings) {
   document.getElementById("qrcode-container").innerHTML = qr.createImgTag(4, 2, "QR code of the link");
   urlModalEl.querySelector(".qr-details").open = false;
 
-  setCopied(false);
+  setCopied(copyUrlButton, false);
+  setCopied(copyDeleteButton, false);
   urlModal.show();
 }
 
-function setCopied(copied) {
-  copyUrlButton.querySelector(".copy-idle").classList.toggle("d-none", copied);
-  copyUrlButton.querySelector(".copy-done").classList.toggle("d-none", !copied);
-  copyUrlButton.querySelector(".copy-done").classList.toggle("d-inline-flex", copied);
+function setCopied(button, copied) {
+  button.querySelector(".copy-idle").classList.toggle("d-none", copied);
+  button.querySelector(".copy-done").classList.toggle("d-none", !copied);
+  button.querySelector(".copy-done").classList.toggle("d-inline-flex", copied);
 }
 
-copyUrlButton.addEventListener("click", async () => {
-  await navigator.clipboard.writeText(document.getElementById("paste-url").value);
-  setCopied(true);
-  setTimeout(() => setCopied(false), 2000);
-});
-
-document.getElementById("paste-url").addEventListener("focus", (e) => e.target.select());
+for (const [button, field] of [
+  [copyUrlButton, "paste-url"],
+  [copyDeleteButton, "delete-url"],
+]) {
+  button.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(document.getElementById(field).value);
+    setCopied(button, true);
+    setTimeout(() => setCopied(button, false), 2000);
+  });
+  document.getElementById(field).addEventListener("focus", (e) => e.target.select());
+}
 
 // However the dialog closes, start a fresh paste.
 urlModalEl.addEventListener("hidden.bs.modal", () => {

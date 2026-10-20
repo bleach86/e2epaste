@@ -1,0 +1,34 @@
+{% extends "layout" %}
+{% import "icons" as icons %}
+
+{# The creator's delete link: /delete/<id>#<token>. js/pages/delete.mjs sends
+   the token from the hash; the page itself doesn't know if the paste exists. #}
+{% block page %}
+<div class="page page-narrow">
+    <div class="panel panel-pad text-center not-found">
+        <div id="delete-ask">
+            <span class="dialog-badge mx-auto mb-3">{{ icons.icon("eraser") }}</span>
+            <h1 class="h3 fw-bold">Delete this paste?</h1>
+            <p class="text-secondary mb-4">The paste and any attachment are deleted from the server for good. Anyone
+                you sent the link to won't be able to open it.</p>
+            <button type="button" id="delete-btn" class="btn btn-danger">
+                <span class="delete-idle">Delete paste</span>
+                <span class="delete-busy d-none align-items-center gap-2"><span
+                        class="spinner-border spinner-border-sm" aria-hidden="true"></span> Deleting...</span>
+            </button>
+            <p id="delete-error" class="text-danger mt-3 mb-0" role="alert" hidden></p>
+        </div>
+        <div id="delete-done" hidden>
+            <span class="dialog-badge mx-auto mb-3">{{ icons.icon("check") }}</span>
+            <h1 class="h3 fw-bold">Paste deleted</h1>
+            <p class="text-secondary mb-4">It's gone from the server and can't be opened any more.</p>
+            <a href="/" class="btn btn-accent">{{ icons.icon("plus") }} Create a new paste</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="page-data">{{ {"paste_id": paste_id} | tojson }}</script>
+<script src="/public/js/dist/delete.js?v={{ asset_version }}"></script>
+{% endblock %}

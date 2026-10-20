@@ -27,6 +27,15 @@ pastes_per_hour = 60
 # Attachment data. At least 26, the largest attachment.
 upload_mib_per_hour = 250
 
+# Failed attempts to open or delete a paste (wrong link, password or delete
+# link) allowed per IP per hour. Correct attempts are never limited.
+unlock_attempts_per_hour = 30
+
+# Enables the admin API (POST /api/admin/delete/<id>) for taking pastes down.
+# Leave unset to disable it. Generate one with `openssl rand -hex 32`, and set
+# it with ROCKET_ADMIN_TOKEN rather than in this file.
+# admin_token = ""
+
 # Storage limits. 0 turns a limit off.
 # Stop taking new pastes when the disk has less than this free.
 min_free_disk_mib = 1024

@@ -151,6 +151,20 @@
                 <div id="qrcode-container" class="qr-box"></div>
             </details>
 
+            <details class="qr-details delete-details">
+                <summary>Delete link</summary>
+                <p class="small text-secondary mt-2 mb-2">Opens a page where you can delete the paste before it
+                    expires. Keep it to yourself: anyone with it can delete the paste. It's only shown now.</p>
+                <div class="input-group">
+                    <input id="delete-url" class="form-control font-monospace small" type="text" readonly
+                        aria-label="Delete link">
+                    <button id="copy-delete-btn" type="button" class="btn btn-quiet">
+                        <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }} Copy</span>
+                        <span class="copy-done d-none align-items-center gap-2">{{ icons.icon("check") }} Copied</span>
+                    </button>
+                </div>
+            </details>
+
             <div class="d-flex justify-content-end">
                 <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Create another paste</button>
             </div>

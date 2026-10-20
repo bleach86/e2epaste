@@ -11,7 +11,8 @@ uploaded, and the key never reaches the server, so the server only ever stores d
   in the browser.
 - **Optional password.** The paste can't be decrypted without it, even by someone who has the link.
 - **Expiry and view limits.** Pastes expire after 10 minutes to 1 year. Set a view limit of 1 for
-  "burn after reading".
+  "burn after reading". Views are counted by the server, and the paste is deleted on its last one.
+- **Delete links.** The creator gets a separate link to delete the paste early.
 - **File attachments** up to 25 MB, alongside up to 1 MB of text.
 - **Syntax highlighting** for 35 languages, live while you type.
 - **Short links and QR codes** for sharing. Link previews in chat apps show a generic card, never the
@@ -28,15 +29,31 @@ When you create a paste, your browser:
 2. derives an AES-256 key from it with HKDF-SHA256 (if you set a password, it's stretched with
    PBKDF2-SHA256, 600,000 rounds, and mixed in),
 3. compresses the text, title, file and file name, then encrypts each with AES-256-GCM using its own IV,
-4. uploads only the encrypted data.
+4. derives a separate *access proof* from the same secret (and password) with different HKDF info, and
+5. uploads the encrypted data and a SHA-256 hash of the access proof.
 
 The secret goes in the link after the `#`, for example `https://e2epaste.xyz/s/Ab3dE5gH#<secret>`.
-Browsers never send the part after `#` to the server, so the server never has the key. When someone opens
-the link, their browser reads the secret and decrypts the paste locally.
+Browsers never send the part after `#` to the server, so the server never has the key.
+
+When someone opens the link, the page itself holds none of the paste. Their browser derives the key and the
+access proof, and sends the proof to the server. The server checks it against the stored hash, counts the
+view and only then sends the encrypted paste, which the browser decrypts locally. So:
+
+- knowing a paste's ID (from a log, say) isn't enough to download it or use up its views,
+- a broken link or a wrong password is refused without using a view,
+- the encrypted paste can't be downloaded to guess a password offline: guesses have to go through the
+  server, which limits failed attempts per IP.
+
+The proof can't be turned back into the secret, the password or the key. Each view also comes with a
+one-time ticket for downloading the attachment, so attachments can't be fetched without a view either.
 
 The server does store some information it needs to work: the syntax highlighting choice, sizes, when the
-paste was created and expires, the view count and limit, and whether it has a password. Like any website,
-it can also see IP addresses.
+paste was created and expires, the view count and limit, whether it has a password, and the hashes of the
+access proof and the creator's delete link. Like any website, it can also see IP addresses.
+
+Pages are served with a strict Content Security Policy: scripts only from the site itself, with no inline
+script or style. Paste pages and API responses are marked `no-store`, so browsers and proxies don't keep
+copies.
 
 **Limits of the design.** Anyone with the full link can read the paste, so it's only as private as the
 channel you send the link through; a password protects against that. And as with every browser-based
@@ -44,7 +61,8 @@ encrypted service, the encryption code is delivered by the site itself, so you'r
 send unmodified code. That's why the code is open source.
 
 The encryption code is in [`js/crypto.mjs`](js/crypto.mjs). Older paste formats (v1 and v2) are still
-decrypted for existing links; new pastes always use v3.
+decrypted for existing links; new pastes always use v3. Pastes created before access proofs existed open
+without one, and their views are still counted by the server.
 
 ## Self-hosting
 
@@ -70,6 +88,8 @@ variable named `ROCKET_` plus the setting in capitals, such as `ROCKET_SITE_URL`
 | `address` | `127.0.0.1` | Address to listen on. The default only accepts connections from the same machine, for a reverse proxy there. Use `0.0.0.0` if the proxy is on another machine |
 | `port` | `8001` | Port to listen on |
 | `ip_header` | `X-Real-IP` | Header the reverse proxy puts the visitor's IP in (see [Limits](#limits)) |
+| `unlock_attempts_per_hour` | `30` | Failed attempts to open or delete a paste (wrong link, password or delete link) one IP can make per hour |
+| `admin_token` | unset | Turns on the [admin API](#taking-a-paste-down). At least 32 characters |
 | `pastes_per_minute` | `10` | Pastes one IP can create per minute |
 | `pastes_per_hour` | `60` | Pastes one IP can create per hour |
 | `upload_mib_per_hour` | `250` | Attachment data one IP can upload per hour, in MiB. At least 26, the largest attachment |
@@ -278,6 +298,19 @@ If a CDN such as Cloudflare sits in front of the proxy, the proxy sees the CDN's
 visitor's. Configure the proxy to take the real address from the CDN first (with Apache, `mod_remoteip`;
 with nginx, `set_real_ip_from`), or every visitor will share the CDN's limits.
 
+### Taking a paste down
+
+The server can't read pastes, but you may still need to remove one, for example after an abuse report. Set
+`admin_token` (with `ROCKET_ADMIN_TOKEN`; generate one with `openssl rand -hex 32`) and restart. Then
+delete a paste by its ID, the 8 characters after `/s/` or `/paste/` in its link:
+
+```sh
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://paste.example.com/api/admin/delete/Ab3dE5gH
+```
+
+The reply is `{"deleted":true}`, or `{"deleted":false}` if there was no such paste. Without `admin_token`,
+the admin API doesn't exist. Failed attempts count towards `unlock_attempts_per_hour`.
+
 ### Data
 
 | Path (in `data_dir`) | Contents |
@@ -285,9 +318,8 @@ with nginx, `set_real_ip_from`), or every visitor will share the CDN's limits.
 | `e2epaste.redb` | The paste database ([redb](https://www.redb.org/)): encrypted pastes, the expiry index and site stats |
 | `file_store/` | Encrypted attachments, one file per paste |
 
-Expired pastes can't be opened. A cleanup every 15 minutes deletes them from disk, leaving pastes less
-than a day old for a later run. Back up the database and `file_store/` together, with the server
-stopped.
+Expired pastes can't be opened, and a cleanup every minute deletes them from disk. Back up the database
+and `file_store/` together, with the server stopped.
 
 ### Upgrading from a version before redb
 

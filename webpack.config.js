@@ -21,6 +21,7 @@ module.exports = {
     create: "./js/pages/create.mjs",
     paste: "./js/pages/paste.mjs",
     share: "./js/pages/share.mjs",
+    delete: "./js/pages/delete.mjs",
     ...toolEntries,
   },
   output: {

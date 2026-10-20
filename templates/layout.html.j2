@@ -33,12 +33,12 @@
     <link href="/public/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/public/css/atom-one-dark.min.css">
     {# Last, so the theme overrides Bootstrap. #}
-    <link rel="stylesheet" href="/public/css/styles.css?v=2.5">
+    <link rel="stylesheet" href="/public/css/styles.css?v=2.6">
     <script src="/public/js/taboverride.min.js"></script>
 </head>
 
 <body class="d-flex flex-column min-vh-100">
-    <a href="#main" class="visually-hidden-focusable position-absolute top-0 start-0 m-2 btn btn-accent" style="z-index: 1100">Skip to content</a>
+    <a href="#main" class="visually-hidden-focusable position-absolute top-0 start-0 m-2 btn btn-accent skip-link">Skip to content</a>
     {% include "nav" %}
     {# Shown by common.mjs when the page isn't a secure context (plain HTTP),
        where browsers turn off the Web Crypto API. #}

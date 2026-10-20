@@ -51,6 +51,16 @@ impl Bucket {
     }
 }
 
+/// Limits failed attempts to open or delete a paste (wrong link, password or
+/// token) per IP. Correct attempts aren't counted.
+pub struct UnlockLimiter(pub RateLimiter);
+
+impl UnlockLimiter {
+    pub fn new(attempts_per_hour: u64) -> Self {
+        UnlockLimiter(RateLimiter::new(0, attempts_per_hour, 0))
+    }
+}
+
 // Indexes into `RateLimiter::rules` and each client's buckets.
 const PASTES_PER_MINUTE: usize = 0;
 const PASTES_PER_HOUR: usize = 1;
@@ -79,6 +89,15 @@ impl RateLimiter {
     /// client, or, if any limit would be exceeded, takes nothing and returns
     /// how long to wait.
     pub fn take(&self, ip: Option<IpAddr>, upload_bytes: u64) -> Result<(), Duration> {
+        self.take_or_check(ip, upload_bytes, true)
+    }
+
+    /// Like `take(ip, 0)`, but takes nothing either way.
+    pub fn check(&self, ip: Option<IpAddr>) -> Result<(), Duration> {
+        self.take_or_check(ip, 0, false)
+    }
+
+    fn take_or_check(&self, ip: Option<IpAddr>, upload_bytes: u64, take: bool) -> Result<(), Duration> {
         let mut costs = [0.0; 3];
         costs[PASTES_PER_MINUTE] = 1.0;
         costs[PASTES_PER_HOUR] = 1.0;
@@ -97,6 +116,9 @@ impl RateLimiter {
         }
         if wait > Duration::ZERO {
             return Err(wait);
+        }
+        if !take {
+            return Ok(());
         }
 
         for (i, rule) in self.rules.iter().enumerate() {
@@ -181,6 +203,15 @@ mod tests {
         assert!(limiter.take(ip("2001:db8:1:2:ffff::9"), 0).is_err(), "same /64");
         assert!(limiter.take(ip("2001:db8:1:3::1"), 0).is_ok(), "different /64");
         assert_eq!(client_key(ip("::ffff:203.0.113.7")), A.unwrap());
+    }
+
+    #[test]
+    fn check_takes_nothing() {
+        let limiter = RateLimiter::new(1, 0, 0);
+        assert!(limiter.check(A).is_ok());
+        assert!(limiter.check(A).is_ok());
+        assert!(limiter.take(A, 0).is_ok());
+        assert!(limiter.check(A).is_err());
     }
 
     #[test]

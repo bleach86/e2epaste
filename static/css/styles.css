@@ -712,6 +712,11 @@ body {
   --bs-btn-font-weight: 600;
 }
 
+/* Above the sticky header and dialogs. */
+.skip-link {
+  z-index: 1100;
+}
+
 /* Plain-HTTP warning under the header (layout.html.j2). */
 .insecure-warning {
   background: #2a2112;
