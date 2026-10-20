@@ -5,4 +5,5 @@ import { readPageData } from "../ui.mjs";
 
 const { paste_id: pasteId } = readPageData();
 
-window.location.href = `/paste/${pasteId}${window.location.hash}`;
+// replace() keeps /share/ out of history, so Back doesn't bounce forward again.
+window.location.replace(`/paste/${pasteId}${window.location.hash}`);

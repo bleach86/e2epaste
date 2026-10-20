@@ -1,0 +1,22 @@
+{% extends "layout" %}
+
+{% block page %}
+<div class="spacer-50"></div>
+<div class="container bg-dark-subtle w-100 body-height rounded-2 mb-5 pb-4">
+    <nav aria-label="breadcrumb" class="pt-3">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="/" class="link-secondary">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ hub.name }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="text-center mt-4">{{ hub.name }}</h1>
+    <p class="text-center text-secondary">
+        {{ hub.intro }}<br>
+        <small><i class="bi bi-shield-lock"></i> Every tool runs entirely in your browser. Nothing you enter is
+            sent to the server.</small>
+    </p>
+
+    {% include "tool_list" %}
+</div>
+{% endblock %}

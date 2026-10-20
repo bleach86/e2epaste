@@ -1,0 +1,25 @@
+{% extends "tool_layout" %}
+{% import "tool_macros" as m %}
+
+{% block tool %}
+{{ m.panel("encode", "Text to Hex", "Type or paste text. Each UTF-8 byte becomes two hex digits.",
+    "Enter text to convert...", "Hex output") }}
+{{ m.panel("decode", "Hex to Text", "Paste hex. Spaces, colons, commas, dashes and 0x prefixes are ignored.",
+    "Enter hex to convert to text...", "Decoded text") }}
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What is hexadecimal?</h2>
+<p>Hexadecimal (hex) is base 16: it counts with the digits <code>0–9</code> and the letters <code>a–f</code>.
+    One byte, a number from 0 to 255, is always exactly two hex digits, from <code>00</code> to <code>ff</code>.
+    That's why hex is the usual way to show raw bytes: in hash values, colour codes, memory dumps, network
+    packets and escape sequences.</p>
+
+<h2 class="h4">How the conversion works</h2>
+<p>Text is first turned into UTF-8 bytes, then each byte is written as two hex digits. Plain English letters
+    take one byte each, so <code>Hi</code> becomes <code>4869</code>. Other characters take two to four bytes:
+    <code>€</code> becomes <code>e282ac</code>.</p>
+<p>Going the other way, the hex is turned back into bytes and read as UTF-8. You can paste hex in common
+    formats such as <code>48 69</code>, <code>48:69</code> or <code>0x48 0x69</code>. If the bytes aren't valid
+    UTF-8 text, you'll see a warning and the bad bytes are shown as <code>�</code>.</p>
+{% endblock %}

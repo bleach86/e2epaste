@@ -1,0 +1,30 @@
+{% extends "tool_layout" %}
+{% import "tool_macros" as m %}
+
+{% block tool %}
+{{ m.panel("encode", "Text to Base64", "Type or paste text. It's encoded as UTF-8, then Base64.",
+    "Enter text to encode...", "Base64 output") }}
+{{ m.panel("decode", "Base64 to Text", "Paste Base64 or URL-safe Base64. Spaces, line breaks and missing padding are fine.",
+    "Enter Base64 to decode...", "Decoded text") }}
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What is Base64?</h2>
+<p>Base64 is a way of writing any data, including text in any language, using only 64 plain characters:
+    <code>A–Z</code>, <code>a–z</code>, <code>0–9</code>, <code>+</code> and <code>/</code>, with <code>=</code>
+    as padding at the end. It's used wherever binary data has to travel through something that only handles
+    text: email attachments, <code>data:</code> URLs, JSON payloads, HTTP Basic authentication headers and
+    JSON Web Tokens.</p>
+<p>Every 3 bytes of input become 4 characters of output, so Base64 is about a third larger than the
+    original.</p>
+
+<h2 class="h4">How to use it</h2>
+<p>Type in either box and the result updates as you type. Text is converted to UTF-8 bytes before encoding,
+    so accented letters, emoji and non-Latin scripts work. The decoder also accepts
+    <strong>URL-safe Base64</strong> (which uses <code>-</code> and <code>_</code> instead of <code>+</code> and
+    <code>/</code>), such as the parts of a JWT.</p>
+
+<h2 class="h4">Is Base64 encryption?</h2>
+<p>No. Base64 is an encoding, not encryption: anyone can decode it, and it gives no protection at all. If you
+    need to share something privately, use an <a href="/">end-to-end encrypted paste</a> instead.</p>
+{% endblock %}

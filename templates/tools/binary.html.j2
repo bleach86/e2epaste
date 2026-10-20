@@ -1,0 +1,25 @@
+{% extends "tool_layout" %}
+{% import "tool_macros" as m %}
+
+{% block tool %}
+{{ m.panel("encode", "Text to Binary", "Type or paste text. Each UTF-8 byte becomes 8 bits.",
+    "Enter text to convert...", "Binary output") }}
+{{ m.panel("decode", "Binary to Text", "Paste bytes separated by spaces, or one unbroken run of bits in groups of 8.",
+    "Enter binary to convert to text...", "Decoded text") }}
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">How text becomes binary</h2>
+<p>Computers store text as numbers. This tool uses UTF-8, the encoding used by almost every website and
+    modern system: each character becomes one to four bytes, and each byte is written as 8 binary digits
+    (bits). The letter <code>A</code> is byte 65, which is <code>01000001</code> in binary. Bytes are separated
+    by spaces to make them easy to read.</p>
+<p>English letters, digits and common punctuation use a single byte, the same values as ASCII. Accented
+    letters, other scripts and emoji use more: <code>é</code> is <code>11000011 10101001</code>.</p>
+
+<h2 class="h4">Converting binary back to text</h2>
+<p>Paste bytes separated by spaces or line breaks; leading zeros can be left off, so <code>1000001</code> also
+    reads as <code>A</code>. You can also paste one long run of bits with no spaces, as long as its length is a
+    multiple of 8. If the bytes don't form valid UTF-8 text, you'll see a warning and the bad bytes are shown
+    as <code>�</code>.</p>
+{% endblock %}

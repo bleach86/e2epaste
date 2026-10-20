@@ -221,7 +221,9 @@ submitButton.addEventListener("click", async () => {
 
     loadingButton.style.display = "none";
     submitButton.style.display = "block";
-    openModal(`${host}/paste/${data.id}#${keyFragments.hashFragment}`);
+    // Hand out /share/ links: link-preview bots can fetch that page (robots.txt
+    // blocks /paste/) and it forwards browsers to the paste.
+    openModal(`${host}/share/${data.id}#${keyFragments.hashFragment}`);
   } else {
     alert("Failed to create paste");
   }

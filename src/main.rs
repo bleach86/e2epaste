@@ -3,6 +3,7 @@ extern crate rocket;
 
 mod paste_db;
 mod paste_id;
+mod tools;
 
 use rocket::data::ToByteUnit;
 use rocket::fairing::Fairing;
@@ -12,6 +13,7 @@ use rocket::futures::StreamExt;
 use rocket::http::uri::Absolute;
 use rocket::http::ContentType;
 use rocket::http::Header;
+use rocket::http::Status;
 use rocket::request::Request;
 use rocket::response::Response;
 use rocket::serde::json::Json;
@@ -36,6 +38,48 @@ use paste_id::PasteId;
 const HOST: Absolute<'static> = uri!("https://e2epaste.xyz");
 const TITLE: &str = "e2ePaste.XYZ";
 const ID_LENGTH: usize = 8;
+
+/// Per-page <title>, meta description and link-preview text, rendered by
+/// layout.html.j2.
+#[derive(Serialize)]
+pub struct PageMeta {
+    pub title: &'static str,
+    pub description: &'static str,
+    /// Path for the canonical URL and og:url. `None` marks the page noindex.
+    pub canonical: Option<&'static str>,
+}
+
+const INDEX_PAGE: PageMeta = PageMeta {
+    title: "e2ePaste.XYZ - End-to-End Encrypted Pastebin",
+    description: "Share text and files with end-to-end encryption. Pastes are encrypted in your browser \
+        with AES-256-GCM, with optional passwords, expiry and view limits.",
+    canonical: Some("/"),
+};
+
+const FAQ_PAGE: PageMeta = PageMeta {
+    title: "FAQ - e2ePaste.XYZ",
+    description: "What e2ePaste.XYZ is, how it encrypts your pastes in the browser with the Web Crypto \
+        API so the server never sees their contents, and how large a paste can be.",
+    canonical: Some("/faq"),
+};
+
+// Paste pages are private: never indexed, and generic preview text so shared
+// links don't reveal anything about the paste.
+const PASTE_PAGE: PageMeta = PageMeta {
+    title: "Encrypted Paste - e2ePaste.XYZ",
+    description: "An end-to-end encrypted paste. It can only be decrypted in your browser using the \
+        full link.",
+    canonical: None,
+};
+
+const NOT_FOUND_PAGE: PageMeta = PageMeta {
+    title: "Paste Not Found - e2ePaste.XYZ",
+    description: "This paste doesn't exist, has expired, or has reached its view limit.",
+    canonical: None,
+};
+
+// Pages listed in sitemap.xml, besides the tool pages.
+const SITEMAP_PATHS: [&str; 2] = ["/", "/faq"];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IncomingPaste {
@@ -234,7 +278,7 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "bot_filter",
-        context! {title: TITLE, paste_id: id.to_string(), host: HOST, site_stats, year: Utc::now().year()},
+        context! {title: TITLE, page: PASTE_PAGE, paste_id: id.to_string(), host: HOST, site_stats, year: Utc::now().year()},
     )
 }
 
@@ -251,17 +295,14 @@ async fn download_attachment(id: PasteId<'_>) -> Option<NamedFile> {
 }
 
 #[get("/paste/<id>")]
-async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
+async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     let now: DateTime<Utc> = chrono::Utc::now();
 
     let mut paste_data: PasteData = match db.get_paste(id.to_string()) {
         Some(paste_data) => paste_data,
         None => {
-            return Template::render(
-                "paste_not_found",
-                context! {title: TITLE, site_stats, year: now.year()},
-            )
+            return paste_not_found(site_stats, now.year());
         }
     };
 
@@ -290,10 +331,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
                 },
                 None => {}
             }
-            return Template::render(
-                "paste_not_found",
-                context! {title: TITLE, site_stats, year: now.year()},
-            );
+            return paste_not_found(site_stats, now.year());
         }
     }
 
@@ -313,10 +351,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
                     eprintln!("Error deleting expired index: {:?}", e);
                 }
             };
-            return Template::render(
-                "paste_not_found",
-                context! {title: TITLE, site_stats, year: now.year()},
-            );
+            return paste_not_found(site_stats, now.year());
         }
     }
 
@@ -324,10 +359,11 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
 
     let formatted_lang = get_formatted_lang(&paste_data.syntax);
 
-    Template::render(
+    let template = Template::render(
         "paste",
         context! {
             title: TITLE,
+            page: PASTE_PAGE,
             paste: paste_data,
             has_password,
             host: HOST,
@@ -335,7 +371,16 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> Template {
             year: now.year(),
             formatted_lang,
         },
-    )
+    );
+    (Status::Ok, template)
+}
+
+fn paste_not_found(site_stats: paste_db::SiteStats, year: i32) -> (Status, Template) {
+    let template = Template::render(
+        "paste_not_found",
+        context! {title: TITLE, page: NOT_FOUND_PAGE, site_stats, year},
+    );
+    (Status::NotFound, template)
 }
 
 #[get("/faq")]
@@ -343,26 +388,51 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "faq",
-        context! {title: TITLE, site_stats, host: HOST, year: Utc::now().year()},
+        context! {title: TITLE, page: FAQ_PAGE, site_stats, host: HOST, year: Utc::now().year()},
     )
 }
 
 #[get("/tools/password")]
-async fn password_gen(db: &State<Arc<PasteDB>>) -> Template {
-    let site_stats: paste_db::SiteStats = db.get_site_stats();
-    Template::render(
-        "password_gen",
-        context! {title: TITLE, site_stats, host: HOST, year: Utc::now().year()},
-    )
+fn password_tools(db: &State<Arc<PasteDB>>) -> Template {
+    tool_hub(db, tools::ToolGroup::Password)
 }
 
 #[get("/tools/strings")]
-async fn string_tools(db: &State<Arc<PasteDB>>) -> Template {
-    let site_stats: paste_db::SiteStats = db.get_site_stats();
+fn string_tools(db: &State<Arc<PasteDB>>) -> Template {
+    tool_hub(db, tools::ToolGroup::Strings)
+}
+
+fn tool_hub(db: &State<Arc<PasteDB>>, group: tools::ToolGroup) -> Template {
+    let hub = tools::hub(group);
+    let listings = tools::listings();
     Template::render(
-        "string_tools",
-        context! {title: TITLE, site_stats, host: HOST, year: Utc::now().year()},
+        "tool_hub",
+        context! {
+            title: TITLE,
+            page: &hub.page,
+            hub,
+            listings,
+            site_stats: db.get_site_stats(),
+            year: Utc::now().year(),
+        },
     )
+}
+
+#[get("/tools/<slug>")]
+fn tool_page(db: &State<Arc<PasteDB>>, slug: &str) -> Option<Template> {
+    let tool = tools::find_tool(slug)?;
+    Some(Template::render(
+        format!("tools/{}", tool.slug),
+        context! {
+            title: TITLE,
+            page: &tool.page,
+            tool,
+            hub: tools::hub(tool.group),
+            listings: tools::listings(),
+            site_stats: db.get_site_stats(),
+            year: Utc::now().year(),
+        },
+    ))
 }
 
 #[get("/")]
@@ -371,8 +441,33 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
     let languages: Vec<(&str, &str)> = get_languages();
     Template::render(
         "index",
-        context! {title: TITLE, site_stats, host: HOST, languages, year: Utc::now().year()},
+        context! {title: TITLE, page: INDEX_PAGE, site_stats, host: HOST, languages, year: Utc::now().year()},
     )
+}
+
+// Paste URLs are private, so keep crawlers off them (and off the API, where a
+// JS-running crawler could use up a paste's views). /share/ stays crawlable so
+// link previews work; that page is noindex and holds no paste data.
+#[get("/robots.txt")]
+fn robots() -> (ContentType, String) {
+    let body = format!(
+        "User-agent: *\nDisallow: /paste/\nDisallow: /api/\n\nSitemap: {HOST}/sitemap.xml\n"
+    );
+    (ContentType::Plain, body)
+}
+
+#[get("/sitemap.xml")]
+fn sitemap() -> (ContentType, String) {
+    let urls: String = SITEMAP_PATHS
+        .into_iter()
+        .chain(tools::sitemap_paths())
+        .map(|path| format!("  <url><loc>{HOST}{path}</loc></url>\n"))
+        .collect();
+    let body = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n{urls}</urlset>\n"
+    );
+    (ContentType::XML, body)
 }
 
 fn get_formatted_lang(lang: &str) -> String {
@@ -444,16 +539,20 @@ async fn rocket() -> _ {
                 faq,
                 filter_bots,
                 advance_views,
-                password_gen,
+                password_tools,
                 string_tools,
+                tool_page,
                 download_attachment,
                 upload_attachment,
+                robots,
+                sitemap,
             ],
         )
         .attach(Template::custom(|engines| {
             engines
                 .minijinja
                 .add_global("asset_version", env!("ASSET_VERSION"));
+            engines.minijinja.add_global("site_url", HOST.to_string());
         }))
         .attach(CacheControlFairing)
         .attach(WasmFairing);

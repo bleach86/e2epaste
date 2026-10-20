@@ -39,16 +39,24 @@ fn npm(args: &[&str]) {
 
 fn hash_dir(dir: &Path) -> u64 {
     let mut hasher = DefaultHasher::new();
+    hash_dir_into(dir, dir, &mut hasher);
+    hasher.finish()
+}
+
+// Hashes every file under `dir` (recursively, in a stable order) by its path
+// relative to `root` and its contents.
+fn hash_dir_into(root: &Path, dir: &Path, hasher: &mut DefaultHasher) {
     let mut entries: Vec<_> = std::fs::read_dir(dir)
         .map(|rd| rd.filter_map(Result::ok).map(|e| e.path()).collect())
         .unwrap_or_default();
     entries.sort();
 
     for path in entries {
-        if let Ok(contents) = std::fs::read(&path) {
-            path.file_name().hash(&mut hasher);
-            contents.hash(&mut hasher);
+        if path.is_dir() {
+            hash_dir_into(root, &path, hasher);
+        } else if let Ok(contents) = std::fs::read(&path) {
+            path.strip_prefix(root).unwrap_or(&path).hash(hasher);
+            contents.hash(hasher);
         }
     }
-    hasher.finish()
 }

@@ -4,19 +4,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }} - Fully End-to-End Encrypted Pastebin</title>
-    <meta name="description" content="Fully End-to-End Encrypted Pastebin">
-    <meta name="description"
-        content="e2ePaste.XYZ is a secure pastebin platform offering client-side AES-256-GCM encryption. Enjoy full end-to-end encryption where the server never has knowledge of the contents of your paste, ensuring top-tier privacy and confidentiality.">
-    <meta name="keywords"
-        content="client-side encryption, AES-256-GCM, end-to-end encryption, encrypted pastebin, private pastebin, secure pastebin, privacy, confidential pastebin, encrypted text sharing, pastebin">
+    <title>{{ page.title }}</title>
+    <meta name="description" content="{{ page.description }}">
+    {# site_url and page.canonical are constants from main.rs, so |safe is fine #}
+    {% if page.canonical %}
+    <link rel="canonical" href="{{ site_url|safe }}{{ page.canonical|safe }}">
+    <meta property="og:url" content="{{ site_url|safe }}{{ page.canonical|safe }}">
+    {% else %}
+    <meta name="robots" content="noindex, nofollow">
+    {% endif %}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ title }}">
+    <meta property="og:title" content="{{ page.title }}">
+    <meta property="og:description" content="{{ page.description }}">
+    <meta property="og:image" content="{{ site_url|safe }}/public/android-chrome-512x512.png">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta property="og:image:alt" content="{{ title }} logo">
+    <meta name="twitter:card" content="summary">
     <link rel="apple-touch-icon" sizes="180x180" href="/public/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/public/favicon-16x16.png">
     <link rel="manifest" href="/public/site.webmanifest">
 
 
-    <link rel="stylesheet" href="/public/css/styles.css?v=1.3">
+    <link rel="stylesheet" href="/public/css/styles.css?v=1.4">
     <link href="/public/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/public/css/atom-one-dark.min.css">
     <link rel="stylesheet" href="/public/bootstrap-icons/font/bootstrap-icons.min.css">

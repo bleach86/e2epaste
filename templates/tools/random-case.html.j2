@@ -1,0 +1,19 @@
+{% extends "tool_layout" %}
+{% import "tool_macros" as m %}
+
+{% block tool %}
+{{ m.panel("random", "Randomize case", "Each letter is randomly made upper or lower case as you type.",
+    "Enter text to randomize...", "rAnDoMiZeD tExT") }}
+<div class="text-center">
+    <button type="button" id="rerandomize" class="btn btn-outline-light">Randomize again</button>
+</div>
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What is random case?</h2>
+<p>Random case mixes upper and lower case letters at random, like <code>tHiS iS rAnDoM cAsE</code>. Online
+    it's best known as "mocking" text, used to repeat something back in a sarcastic tone. Each letter has an
+    even chance of being upper or lower case, so you get a different result every time; press
+    <strong>Randomize again</strong> until you like it.</p>
+<p>Only letters change. Numbers, punctuation, spaces and emoji are left as they are.</p>
+{% endblock %}
