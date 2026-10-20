@@ -11,7 +11,7 @@ import {
   encryptText,
   generateLinkSecret,
 } from "../crypto.mjs";
-import { rememberDeleteToken } from "../delete_tokens.mjs";
+import { rememberDeleteToken, rememberingEnabled, setRemembering } from "../delete_tokens.mjs";
 import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable } from "../ui.mjs";
 
@@ -46,6 +46,7 @@ const syntaxSelect = document.getElementById("syntax");
 const fileInput = document.getElementById("fileInput");
 const attachmentRow = document.getElementById("attachment");
 const burnSwitch = document.getElementById("burn");
+const rememberSwitch = document.getElementById("remember-delete");
 const maxViewsInput = document.getElementById("max-views");
 const passwordInput = document.getElementById("paste-password");
 const passwordToggle = document.getElementById("toggle-password");
@@ -345,7 +346,10 @@ async function createPaste() {
   }
   // For the Delete button on the paste page, in this browser. Before the
   // upload, so a paste whose attachment failed can still be deleted.
-  rememberDeleteToken(data.id, data.delete_token, lifetime);
+  const remembered = rememberSwitch.checked;
+  if (remembered) {
+    rememberDeleteToken(data.id, data.delete_token, lifetime);
+  }
   if (encryptedFile) {
     await uploadEncryptedFile(encryptedFile, data.id, data.upload_token);
   }
@@ -359,6 +363,7 @@ async function createPaste() {
     views,
     password: password !== "",
     attachment: Boolean(encryptedFile),
+    remembered,
   });
 }
 
@@ -402,6 +407,7 @@ function showLink(url, deleteUrl, settings) {
   document.getElementById("paste-url").value = url;
   document.getElementById("delete-url").value = deleteUrl;
   urlModalEl.querySelector(".delete-details").open = false;
+  document.getElementById("delete-remembered").hidden = !settings.remembered;
 
   const chips = [chip("clock", `Expires in ${settings.expiry}`)];
   if (settings.views === 1) {
@@ -456,6 +462,10 @@ urlModalEl.addEventListener("hidden.bs.modal", () => {
   const totalPastes = document.getElementById("total-pastes");
   totalPastes.textContent = (parseInt(totalPastes.textContent, 10) || 0) + 1;
 });
+
+// Kept across visits, not reset with the form.
+rememberSwitch.checked = rememberingEnabled();
+rememberSwitch.addEventListener("change", () => setRemembering(rememberSwitch.checked));
 
 // --- Reset ----------------------------------------------------------------
 

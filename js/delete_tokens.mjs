@@ -7,6 +7,8 @@
 // data); then there's simply no button, and the delete link still works.
 
 const STORAGE_KEY = "e2epaste.deleteTokens";
+// "off" once the creator turns off "Remember on this device".
+const SETTING_KEY = "e2epaste.rememberDeleteTokens";
 
 // { id: { token, expires } }, without the expired ones.
 function load() {
@@ -47,4 +49,26 @@ export function forgetDeleteToken(id) {
   const tokens = load();
   delete tokens[id];
   save(tokens);
+}
+
+// The "Remember on this device" switch on the create page; on unless turned
+// off. Only the choice is kept, nothing about any paste.
+export function rememberingEnabled() {
+  try {
+    return localStorage.getItem(SETTING_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setRemembering(enabled) {
+  try {
+    if (enabled) {
+      localStorage.removeItem(SETTING_KEY);
+    } else {
+      localStorage.setItem(SETTING_KEY, "off");
+    }
+  } catch {
+    // Not kept; the switch is back on next time.
+  }
 }

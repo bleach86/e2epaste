@@ -256,6 +256,28 @@ const plain = await createPaste({ text: "the quick brown fox" });
   await lp.reload({ waitUntil: "networkidle0" });
   await lp.waitForFunction(() => !document.getElementById("decrypted-notice").hidden);
   check("delete button: a broken store is ignored", await lp.$eval("#delete-paste-btn", (e) => e.hidden));
+  await lp.evaluate((k) => localStorage.removeItem(k), STORAGE_KEY);
+
+  // "Remember on this device" off: nothing is kept, and the choice sticks.
+  await lp.goto(BASE + "/", { waitUntil: "networkidle0" });
+  check("remember switch: on by default", await lp.$eval("#remember-delete", (e) => e.checked));
+  await lp.click("#remember-delete");
+  await lp.$eval("#paste-area", (el) => { el.value = "not remembered"; el.dispatchEvent(new Event("input")); });
+  await lp.click("#submit-paste");
+  await lp.waitForSelector("#url-modal.show", { timeout: 20000 });
+  check("remember switch: off keeps nothing", (await lp.evaluate((k) => localStorage.getItem(k), STORAGE_KEY)) === null);
+  check("remember switch: link dialog doesn't claim it's remembered", await lp.$eval("#delete-remembered", (e) => e.hidden));
+  const forgotten = local(await lp.$eval("#paste-url", (e) => e.value));
+  await lp.reload({ waitUntil: "networkidle0" });
+  check("remember switch: stays off on the next visit", !(await lp.$eval("#remember-delete", (e) => e.checked)));
+  await lp.goto(forgotten, { waitUntil: "networkidle0" });
+  await lp.waitForFunction(() => !document.getElementById("decrypted-notice").hidden);
+  check("remember switch: no Delete button when off", await lp.$eval("#delete-paste-btn", (e) => e.hidden));
+  // Back on, for the rest of this file.
+  await lp.goto(BASE + "/", { waitUntil: "networkidle0" });
+  await lp.click("#remember-delete");
+  await lp.reload({ waitUntil: "networkidle0" });
+  check("remember switch: back on sticks too", await lp.$eval("#remember-delete", (e) => e.checked));
   await lp.close();
 }
 

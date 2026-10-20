@@ -98,6 +98,20 @@
                 <div class="field-hint">Needed to open the paste, even with the link.</div>
             </div>
 
+            <hr class="panel-divider">
+
+            {# js/delete_tokens.mjs #}
+            <div class="d-flex justify-content-between align-items-center gap-3">
+                <div>
+                    <label for="remember-delete" class="field-label mb-0">Remember on this device</label>
+                    <div class="field-hint mt-0">So this browser can delete it later</div>
+                </div>
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input switch-lg" type="checkbox" role="switch" id="remember-delete"
+                        checked>
+                </div>
+            </div>
+
             <button type="button" id="submit-paste" class="btn btn-accent btn-lg w-100">
                 <span class="submit-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Encrypt &amp; get link</span>
                 <span class="submit-busy d-none align-items-center gap-2"><span class="spinner-border spinner-border-sm"
@@ -155,8 +169,9 @@
             <details class="qr-details delete-details">
                 <summary>Delete link</summary>
                 <p class="small text-secondary mt-2 mb-2">Opens a page where you can delete the paste before it
-                    expires. Keep it to yourself: anyone with it can delete the paste. It's only shown now, but this
-                    browser also remembers it, so the paste's page has a Delete button for you here.</p>
+                    expires. Keep it to yourself: anyone with it can delete the paste. It's only shown now<span
+                        id="delete-remembered">, but this browser also remembers it, so the paste's page has a Delete
+                        button for you here</span>.</p>
                 <div class="input-group">
                     <input id="delete-url" class="form-control font-monospace small" type="text" readonly
                         aria-label="Delete link">
