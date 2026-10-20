@@ -64,6 +64,12 @@ const FAQ_PAGE: PageMeta = PageMeta {
     canonical: Some("/faq"),
 };
 
+const CREDITS_PAGE: PageMeta = PageMeta {
+    title: "Open Source Credits - e2ePaste.XYZ",
+    description: "The open source projects e2ePaste.XYZ is built on, with their licences.",
+    canonical: Some("/credits"),
+};
+
 // Paste pages are private: never indexed, and generic preview text so shared
 // links don't reveal anything about the paste.
 const PASTE_PAGE: PageMeta = PageMeta {
@@ -80,7 +86,7 @@ const NOT_FOUND_PAGE: PageMeta = PageMeta {
 };
 
 // Pages listed in sitemap.xml, besides the tool pages.
-const SITEMAP_PATHS: [&str; 2] = ["/", "/faq"];
+const SITEMAP_PATHS: [&str; 3] = ["/", "/faq", "/credits"];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IncomingPaste {
@@ -399,6 +405,14 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
     )
 }
 
+#[get("/credits")]
+fn credits(db: &State<Arc<PasteDB>>) -> Template {
+    Template::render(
+        "credits",
+        context! {title: TITLE, page: CREDITS_PAGE, site_stats: db.get_site_stats(), year: Utc::now().year()},
+    )
+}
+
 #[get("/tools/password")]
 fn password_tools(db: &State<Arc<PasteDB>>) -> Template {
     tool_hub(db, tools::ToolGroup::Password)
@@ -545,6 +559,7 @@ async fn rocket() -> _ {
                 upload,
                 retrieve,
                 faq,
+                credits,
                 filter_bots,
                 share_short,
                 advance_views,
