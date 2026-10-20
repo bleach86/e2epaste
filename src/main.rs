@@ -38,11 +38,11 @@ use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
 use rate_limit::{RateLimiter, UnlockLimiter};
 
-pub(crate) const TITLE: &str = "e2ePaste.XYZ";
 const ID_LENGTH: usize = 8;
 
 /// Per-page <title>, meta description and link-preview text, rendered by
-/// layout.html.j2.
+/// layout.html.j2, which puts the site's name (site_name) in place of
+/// "{site}".
 #[derive(Serialize)]
 pub struct PageMeta {
     pub title: &'static str,
@@ -52,7 +52,7 @@ pub struct PageMeta {
 }
 
 const INDEX_PAGE: PageMeta = PageMeta {
-    title: "e2ePaste.XYZ - End-to-End Encrypted Pastebin",
+    title: "{site} - End-to-End Encrypted Pastebin",
     description:
         "Share text and files with end-to-end encryption. Pastes are encrypted in your browser \
         with AES-256-GCM, with optional passwords, expiry and view limits.",
@@ -60,23 +60,22 @@ const INDEX_PAGE: PageMeta = PageMeta {
 };
 
 const FAQ_PAGE: PageMeta = PageMeta {
-    title: "FAQ - e2ePaste.XYZ",
-    description:
-        "How e2ePaste.XYZ encrypts pastes in your browser so the server can't read them, what \
+    title: "FAQ - {site}",
+    description: "How {site} encrypts pastes in your browser so the server can't read them, what \
         the server can see, how passwords, expiry and view limits work, and size limits.",
     canonical: Some("/faq"),
 };
 
 const CREDITS_PAGE: PageMeta = PageMeta {
-    title: "Open Source Credits - e2ePaste.XYZ",
-    description: "The open source projects e2ePaste.XYZ is built on, with their licences.",
+    title: "Open Source Credits - {site}",
+    description: "The open source projects {site} is built on, with their licences.",
     canonical: Some("/credits"),
 };
 
 // Paste pages are private: never indexed, and generic preview text so shared
 // links don't reveal anything about the paste.
 const PASTE_PAGE: PageMeta = PageMeta {
-    title: "Encrypted Paste - e2ePaste.XYZ",
+    title: "Encrypted Paste - {site}",
     description:
         "An end-to-end encrypted paste. It can only be decrypted in your browser using the \
         full link.",
@@ -84,13 +83,13 @@ const PASTE_PAGE: PageMeta = PageMeta {
 };
 
 pub(crate) const DELETE_PAGE: PageMeta = PageMeta {
-    title: "Delete Paste - e2ePaste.XYZ",
-    description: "Delete a paste you created on e2ePaste.XYZ.",
+    title: "Delete Paste - {site}",
+    description: "Delete a paste you created on {site}.",
     canonical: None,
 };
 
 const NOT_FOUND_PAGE: PageMeta = PageMeta {
-    title: "Paste Not Found - e2ePaste.XYZ",
+    title: "Paste Not Found - {site}",
     description: "This paste doesn't exist, has expired, or has reached its view limit.",
     canonical: None,
 };
@@ -202,7 +201,7 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "bot_filter",
-        context! {title: TITLE, page: PASTE_PAGE, paste_id: id.to_string(), site_stats, year: Utc::now().year()},
+        context! {page: PASTE_PAGE, paste_id: id.to_string(), site_stats, year: Utc::now().year()},
     )
 }
 
@@ -313,7 +312,6 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
     let template = Template::render(
         "paste",
         context! {
-            title: TITLE,
             page: PASTE_PAGE,
             // Not the paste's content: the browser fetches that from
             // /api/open/ with proof that it has the full link.
@@ -329,7 +327,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
 fn paste_not_found(site_stats: paste_db::SiteStats, year: i32) -> (Status, Template) {
     let template = Template::render(
         "paste_not_found",
-        context! {title: TITLE, page: NOT_FOUND_PAGE, site_stats, year},
+        context! {page: NOT_FOUND_PAGE, site_stats, year},
     );
     (Status::NotFound, template)
 }
@@ -339,7 +337,7 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "faq",
-        context! {title: TITLE, page: FAQ_PAGE, site_stats, year: Utc::now().year()},
+        context! {page: FAQ_PAGE, site_stats, year: Utc::now().year()},
     )
 }
 
@@ -347,7 +345,7 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
 fn credits(db: &State<Arc<PasteDB>>) -> Template {
     Template::render(
         "credits",
-        context! {title: TITLE, page: CREDITS_PAGE, site_stats: db.get_site_stats(), year: Utc::now().year()},
+        context! {page: CREDITS_PAGE, site_stats: db.get_site_stats(), year: Utc::now().year()},
     )
 }
 
@@ -367,7 +365,6 @@ fn tool_hub(db: &State<Arc<PasteDB>>, group: tools::ToolGroup) -> Template {
     Template::render(
         "tool_hub",
         context! {
-            title: TITLE,
             page: &hub.page,
             hub,
             listings,
@@ -383,7 +380,6 @@ fn tool_page(db: &State<Arc<PasteDB>>, slug: &str) -> Option<Template> {
     Some(Template::render(
         format!("tools/{}", tool.slug),
         context! {
-            title: TITLE,
             page: &tool.page,
             tool,
             hub: tools::hub(tool.group),
@@ -400,7 +396,7 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
     let languages: Vec<(&str, &str)> = get_languages();
     Template::render(
         "index",
-        context! {title: TITLE, page: INDEX_PAGE, site_stats, languages, year: Utc::now().year()},
+        context! {page: INDEX_PAGE, site_stats, languages, year: Utc::now().year()},
     )
 }
 
@@ -415,6 +411,27 @@ fn robots(config: &State<AppConfig>) -> (ContentType, String) {
         config.site_url
     );
     (ContentType::Plain, body)
+}
+
+/// For "add to home screen". Served here rather than from /public so it can
+/// carry the site's name.
+#[get("/site.webmanifest")]
+fn web_manifest(config: &State<AppConfig>) -> (ContentType, String) {
+    let manifest = serde_json::json!({
+        "name": config.site_name,
+        "short_name": config.site_name,
+        "icons": [
+            {"src": "/public/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/public/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+        "theme_color": "#0e1116",
+        "background_color": "#0e1116",
+        "display": "standalone",
+    });
+    (
+        ContentType::new("application", "manifest+json"),
+        manifest.to_string(),
+    )
 }
 
 #[get("/sitemap.xml")]
@@ -519,8 +536,8 @@ async fn rocket() -> _ {
     let tickets_clone = tickets.clone();
     let hsts = config.site_url.starts_with("https://");
     println!(
-        "Site URL {}, data in {:?}, static files from {:?}",
-        config.site_url, config.data_dir, config.static_dir
+        "Site {:?} at {}, data in {:?}, static files from {:?}",
+        config.site_name, config.site_url, config.data_dir, config.static_dir
     );
     let limit = |n: u64, unit: &str| {
         if n == 0 {
@@ -548,6 +565,8 @@ async fn rocket() -> _ {
         },
     );
     let site_url = config.site_url.clone();
+    let site_name = config.site_name.clone();
+    let source_url = config.source_url.clone();
     let static_dir = config.static_dir.clone();
 
     // Build the Rocket instance
@@ -579,6 +598,7 @@ async fn rocket() -> _ {
                 upload_attachment,
                 robots,
                 sitemap,
+                web_manifest,
                 assets::dist_asset,
             ],
         )
@@ -587,6 +607,20 @@ async fn rocket() -> _ {
                 .minijinja
                 .add_global("asset_version", env!("ASSET_VERSION"));
             engines.minijinja.add_global("site_url", site_url.clone());
+            engines.minijinja.add_global("site_name", site_name.clone());
+            // The header shows a domain-style name's last part, e.g. ".XYZ",
+            // in a lighter colour.
+            let (brand, brand_suffix) = match site_name.rsplit_once('.') {
+                Some((name, suffix)) if !name.is_empty() && !suffix.is_empty() => {
+                    (name.to_string(), format!(".{suffix}"))
+                }
+                _ => (site_name.clone(), String::new()),
+            };
+            engines.minijinja.add_global("brand", brand);
+            engines.minijinja.add_global("brand_suffix", brand_suffix);
+            engines
+                .minijinja
+                .add_global("source_url", source_url.clone());
             // For the Tools menu in nav.html.j2.
             engines.minijinja.add_global(
                 "nav_tools",

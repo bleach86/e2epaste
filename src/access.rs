@@ -163,7 +163,6 @@ pub fn delete_page(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Template {
     Template::render(
         "delete",
         context! {
-            title: crate::TITLE,
             page: crate::DELETE_PAGE,
             paste_id: id.to_string(),
             site_stats: db.get_site_stats(),

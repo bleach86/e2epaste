@@ -36,6 +36,10 @@ const SUITES = [
   { file: "tools.mjs", env: NO_PASTE_LIMITS },
   { file: "nav.mjs", env: NO_PASTE_LIMITS },
   { file: "mobile_footer.mjs", env: NO_PASTE_LIMITS },
+  {
+    file: "branding.mjs",
+    env: { ROCKET_SITE_URL: "https://paste.example.com", ROCKET_SOURCE_URL: "https://git.example.com/someone/e2epaste-fork" },
+  },
   { file: "rate_limit.mjs", env: {} },
 ];
 

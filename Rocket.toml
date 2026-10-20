@@ -10,6 +10,13 @@ port = 8001
 # previews. Set it to your own domain, with https:// and no trailing path.
 site_url = "http://localhost:8001"
 
+# The site's name, in page titles, the header and link previews. Defaults to
+# site_url's host name, e.g. "paste.example.com".
+# site_name = ""
+
+# Where the "source code" links point. Change it if you run a modified copy.
+# source_url = "https://github.com/bleach86/e2epaste"
+
 # Where the paste database (paste_db/) and attachments (file_store/) are kept.
 data_dir = "."
 

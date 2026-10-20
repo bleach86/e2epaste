@@ -89,6 +89,8 @@ variable named `ROCKET_` plus the setting in capitals, such as `ROCKET_SITE_URL`
 | Setting | Default | What it does |
 |---|---|---|
 | `site_url` | `http://localhost:8001` | The site's public address: `https://` plus the domain, with no path |
+| `site_name` | `site_url`'s host name | The name in page titles, the header and link previews, e.g. `Example Paste`. Up to 40 characters |
+| `source_url` | this repository | Where the "source code" links point. If you run a modified copy, point it at your code |
 | `data_dir` | `.` (working directory) | Where the database (`e2epaste.redb`) and attachments (`file_store/`) are kept. Both are created if missing |
 | `address` | `127.0.0.1` | Address to listen on. The default only accepts connections from the same machine, for a reverse proxy there. Use `0.0.0.0` if the proxy is on another machine |
 | `port` | `8001` | Port to listen on |

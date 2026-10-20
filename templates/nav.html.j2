@@ -6,7 +6,7 @@
   <nav class="navbar navbar-expand-lg" aria-label="Main">
     <a class="brand me-4" href="/">
       <span class="brand-mark">{{ icons.icon("lock") }}</span>
-      <span>e2ePaste<span class="brand-suffix">.XYZ</span></span>
+      <span>{{ brand }}{% if brand_suffix %}<span class="brand-suffix">{{ brand_suffix }}</span>{% endif %}</span>
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
@@ -35,8 +35,8 @@
         </li>
       </ul>
       <div class="d-flex align-items-center gap-3 ms-lg-auto mt-2 mt-lg-0 pb-2 pb-lg-0">
-        <a class="nav-link d-inline-flex align-items-center gap-2" href="https://github.com/bleach86/e2epaste" target="_blank" rel="noopener noreferrer">
-          {{ icons.icon("github") }} Open source
+        <a class="nav-link d-inline-flex align-items-center gap-2" href="{{ source_url }}" target="_blank" rel="noopener noreferrer">
+          {{ icons.icon("github" if "github.com" in source_url else "code") }} Open source
         </a>
         {% if path != '/' %}
         <a class="btn btn-accent btn-sm" href="/">{{ icons.icon("plus") }} New paste</a>

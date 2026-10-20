@@ -39,7 +39,7 @@ pub static HUBS: [ToolHub; 2] = [
         path: "/tools/password",
         intro: "Generate strong random passwords and check how hard a password is to crack.",
         page: PageMeta {
-            title: "Password Tools: Generator & Strength Checker - e2ePaste.XYZ",
+            title: "Password Tools: Generator & Strength Checker - {site}",
             description: "Free password tools that run entirely in your browser: generate strong \
                 random passwords and check password strength. Nothing is sent to the server.",
             canonical: Some("/tools/password"),
@@ -51,7 +51,7 @@ pub static HUBS: [ToolHub; 2] = [
         path: "/tools/strings",
         intro: "Encode, decode, count and transform text.",
         page: PageMeta {
-            title: "String Tools: Base64, Hex, Binary, Character Counter & More - e2ePaste.XYZ",
+            title: "String Tools: Base64, Hex, Binary, Character Counter & More - {site}",
             description:
                 "Free text tools that run entirely in your browser: Base64, hex and binary \
                 converters, a character and word counter, reverse text, random case and more.",
@@ -67,7 +67,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Create a strong random password.",
         group: ToolGroup::Password,
         page: PageMeta {
-            title: "Strong Random Password Generator - e2ePaste.XYZ",
+            title: "Strong Random Password Generator - {site}",
             description: "Generate strong, random passwords up to 128 characters, with or without \
                 symbols. Made in your browser with a cryptographically secure random generator.",
             canonical: Some("/tools/password-generator"),
@@ -79,7 +79,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "See how long a password would take to crack, and how to improve it.",
         group: ToolGroup::Password,
         page: PageMeta {
-            title: "Password Strength Checker - e2ePaste.XYZ",
+            title: "Password Strength Checker - {site}",
             description: "Check how strong a password really is. Detects common passwords, words, \
                 names, keyboard patterns and repeats, and estimates crack time. Runs in your browser.",
             canonical: Some("/tools/password-strength"),
@@ -91,7 +91,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Count characters, bytes, words, lines and unique words.",
         group: ToolGroup::Strings,
         page: PageMeta {
-            title: "Character, Word & Line Counter - e2ePaste.XYZ",
+            title: "Character, Word & Line Counter - {site}",
             description: "Count characters, UTF-8 bytes, words, lines, unique words and unique \
                 characters as you type. Emoji count as one character. Runs in your browser.",
             canonical: Some("/tools/character-counter"),
@@ -103,7 +103,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Encode text to Base64 or decode Base64 back to text.",
         group: ToolGroup::Strings,
         page: PageMeta {
-            title: "Base64 Encode & Decode Online - e2ePaste.XYZ",
+            title: "Base64 Encode & Decode Online - {site}",
             description: "Encode text to Base64 and decode Base64 to text, with full UTF-8 support \
                 and URL-safe Base64 decoding. Runs entirely in your browser.",
             canonical: Some("/tools/base64"),
@@ -115,7 +115,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Convert text to hexadecimal and hex back to text.",
         group: ToolGroup::Strings,
         page: PageMeta {
-            title: "Text to Hex & Hex to Text Converter - e2ePaste.XYZ",
+            title: "Text to Hex & Hex to Text Converter - {site}",
             description: "Convert text to hexadecimal (UTF-8 bytes) and hex back to text. Accepts \
                 spaces, colons and 0x prefixes. Runs entirely in your browser.",
             canonical: Some("/tools/hex"),
@@ -127,7 +127,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Convert text to binary and binary back to text.",
         group: ToolGroup::Strings,
         page: PageMeta {
-            title: "Text to Binary & Binary to Text Converter - e2ePaste.XYZ",
+            title: "Text to Binary & Binary to Text Converter - {site}",
             description: "Convert text to 8-bit binary (UTF-8 bytes) and binary back to text. \
                 Runs entirely in your browser.",
             canonical: Some("/tools/binary"),
@@ -139,7 +139,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Write text backwards, character by character.",
         group: ToolGroup::Strings,
         page: PageMeta {
-            title: "Reverse Text Generator - e2ePaste.XYZ",
+            title: "Reverse Text Generator - {site}",
             description: "Reverse text so it reads backwards. Emoji and accented letters stay \
                 intact. Runs entirely in your browser.",
             canonical: Some("/tools/reverse-text"),
@@ -151,7 +151,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Turn text into rAnDoM cAsE.",
         group: ToolGroup::Strings,
         page: PageMeta {
-            title: "Random Case Converter (rAnDoM cAsE) - e2ePaste.XYZ",
+            title: "Random Case Converter (rAnDoM cAsE) - {site}",
             description: "Convert text to random upper and lower case letters, like \"mocking\" \
                 text. Runs entirely in your browser.",
             canonical: Some("/tools/random-case"),
@@ -163,7 +163,7 @@ pub static TOOLS: [Tool; 9] = [
         summary: "Count and highlight how often a word or phrase appears in text.",
         group: ToolGroup::Strings,
         page: PageMeta {
-            title: "Count Occurrences of a Word or Phrase in Text - e2ePaste.XYZ",
+            title: "Count Occurrences of a Word or Phrase in Text - {site}",
             description: "Count how many times a word, phrase or character appears in text, with \
                 matches highlighted and an optional case-sensitive search. Runs in your browser.",
             canonical: Some("/tools/count-occurrences"),

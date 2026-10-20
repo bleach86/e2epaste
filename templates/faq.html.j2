@@ -21,12 +21,12 @@
 {% block page %}
 <div class="page page-narrow">
     <h1 class="page-title">Frequently asked questions</h1>
-    <p class="page-lede">How e2ePaste.XYZ works, what it protects, and what it doesn't.</p>
+    <p class="page-lede">How {{ site_name }} works, what it protects, and what it doesn't.</p>
 
     <section class="mt-4" aria-labelledby="faq-basics">
         <h2 class="h4 mb-3" id="faq-basics">The basics</h2>
         <div class="accordion">
-            {% call faq("what", "What is e2ePaste.XYZ?", open=true) %}
+            {% call faq("what", "What is " ~ site_name ~ "?", open=true) %}
             <p>A pastebin for sharing text and files privately. Your paste is encrypted in your browser before it's
                 uploaded, so the server only ever stores data it can't read. You get a link to share; whoever opens
                 it can read the paste. There's no account to create.</p>
@@ -41,8 +41,8 @@
             {% endcall %}
 
             {% call faq("cost", "Is it free? Is it open source?") %}
-            <p class="mb-0">Yes to both. The code is <a href="https://github.com/bleach86/e2epaste" target="_blank"
-                    rel="noopener noreferrer">on GitHub</a> under the MIT licence, so anyone can check how the
+            <p class="mb-0">Yes to both. The code behind this site is <a href="{{ source_url }}" target="_blank"
+                    rel="noopener noreferrer">open source</a> under the MIT licence, so anyone can check how the
                 encryption works.</p>
             {% endcall %}
         </div>
@@ -119,7 +119,7 @@
     </section>
 
     <section class="mt-5" aria-labelledby="faq-using">
-        <h2 class="h4 mb-3" id="faq-using">Using e2ePaste.XYZ</h2>
+        <h2 class="h4 mb-3" id="faq-using">Using {{ site_name }}</h2>
         <div class="accordion">
             {% call faq("limits", "How large can a paste be?") %}
             <p class="mb-0">Text can be up to 1 MB, and you can attach one file of up to 25 MB.</p>

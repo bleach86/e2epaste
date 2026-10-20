@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     environment:
       ROCKET_SITE_URL: ${SITE_URL:-http://localhost:8001}
+      ROCKET_SITE_NAME: ${SITE_NAME:-}
       # Empty turns the admin API off.
       ROCKET_ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     ports:

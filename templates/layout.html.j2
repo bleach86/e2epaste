@@ -5,8 +5,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ page.title }}</title>
-    <meta name="description" content="{{ page.description }}">
+    {# Page titles and descriptions say "{site}" where the site's name goes. #}
+    {% set page_title = page.title | replace("{site}", site_name) %}
+    {% set page_description = page.description | replace("{site}", site_name) %}
+    <title>{{ page_title }}</title>
+    <meta name="description" content="{{ page_description }}">
     {# site_url and page.canonical are constants from main.rs, so |safe is fine #}
     {% if page.canonical %}
     <link rel="canonical" href="{{ site_url|safe }}{{ page.canonical|safe }}">
@@ -15,18 +18,18 @@
     <meta name="robots" content="noindex, nofollow">
     {% endif %}
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="{{ title }}">
-    <meta property="og:title" content="{{ page.title }}">
-    <meta property="og:description" content="{{ page.description }}">
+    <meta property="og:site_name" content="{{ site_name }}">
+    <meta property="og:title" content="{{ page_title }}">
+    <meta property="og:description" content="{{ page_description }}">
     <meta property="og:image" content="{{ site_url|safe }}/public/android-chrome-512x512.png">
     <meta property="og:image:width" content="512">
     <meta property="og:image:height" content="512">
-    <meta property="og:image:alt" content="{{ title }} logo">
+    <meta property="og:image:alt" content="{{ site_name }} logo">
     <meta name="twitter:card" content="summary">
     <link rel="apple-touch-icon" sizes="180x180" href="/public/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/public/favicon-16x16.png">
-    <link rel="manifest" href="/public/site.webmanifest">
+    <link rel="manifest" href="/site.webmanifest">
     <meta name="theme-color" content="#0e1116">
 
     <link rel="preload" href="/public/fonts/metropolis-latin-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -47,7 +50,7 @@
             {{ icons.icon("alert") }}
             <div>
                 <p class="mb-1"><strong>Encryption doesn't work on this connection.</strong> This page wasn't loaded
-                    over HTTPS, and browsers only allow the encryption {{ title }} uses on secure pages. You can't
+                    over HTTPS, and browsers only allow the encryption {{ site_name }} uses on secure pages. You can't
                     create or open pastes until you use the HTTPS address.</p>
                 <a id="insecure-https-link" class="btn btn-sm btn-warn mt-1 mb-2" hidden>Open this page over HTTPS</a>
                 <p class="insecure-warning-admin mb-0">Running this site? Put it behind HTTPS, or use

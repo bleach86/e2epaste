@@ -17,6 +17,13 @@ pub struct AppConfig {
     /// canonical links, the sitemap and link previews.
     #[serde(default = "default_site_url")]
     pub site_url: String,
+    /// The site's name, in page titles, the header and link previews.
+    /// Defaults to site_url's host name, e.g. "paste.example.com".
+    #[serde(default)]
+    pub site_name: String,
+    /// Where the "source code" links point: the code this site runs.
+    #[serde(default = "default_source_url")]
+    pub source_url: String,
     /// Holds `e2epaste.redb` (the database) and `file_store/` (attachments).
     #[serde(default = "default_data_dir")]
     pub data_dir: PathBuf,
@@ -49,6 +56,13 @@ pub struct AppConfig {
     #[serde(default)]
     pub admin_token: Option<String>,
 }
+
+fn default_source_url() -> String {
+    "https://github.com/bleach86/e2epaste".to_string()
+}
+
+/// Longest site_name accepted; it has to fit in the header on a phone.
+const MAX_SITE_NAME_CHARS: usize = 40;
 
 fn default_site_url() -> String {
     "http://localhost:8001".to_string()
@@ -91,6 +105,15 @@ impl AppConfig {
     pub fn from_figment(figment: &Figment) -> Result<Self, String> {
         let mut config: AppConfig = figment.extract().map_err(|e| e.to_string())?;
         config.site_url = normalize_site_url(&config.site_url)?;
+        config.site_name = site_name(&config.site_name, &config.site_url)?;
+        let source_ok = Absolute::parse(&config.source_url)
+            .is_ok_and(|url| matches!(url.scheme(), "http" | "https"));
+        if !source_ok {
+            return Err(format!(
+                "source_url {:?} isn't an http(s) address",
+                config.source_url
+            ));
+        }
 
         config.admin_token = config
             .admin_token
@@ -191,15 +214,66 @@ fn normalize_site_url(raw: &str) -> Result<String, String> {
     Ok(url.to_string())
 }
 
-fn is_local(site_url: &str) -> bool {
-    let host = Absolute::parse(site_url)
+/// The configured name, or the host name from site_url ("e2ePaste" for a
+/// local address, where the host name means nothing to anyone).
+fn site_name(configured: &str, site_url: &str) -> Result<String, String> {
+    let name = configured.trim();
+    if name.is_empty() {
+        return Ok(match is_local(site_url) {
+            true => "e2ePaste".to_string(),
+            false => host(site_url),
+        });
+    }
+    if name.chars().count() > MAX_SITE_NAME_CHARS || name.chars().any(char::is_control) {
+        return Err(format!(
+            "site_name {name:?} must be at most {MAX_SITE_NAME_CHARS} characters, on one line"
+        ));
+    }
+    Ok(name.to_string())
+}
+
+fn host(site_url: &str) -> String {
+    Absolute::parse(site_url)
         .ok()
         .and_then(|url| url.authority().map(|a| a.host().to_string()))
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+fn is_local(site_url: &str) -> bool {
+    let host = host(site_url);
     host == "localhost" || host == "127.0.0.1" || host == "[::1]"
 }
 
 /// Creates the data directories if they don't exist yet.
 pub fn ensure_dir(path: &Path) -> Result<(), String> {
     std::fs::create_dir_all(path).map_err(|e| format!("can't create {path:?}: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn site_name_defaults_to_the_host() {
+        assert_eq!(
+            site_name("", "https://paste.example.com").unwrap(),
+            "paste.example.com"
+        );
+        assert_eq!(
+            site_name("  ", "https://paste.example.com").unwrap(),
+            "paste.example.com"
+        );
+        assert_eq!(site_name("", "http://localhost:8001").unwrap(), "e2ePaste");
+        assert_eq!(
+            site_name(" My Paste ", "https://x.example").unwrap(),
+            "My Paste"
+        );
+    }
+
+    #[test]
+    fn site_name_must_fit() {
+        assert!(site_name(&"a".repeat(MAX_SITE_NAME_CHARS), "https://x.example").is_ok());
+        assert!(site_name(&"a".repeat(MAX_SITE_NAME_CHARS + 1), "https://x.example").is_err());
+        assert!(site_name("two\nlines", "https://x.example").is_err());
+    }
 }
