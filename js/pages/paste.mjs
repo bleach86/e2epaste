@@ -1,5 +1,5 @@
-// View-paste page (paste.html.j2). Rebuilds the key from the server's copy
-// and the URL hash, then decrypts in the browser.
+// View-paste page (paste.html.j2). Rebuilds the key from the link (and the
+// password, if any), then decrypts in the browser.
 
 import {
   base64ToArrayBuffer,
@@ -10,31 +10,65 @@ import {
 import { readPageData } from "../ui.mjs";
 
 const { paste, has_password: hasPassword } = readPageData();
-const keyFragment = window.location.hash.substring(1);
+const linkHash = window.location.hash.substring(1);
+
+// File extensions for "Download", by syntax-highlighting language.
+const EXTENSIONS = {
+  bash: "sh", c: "c", cpp: "cpp", csharp: "cs", css: "css", diff: "diff", go: "go", graphql: "graphql",
+  ini: "ini", java: "java", javascript: "js", json: "json", kotlin: "kt", less: "less", lua: "lua",
+  makefile: "mk", markdown: "md", objectivec: "m", perl: "pl", php: "php", "php-template": "php",
+  python: "py", "python-repl": "py", r: "r", ruby: "rb", rust: "rs", scss: "scss", shell: "sh", sql: "sql",
+  swift: "swift", typescript: "ts", vbnet: "vb", wasm: "wat", xml: "xml", yaml: "yaml",
+};
 
 const viewArea = document.getElementById("view-area");
+const codeView = document.getElementById("code-view");
+const gutter = document.getElementById("code-gutter");
+const titleEl = document.getElementById("paste-title");
+const copyButton = document.getElementById("copy-paste-btn");
+const downloadButton = document.getElementById("download-paste-btn");
+const wrapButton = document.getElementById("wrap-btn");
 const passwordInput = document.getElementById("password-input");
 const passwordSubmit = document.getElementById("submit-password-btn");
-const downloadLink = document.getElementById("download-link");
-const downloadSpinner = document.getElementById("download-spinner");
+const passwordError = document.getElementById("password-error");
+const attachmentButton = document.getElementById("download-link");
 const downloadStatus = document.getElementById("download-status");
 
 // Key and IV for this paste, set once decryption succeeds.
 let pasteSecrets = null;
+let pasteText = "";
+let pasteTitle = "";
 let fileName = null;
 let passwordModal;
 
+// --- Decrypting -----------------------------------------------------------
+
+function showText(text) {
+  pasteText = text;
+  viewArea.textContent = text;
+
+  // One number per line; a trailing newline doesn't start a visible line.
+  let lines = text.split("\n").length;
+  if (text.endsWith("\n") && lines > 1) {
+    lines -= 1;
+  }
+  gutter.textContent = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
+
+  if (paste.syntax && paste.syntax !== "plaintext" && hljs.getLanguage(paste.syntax)) {
+    hljs.highlightElement(viewArea);
+  }
+}
+
 // Throws if the password or link is wrong.
 async function decrypt(password) {
-  const secrets = await getPasteSecrets(paste, keyFragment, hasPassword, password);
+  const secrets = await getPasteSecrets(paste, linkHash, hasPassword, password);
   const text = await decryptText(base64ToArrayBuffer(paste.content), secrets.key, secrets.iv);
   pasteSecrets = secrets;
+  showText(text);
 
-  viewArea.textContent = text;
-  viewArea.style.height = "100%";
-
-  // v3 titles are encrypted, so the server leaves the heading empty. A title
-  // that won't decrypt shouldn't stop the paste itself from showing.
+  // v3 titles are encrypted, so the server leaves the heading as a
+  // placeholder. A title that won't decrypt shouldn't stop the paste itself
+  // from showing.
   if (paste.version >= 3) {
     let title = "";
     try {
@@ -42,25 +76,26 @@ async function decrypt(password) {
     } catch (e) {
       console.error("Failed to decrypt title", e);
     }
-    document.getElementById("paste-title").textContent = title || "Untitled";
+    pasteTitle = title;
+    titleEl.textContent = title || "Untitled";
+  } else {
+    pasteTitle = paste.title;
   }
 
   if (paste.file_name) {
-    document.getElementById("attachment-section").classList.remove("d-none");
-
-    const nameBytes = await decryptPart(
-      secrets,
-      "file-name",
-      base64ToArrayBuffer(paste.file_name),
-    );
+    const nameBytes = await decryptPart(secrets, "file-name", base64ToArrayBuffer(paste.file_name));
     fileName = new TextDecoder().decode(nameBytes);
-    downloadLink.textContent = fileName;
+    document.getElementById("attachment-name").textContent = fileName;
+    document.getElementById("attachment-section").hidden = false;
   }
+
+  document.getElementById("decrypted-notice").hidden = false;
+  copyButton.disabled = false;
+  downloadButton.disabled = false;
 }
 
 async function showPaste(password) {
   await decrypt(password);
-  hljs.highlightAll();
   await markAsViewed();
 }
 
@@ -73,48 +108,48 @@ async function markAsViewed() {
 
   if (response.ok) {
     const data = await response.json();
-    document.getElementById("views").innerText = "Views: " + data.views;
-    document.getElementById("total-views").innerText = data.total_views;
+    showViews(data.views);
+    document.getElementById("total-views").textContent = data.total_views;
   }
 }
 
 // --- Password prompt --------------------------------------------------------
 
-function openPasswordModal() {
-  passwordModal = new bootstrap.Modal(document.getElementById("password-modal"));
-  passwordModal.show();
-  setTimeout(() => passwordInput.focus(), 500);
+function setUnlocking(busy) {
+  passwordSubmit.disabled = busy;
+  passwordSubmit.querySelector(".unlock-idle").classList.toggle("d-none", busy);
+  passwordSubmit.querySelector(".unlock-busy").classList.toggle("d-none", !busy);
+  passwordSubmit.querySelector(".unlock-busy").classList.toggle("d-inline-flex", busy);
 }
 
 async function decryptWithPassword() {
   // There is no password hash to check against: a wrong password simply
   // fails to decrypt.
-  passwordSubmit.disabled = true;
+  passwordError.hidden = true;
+  setUnlocking(true);
   try {
     await decrypt(passwordInput.value.trim());
   } catch (e) {
-    const passError = document.getElementById("password-error");
-    passError.style.display = "block";
-    setTimeout(() => {
-      passError.style.display = "none";
-    }, 3000);
+    passwordError.hidden = false;
+    passwordInput.select();
     return;
   } finally {
-    passwordSubmit.disabled = false;
+    setUnlocking(false);
   }
 
   passwordModal.hide();
-  hljs.highlightAll();
   await markAsViewed();
 }
 
 function togglePasswordVisibility() {
-  const icon = document.getElementById("show-pass-icon");
+  const button = document.getElementById("show-pass-button");
   const show = passwordInput.type === "password";
-
   passwordInput.type = show ? "text" : "password";
-  icon.classList.toggle("bi-eye", !show);
-  icon.classList.toggle("bi-eye-slash", show);
+  button.setAttribute("aria-pressed", String(show));
+  button.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  button.querySelector(".pw-show").classList.toggle("d-none", show);
+  button.querySelector(".pw-hide").classList.toggle("d-none", !show);
+  button.querySelector(".pw-hide").classList.toggle("d-inline-flex", show);
 }
 
 passwordSubmit.addEventListener("click", decryptWithPassword);
@@ -125,83 +160,110 @@ passwordInput.addEventListener("keydown", (event) => {
 });
 document.getElementById("show-pass-button").addEventListener("click", togglePasswordVisibility);
 
-// --- Attachment download ----------------------------------------------------
+// --- Actions ----------------------------------------------------------------
 
-downloadLink.addEventListener("click", async (event) => {
-  event.preventDefault();
+copyButton.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(pasteText);
+  copyButton.querySelector(".copy-idle").classList.add("d-none");
+  copyButton.querySelector(".copy-done").classList.replace("d-none", "d-inline-flex");
+  setTimeout(() => {
+    copyButton.querySelector(".copy-done").classList.replace("d-inline-flex", "d-none");
+    copyButton.querySelector(".copy-idle").classList.remove("d-none");
+  }, 2000);
+});
 
-  downloadSpinner.classList.remove("d-none");
-  downloadLink.classList.add("d-none");
-
-  const res = await fetch(`/api/download-attachment/${paste.id}`);
-  if (!res.ok) {
-    alert("Download failed");
-    return;
-  }
-
-  downloadStatus.textContent = "Decrypting file...";
-  const decrypted = await decryptPart(pasteSecrets, "file", await res.arrayBuffer());
-
-  const url = URL.createObjectURL(new Blob([decrypted], { type: "application/octet-stream" }));
+function saveBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = fileName;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-  downloadSpinner.classList.add("d-none");
-  downloadLink.classList.remove("d-none");
-  downloadStatus.textContent = "Downloading encrypted file from server...";
-});
-
-// --- Paste info -------------------------------------------------------------
-
-function timeUntil(timestamp) {
-  const difference = timestamp - Date.now();
-
-  if (difference <= 0) {
-    return " Never";
-  }
-
-  const seconds = Math.floor(difference / 1000);
-  const units = [
-    ["years", 31536000],
-    ["months", 2592000],
-    ["days", 86400],
-    ["hours", 3600],
-    ["minutes", 60],
-  ];
-
-  for (const [unit, size] of units) {
-    const count = Math.floor(seconds / size);
-    if (count > 1) {
-      return count + " " + unit;
-    }
-  }
-  return seconds + " seconds";
 }
 
-document.getElementById("expire-date").innerText =
-  paste.expires === null ? " Never" : timeUntil(paste.expires);
-
-document.getElementById("paste-date").innerText = new Date(paste.timestamp * 1000).toLocaleDateString(
-  "en-US",
-  { year: "numeric", month: "long", day: "numeric" },
-);
-
-document.getElementById("max-views").innerText = paste.max_views ? paste.max_views : "∞";
-
-// --- Copy / select all ------------------------------------------------------
-
-document.getElementById("copy-paste-btn").addEventListener("click", () => {
-  navigator.clipboard.writeText(viewArea.textContent);
+downloadButton.addEventListener("click", () => {
+  const base = (pasteTitle || "paste").replace(/[\\/:*?"<>|\x00-\x1f]+/g, "-").trim() || "paste";
+  const ext = EXTENSIONS[paste.syntax] ?? "txt";
+  saveBlob(new Blob([pasteText], { type: "text/plain;charset=utf-8" }), `${base}.${ext}`);
 });
 
-// Ctrl/Cmd+A selects only the paste content.
+wrapButton.addEventListener("click", () => {
+  const wrap = !codeView.classList.contains("wrap");
+  codeView.classList.toggle("wrap", wrap);
+  wrapButton.setAttribute("aria-pressed", String(wrap));
+});
+
+function setAttachmentBusy(busy, status) {
+  attachmentButton.disabled = busy;
+  attachmentButton.querySelector(".dl-idle").classList.toggle("d-none", busy);
+  attachmentButton.querySelector(".dl-busy").classList.toggle("d-none", !busy);
+  attachmentButton.querySelector(".dl-busy").classList.toggle("d-inline-flex", busy);
+  downloadStatus.textContent = status;
+}
+
+attachmentButton.addEventListener("click", async () => {
+  setAttachmentBusy(true, "Downloading encrypted file...");
+  try {
+    const res = await fetch(`/api/download-attachment/${paste.id}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    setAttachmentBusy(true, "Decrypting...");
+    const decrypted = await decryptPart(pasteSecrets, "file", await res.arrayBuffer());
+    saveBlob(new Blob([decrypted], { type: "application/octet-stream" }), fileName);
+    setAttachmentBusy(false, "Encrypted attachment");
+  } catch (e) {
+    console.error(e);
+    setAttachmentBusy(false, "Download failed. Please try again.");
+  }
+});
+
+// --- Paste details ----------------------------------------------------------
+
+function timeUntil(timestamp) {
+  const seconds = Math.floor((timestamp - Date.now()) / 1000);
+  const units = [
+    ["year", 31536000],
+    ["month", 2592000],
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  // Use the largest unit that (nearly) fits, then round, so a fresh 3-day
+  // paste says "3 days" rather than "2 days" (2 days 23 hours), and a 1-day
+  // paste says "1 day" rather than "24 hours".
+  for (const [unit, size] of units) {
+    if (seconds >= size * 0.98) {
+      const count = Math.round(seconds / size);
+      return `${count} ${unit}${count === 1 ? "" : "s"}`;
+    }
+  }
+  return "less than a minute";
+}
+
+function showViews(views) {
+  const max = paste.max_views;
+  document.getElementById("views").textContent = max
+    ? `${views.toLocaleString()} of ${max.toLocaleString()} views`
+    : `${views.toLocaleString()} ${views === 1 ? "view" : "views"}`;
+  document.getElementById("final-view").hidden = !(max && views >= max);
+}
+
+document.getElementById("expire-date").textContent =
+  paste.expires === null ? "Never expires" : `Expires in ${timeUntil(paste.expires)}`;
+
+document.getElementById("paste-date").textContent = new Date(paste.timestamp * 1000).toLocaleDateString(
+  "en-US",
+  { year: "numeric", month: "short", day: "numeric" },
+);
+
+showViews(paste.views);
+
+// Ctrl/Cmd+A selects only the paste content (but still works in text fields).
 document.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key === "a") {
+  if ((event.ctrlKey || event.metaKey) && event.key === "a" && !event.target.closest("input, textarea")) {
     event.preventDefault();
     const range = document.createRange();
     range.selectNodeContents(viewArea);
@@ -214,7 +276,12 @@ document.addEventListener("keydown", (event) => {
 // --- Start ------------------------------------------------------------------
 
 if (hasPassword) {
-  openPasswordModal();
+  passwordModal = new bootstrap.Modal(document.getElementById("password-modal"));
+  document.getElementById("password-modal").addEventListener("shown.bs.modal", () => passwordInput.focus());
+  passwordModal.show();
 } else {
-  showPaste("").catch((e) => console.error("Failed to decrypt paste", e));
+  showPaste("").catch((e) => {
+    console.error("Failed to decrypt paste", e);
+    document.getElementById("decrypt-error").hidden = false;
+  });
 }

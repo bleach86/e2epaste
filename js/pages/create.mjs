@@ -10,11 +10,12 @@ import {
   encryptText,
   generateLinkSecret,
 } from "../crypto.mjs";
-import { readPageData, showCopiedPopover } from "../ui.mjs";
+import { readPageData } from "../ui.mjs";
 
 const MAX_PASTE_BYTES = 1048576;
 const MAX_FILE_BYTES = 26214400;
 const MAX_VIEWS = 999999999999;
+const DEFAULT_EXPIRY = "3days";
 // Above this many characters, re-highlight once typing pauses instead of on
 // every keystroke.
 const LIVE_HIGHLIGHT_MAX = 20000;
@@ -36,39 +37,48 @@ const { host } = readPageData();
 const pasteArea = document.getElementById("paste-area");
 const pasteEditor = document.getElementById("paste-editor");
 const pasteHighlight = document.getElementById("paste-highlight");
-const maxViewsInput = document.getElementById("max-views");
+const pasteStats = document.getElementById("paste-stats");
 const titleInput = document.getElementById("paste-title");
-const passwordInput = document.getElementById("paste-password");
+const syntaxSelect = document.getElementById("syntax");
 const fileInput = document.getElementById("fileInput");
-const expireDropdown = document.getElementById("expireDropdown");
-const displayDropdown = document.getElementById("displayDropdown");
+const attachmentRow = document.getElementById("attachment");
+const burnSwitch = document.getElementById("burn");
+const maxViewsInput = document.getElementById("max-views");
+const passwordInput = document.getElementById("paste-password");
+const passwordToggle = document.getElementById("toggle-password");
 const submitButton = document.getElementById("submit-paste");
-const loadingButton = document.getElementById("loading-button");
+const urlModalEl = document.getElementById("url-modal");
 const copyUrlButton = document.getElementById("copy-url-btn");
-const closeUrlButton = document.getElementById("close-url-btn");
 
-let urlModal;
-let copied = false;
 let fileData;
 let fileName;
 let highlightTimer;
+let submitting = false;
 
-pasteArea.value = "";
-maxViewsInput.value = "0";
-titleInput.value = "";
-passwordInput.value = "";
-fileInput.value = "";
-pasteArea.focus();
-tabOverride.set(pasteArea);
+// --- Editor ---------------------------------------------------------------
 
 function resizePasteArea() {
   pasteArea.style.height = "auto";
   pasteArea.style.height = pasteArea.scrollHeight + "px";
 }
 
+function formatBytes(n) {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function updateStats() {
+  const text = pasteArea.value;
+  const lines = text === "" ? 0 : text.split("\n").length;
+  const bytes = new TextEncoder().encode(text).byteLength;
+  pasteStats.textContent = `${lines.toLocaleString()} ${lines === 1 ? "line" : "lines"} · ${formatBytes(bytes)}`;
+  pasteStats.classList.toggle("text-danger", bytes > MAX_PASTE_BYTES);
+}
+
 // The selected highlight.js language, or null for plain text.
 function selectedLanguage() {
-  const language = displayDropdown.getAttribute("data-value");
+  const language = syntaxSelect.value;
   return language !== "plaintext" && hljs.getLanguage(language) ? language : null;
 }
 
@@ -101,14 +111,34 @@ function updateHighlight() {
 pasteArea.addEventListener("input", () => {
   resizePasteArea();
   updateHighlight();
+  updateStats();
 });
+
+syntaxSelect.addEventListener("change", () => {
+  updateHighlight();
+  resizePasteArea();
+});
+
+tabOverride.set(pasteArea);
+
+// --- Attachment -----------------------------------------------------------
+
+function clearAttachment() {
+  fileInput.value = "";
+  fileData = undefined;
+  fileName = undefined;
+  attachmentRow.hidden = true;
+}
 
 fileInput.addEventListener("change", (event) => {
   const file = event.target.files[0];
-
+  if (!file) {
+    clearAttachment();
+    return;
+  }
   if (file.size > MAX_FILE_BYTES) {
-    alert("File is too large. Please keep it under 25MB.");
-    fileInput.value = "";
+    alert("File is too large. Please keep it under 25 MB.");
+    clearAttachment();
     return;
   }
 
@@ -116,33 +146,55 @@ fileInput.addEventListener("change", (event) => {
   reader.onload = (e) => {
     fileData = e.target.result;
     fileName = file.name;
+    document.getElementById("attachment-name").textContent = file.name;
+    document.getElementById("attachment-size").textContent = formatBytes(file.size);
+    attachmentRow.hidden = false;
   };
   reader.readAsArrayBuffer(file);
 });
 
-function bindDropdown(itemSelector, button, onChange) {
-  document.querySelectorAll(itemSelector).forEach((item) => {
-    item.addEventListener("click", (event) => {
-      event.preventDefault();
-      button.innerText = item.innerText;
-      button.setAttribute("data-value", item.getAttribute("data-value"));
-      onChange?.();
-    });
-  });
+document.getElementById("attachment-remove").addEventListener("click", clearAttachment);
+
+// --- Options --------------------------------------------------------------
+
+function selectedExpiry() {
+  return document.querySelector('input[name="expire"]:checked')?.value ?? DEFAULT_EXPIRY;
 }
 
-bindDropdown(".dropdown-item.expire-dropdown", expireDropdown);
-// Switching to/from highlighting changes the font, so re-measure the height.
-bindDropdown(".dropdown-item.display-dropdown", displayDropdown, () => {
-  updateHighlight();
-  resizePasteArea();
+function expiryLabel(value) {
+  return document.querySelector(`label[for="expire-${value}"]`)?.textContent.trim() ?? value;
+}
+
+// Burn after reading is a view limit of 1.
+burnSwitch.addEventListener("change", () => {
+  maxViewsInput.disabled = burnSwitch.checked;
+  maxViewsInput.value = burnSwitch.checked ? "1" : "";
 });
 
-function parseMaxViews(value) {
-  if (value === "" || value === "0" || value < 0) {
-    return null;
+function maxViews() {
+  if (burnSwitch.checked) {
+    return 1;
   }
-  return Math.min(parseInt(value), MAX_VIEWS);
+  const n = parseInt(maxViewsInput.value, 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, MAX_VIEWS) : null;
+}
+
+function setPasswordVisible(visible) {
+  passwordInput.type = visible ? "text" : "password";
+  passwordToggle.setAttribute("aria-pressed", String(visible));
+  passwordToggle.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+}
+
+passwordToggle.addEventListener("click", () => setPasswordVisible(passwordInput.type === "password"));
+
+// --- Submit ---------------------------------------------------------------
+
+function setBusy(busy) {
+  submitting = busy;
+  submitButton.disabled = busy;
+  submitButton.querySelector(".submit-idle").classList.toggle("d-none", busy);
+  submitButton.querySelector(".submit-busy").classList.toggle("d-none", !busy);
+  submitButton.querySelector(".submit-busy").classList.toggle("d-inline-flex", busy);
 }
 
 async function uploadEncryptedFile(file, id) {
@@ -153,23 +205,21 @@ async function uploadEncryptedFile(file, id) {
   });
 }
 
-submitButton.addEventListener("click", async () => {
+async function createPaste() {
   const text = pasteArea.value;
 
   if (text === "") {
+    pasteArea.focus();
     return;
   }
 
   if (new TextEncoder().encode(text).byteLength > MAX_PASTE_BYTES) {
-    alert("Paste is too large. Please keep it under 1MB.");
+    alert("Paste is too large. Please keep it under 1 MB.");
     return;
   }
 
-  loadingButton.style.display = "block";
-  submitButton.style.display = "none";
-
-  const expire = expireDropdown.getAttribute("data-value");
-  const syntax = displayDropdown.getAttribute("data-value");
+  const expire = selectedExpiry();
+  const views = maxViews();
   const password = passwordInput.value.trim();
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
@@ -188,7 +238,6 @@ submitButton.addEventListener("click", async () => {
     encryptedFileName = arrayBufferToBase64(cipherName);
   }
 
-  const expireSeconds = EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"];
   // Encrypted like everything else; an empty title is shown as "Untitled".
   // Cut by code point so the 64-character limit can't split an emoji.
   const titleText = Array.from(titleInput.value).slice(0, 64).join("");
@@ -197,13 +246,13 @@ submitButton.addEventListener("click", async () => {
   const paste = {
     content: arrayBufferToBase64(encrypted),
     iv: Array.from(iv),
-    expires: Date.now() + expireSeconds * 1000,
-    max_views: parseMaxViews(maxViewsInput.value),
+    expires: Date.now() + (EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"]) * 1000,
+    max_views: views,
     key_fragment: "", // v3 stores no key material on the server
     has_password: password !== "",
     version: PASTE_VERSION,
     title: arrayBufferToBase64(title),
-    syntax,
+    syntax: syntaxSelect.value,
     file_name: encryptedFileName,
   };
 
@@ -214,81 +263,123 @@ submitButton.addEventListener("click", async () => {
   });
   const data = await response.json();
 
-  if (data.id) {
-    if (encryptedFile) {
-      await uploadEncryptedFile(encryptedFile, data.id);
-    }
+  if (!data.id) {
+    throw new Error("The server didn't accept the paste");
+  }
+  if (encryptedFile) {
+    await uploadEncryptedFile(encryptedFile, data.id);
+  }
 
-    loadingButton.style.display = "none";
-    submitButton.style.display = "block";
-    // Hand out /s/ (short for /share/) links: link-preview bots can fetch
-    // that page (robots.txt blocks /paste/) and it forwards browsers on.
-    openModal(`${host}/s/${data.id}#${linkSecret}`);
-  } else {
-    alert("Failed to create paste");
+  // Hand out /s/ (short for /share/) links: link-preview bots can fetch that
+  // page (robots.txt blocks /paste/) and it forwards browsers on.
+  showLink(`${host}/s/${data.id}#${linkSecret}`, {
+    expiry: expiryLabel(expire),
+    views,
+    password: password !== "",
+    attachment: Boolean(encryptedFile),
+  });
+}
+
+submitButton.addEventListener("click", async () => {
+  if (submitting) {
+    return;
+  }
+  setBusy(true);
+  try {
+    await createPaste();
+  } catch (e) {
+    console.error(e);
+    alert("Failed to create paste. Please try again.");
+  } finally {
+    setBusy(false);
   }
 });
 
-function openModal(url) {
-  urlModal = new bootstrap.Modal(document.getElementById("url-modal"));
+// --- Link dialog ----------------------------------------------------------
+
+const urlModal = new bootstrap.Modal(urlModalEl);
+
+function chip(icon, text, warn = false) {
+  const li = document.createElement("li");
+  li.className = warn ? "chip chip-warn" : "chip";
+  const svg = document.querySelector(`#chip-icons [data-icon="${icon}"] svg`);
+  if (svg) {
+    li.append(svg.cloneNode(true));
+  }
+  li.append(document.createTextNode(text));
+  return li;
+}
+
+function showLink(url, settings) {
   document.getElementById("paste-url").value = url;
+
+  const chips = [chip("clock", `Expires in ${settings.expiry}`)];
+  if (settings.views === 1) {
+    chips.push(chip("flame", "Burns after 1 view", true));
+  } else if (settings.views) {
+    chips.push(chip("eye", `Limited to ${settings.views.toLocaleString()} views`));
+  }
+  if (settings.password) {
+    chips.push(chip("lock", "Password protected"));
+  }
+  if (settings.attachment) {
+    chips.push(chip("paperclip", "Encrypted attachment"));
+  }
+  document.getElementById("link-summary").replaceChildren(...chips);
+
+  document.getElementById("link-tip").textContent = settings.password
+    ? "Send the password a different way from the link, for example the link by email and the password by text. A lost link or password can't be recovered."
+    : "Anyone who gets this link can read the paste, so share it only where you'd share the content itself. A lost link can't be recovered.";
 
   const qr = qrcode(0, "M");
   qr.addData(url);
   qr.make();
-  document.getElementById("qrcode-container").innerHTML = qr.createImgTag(4, 2);
+  document.getElementById("qrcode-container").innerHTML = qr.createImgTag(4, 2, "QR code of the link");
+  urlModalEl.querySelector(".qr-details").open = false;
 
+  setCopied(false);
   urlModal.show();
 }
 
-function closeModal() {
-  urlModal.hide();
-  closeUrlButton.style.display = "none";
-  copyUrlButton.style.display = "block";
-  copied = false;
-  resizePasteArea();
-
-  const totalPastes = document.getElementById("total-pastes");
-  totalPastes.innerText = parseInt(totalPastes.innerText) + 1;
+function setCopied(copied) {
+  copyUrlButton.querySelector(".copy-idle").classList.toggle("d-none", copied);
+  copyUrlButton.querySelector(".copy-done").classList.toggle("d-none", !copied);
+  copyUrlButton.querySelector(".copy-done").classList.toggle("d-inline-flex", copied);
 }
+
+copyUrlButton.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(document.getElementById("paste-url").value);
+  setCopied(true);
+  setTimeout(() => setCopied(false), 2000);
+});
+
+document.getElementById("paste-url").addEventListener("focus", (e) => e.target.select());
+
+// However the dialog closes, start a fresh paste.
+urlModalEl.addEventListener("hidden.bs.modal", () => {
+  resetForm();
+  const totalPastes = document.getElementById("total-pastes");
+  totalPastes.textContent = (parseInt(totalPastes.textContent, 10) || 0) + 1;
+});
+
+// --- Reset ----------------------------------------------------------------
 
 function resetForm() {
   pasteArea.value = "";
-  maxViewsInput.value = "0";
-  passwordInput.value = "";
   titleInput.value = "";
-  fileInput.value = "";
-  fileData = undefined;
-  fileName = undefined;
+  syntaxSelect.value = "plaintext";
+  clearAttachment();
+  document.getElementById(`expire-${DEFAULT_EXPIRY}`).checked = true;
+  burnSwitch.checked = false;
+  maxViewsInput.disabled = false;
+  maxViewsInput.value = "";
+  passwordInput.value = "";
+  setPasswordVisible(false);
 
-  expireDropdown.setAttribute("data-value", "3days");
-  expireDropdown.innerText = "3 Days";
-
-  displayDropdown.setAttribute("data-value", "plaintext");
-  displayDropdown.innerText = "Plaintext";
   updateHighlight();
-
+  updateStats();
+  resizePasteArea();
   pasteArea.focus();
 }
 
-// First click copies the URL, after which the button turns into "Close".
-function copyUrl() {
-  if (copied) {
-    closeModal();
-    return;
-  }
-
-  navigator.clipboard.writeText(document.getElementById("paste-url").value);
-  showCopiedPopover(copyUrlButton);
-  copied = true;
-
-  setTimeout(() => {
-    resetForm();
-    closeUrlButton.style.display = "block";
-    copyUrlButton.style.display = "none";
-  }, 500);
-}
-
-document.getElementById("url-modal-close").addEventListener("click", copyUrl);
-copyUrlButton.addEventListener("click", copyUrl);
-closeUrlButton.addEventListener("click", closeModal);
+resetForm();

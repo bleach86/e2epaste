@@ -1,13 +1,13 @@
 <section class="mt-5" aria-labelledby="tools-{{ listing.hub.group }}">
-    <h2 class="h4 mb-3" id="tools-{{ listing.hub.group }}">
+    <h2 class="h5 fw-semibold mb-3" id="tools-{{ listing.hub.group }}">
         <a href="{{ listing.hub.path }}" class="link-light link-underline-opacity-0 link-underline-opacity-75-hover">{{ listing.hub.name }}</a>
     </h2>
     <div class="row g-3">
         {% for t in listing.tools if not (tool is defined and t.slug == tool.slug) %}
         <div class="col-md-6 col-lg-4">
-            <a href="/tools/{{ t.slug }}" class="card h-100 bg-dark text-decoration-none tool-card">
+            <a href="/tools/{{ t.slug }}" class="card h-100 text-decoration-none tool-card">
                 <div class="card-body">
-                    <h3 class="h6 card-title text-light">{{ t.name }}</h3>
+                    <h3 class="h6 card-title text-light mb-1">{{ t.name }}</h3>
                     <p class="card-text text-secondary small mb-0">{{ t.summary }}</p>
                 </div>
             </a>

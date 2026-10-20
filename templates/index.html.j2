@@ -1,136 +1,175 @@
 {% extends "layout" %}
+{% import "icons" as icons %}
+
+{% set expiries = [["10min", "10 min"], ["1hour", "1 hour"], ["1day", "1 day"], ["3days", "3 days"],
+    ["1week", "1 week"], ["2weeks", "2 weeks"], ["1month", "1 month"], ["6months", "6 months"],
+    ["1year", "1 year"]] %}
 
 {% block page %}
-<div class="spacer-50"></div>
-<div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
-    <div class="row">
-        <div class="col-md-12 rounded-2">
-            <h2 class="text-center mt-3">{{ title }}</h2>
-            <section id="hello" class="h-100">
-                <div id="paste-editor" class="paste-editor mt-4">
-                    <pre class="paste-highlight" aria-hidden="true"><code id="paste-highlight"
-                            class="form-control paste-area hljs"></code></pre>
-                    <textarea placeholder="Paste here..." id="paste-area"
-                        class="form-control paste-area focus-ring focus-ring-dark"></textarea>
-                </div>
-            </section>
-        </div>
+<div class="page create-page">
+    <div class="mb-4">
+        <h1 class="page-title">Share text and files, end-to-end encrypted.</h1>
+        <p class="page-lede">Everything is encrypted in your browser before upload. The server never sees the key
+            or your content.</p>
     </div>
 
-    <div class="container mt-4 pb-3">
-        <div class="row">
-            <div class="col-md-3" style="font-size:8pt">
-                <div class="form-group mb-3">
-                    <label class="mb-1" for="paste-title">Title (Max 64 Chars):</label>
-                    <input type="input" id="paste-title" class="form-control border border-light"
-                        style="--bs-border-width:0.5px" value="" placeholder="Untitled">
-                </div>
-                <div class="form-group mb-3">
-                    <label class="mb-1" for="max-views">Max Views (0 for unlimited):</label>
-                    <input type="number" min="0" max="999999999999" id="max-views"
-                        class="form-control border border-light" style="--bs-border-width:0.5px" value="0">
-                </div>
-                <div class="form-group mb-3">
-                    <label class="mb-1" for="displayDropdown">Display Options:</label>
-                    <div class="dropdown">
-                        <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6"
-                            style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="displayDropdown"
-                            data-bs-toggle="dropdown" aria-expanded="false" data-value="plaintext">
-                            Plaintext
-                        </button>
-                        <ul class="dropdown-menu" aria-labelledby="displayDropdown">
-                            <li><a class="dropdown-item display-dropdown" href="#" data-value="plaintext">Plaintext</a>
-                            </li>
-                            <li class="text-center mt-2 text-secondary" style="font-size:6pt;">Syntax Highlighting
-                                <hr class="dropdown-divider">
-                            </li>
+    <div class="create-layout">
+        <section class="panel create-editor" aria-label="Paste">
+            <div class="panel-bar">
+                <label for="paste-title" class="visually-hidden">Title</label>
+                <input id="paste-title" class="title-input" type="text" maxlength="64" placeholder="Title (optional)"
+                    autocomplete="off">
+                <label for="syntax" class="visually-hidden">Syntax highlighting</label>
+                <select id="syntax" class="form-select form-select-sm w-auto">
+                    <option value="plaintext" selected>Plain text</option>
+                    <optgroup label="Syntax highlighting">
+                        {% for language in languages if language[0] != "plaintext" %}
+                        <option value="{{ language[0] }}">{{ language[1] }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+                <input type="file" id="fileInput" class="visually-hidden file-input">
+                <label for="fileInput" class="btn btn-quiet btn-sm file-pick">{{ icons.icon("paperclip") }} Attach file</label>
+            </div>
+            <div id="attachment" class="attachment-row" hidden>
+                {{ icons.icon("file") }}
+                <span id="attachment-name" class="text-truncate"></span>
+                <span id="attachment-size" class="text-secondary"></span>
+                <button type="button" id="attachment-remove" class="btn btn-link btn-sm ms-auto p-0 text-secondary"
+                    aria-label="Remove attachment">{{ icons.icon("x") }}</button>
+            </div>
 
-                            {% for language in languages %}
-                            <li><a class="dropdown-item display-dropdown" href="#" data-value="{{ language[0] }}">{{
-                                    language[1] }}</a></li>
-                            {% endfor %}
+            <div id="paste-editor" class="paste-editor">
+                <pre class="paste-highlight" aria-hidden="true"><code id="paste-highlight" class="hljs"></code></pre>
+                <label for="paste-area" class="visually-hidden">Paste content</label>
+                <textarea id="paste-area" placeholder="Paste or type here..." spellcheck="false"></textarea>
+            </div>
+            <div class="panel-foot">
+                <span id="paste-stats">0 lines · 0 bytes</span>
+                <span>Up to 1 MB of text · one file up to 25 MB</span>
+            </div>
+        </section>
 
-                        </ul>
-                    </div>
+        <aside class="panel panel-pad create-options" aria-label="Options">
+            <fieldset>
+                <legend class="field-label">Expires after</legend>
+                <div class="seg">
+                    {% for value, label in expiries %}
+                    <input type="radio" class="btn-check" name="expire" id="expire-{{ value }}" value="{{ value }}"
+                        {% if value == "3days" %}checked{% endif %}>
+                    <label class="seg-btn" for="expire-{{ value }}">{{ label }}</label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <hr class="panel-divider">
+
+            <div class="d-flex justify-content-between align-items-center gap-3">
+                <div>
+                    <label for="burn" class="field-label d-flex align-items-center gap-2 mb-0">
+                        <span class="text-warn d-inline-flex">{{ icons.icon("flame") }}</span> Burn after reading
+                    </label>
+                    <div class="field-hint mt-0">Delete after the first view</div>
+                </div>
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input switch-lg" type="checkbox" role="switch" id="burn">
                 </div>
             </div>
 
-            <div class="col-md-3" style="font-size:8pt">
-                <div class="form-group mb-3">
-                    <label class="mb-1" for="expireDropdown">Expiration:</label>
-                    <div class="dropdown">
-                        <button class="btn btn-dark btn-outline-light dropdown-toggle w-100 fs-6"
-                            style="--bs-border-width:0.5px;font-size:10pt !important" type="button" id="expireDropdown"
-                            data-bs-toggle="dropdown" aria-expanded="false" data-value="3days">
-                            3 Days
-                        </button>
-                        <ul class="dropdown-menu" aria-labelledby="expireDropdown">
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="10min">10 Minutes</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1hour">1 Hour</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1day">1 Day</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="3days">3 Days</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1week">1 Week</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="2weeks">2 Weeks</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1month">1 Month</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="6months">6 Months</a></li>
-                            <li><a class="dropdown-item expire-dropdown" href="#" data-value="1year">1 Year</a></li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="mb-1" for="paste-password">Password:</label>
-                    <input type="input" id="paste-password" class="form-control border border-light"
-                        style="--bs-border-width:0.5px" value="" placeholder="Optional">
-                </div>
-
-
-                <div class="form-group mb-3">
-                    <label for="fileInput" class="mb-1">Add a file (25MB max):</label>
-                    <input style="--bs-border-width:0.5px" class="form-control border border-light" type="file"
-                        id="fileInput">
-                </div>
-
+            <div>
+                <label for="max-views" class="field-label">Or limit views</label>
+                <input type="number" id="max-views" class="form-control" min="1" max="999999999999"
+                    inputmode="numeric" placeholder="Unlimited">
             </div>
-        </div>
-        <div class="form-group mt-4 col-md-2 col-5">
-            <button id="submit-paste" class="btn btn-dark btn-outline-light w-100 fs-6"
-                style="--bs-border-width:0.5px;font-size:10pt !important">Submit Paste</button>
-            <button id="loading-button" class="btn btn-dark btn-outline-light w-100 fs-6"
-                style="--bs-border-width:0.5px;font-size:10pt !important;display:none;" type="button" disabled>
-                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-                <span role="status">Encrypting Paste...</span>
+
+            <hr class="panel-divider">
+
+            <div>
+                <label for="paste-password" class="field-label">Password <span
+                        class="fw-normal text-secondary">(optional)</span></label>
+                <div class="input-group">
+                    <input type="password" id="paste-password" class="form-control" autocomplete="off"
+                        spellcheck="false">
+                    <button type="button" id="toggle-password" class="btn btn-quiet" aria-label="Show password"
+                        aria-pressed="false">{{ icons.icon("eye") }}</button>
+                </div>
+                <div class="field-hint">Needed to open the paste, even with the link.</div>
+            </div>
+
+            <button type="button" id="submit-paste" class="btn btn-accent btn-lg w-100">
+                <span class="submit-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Encrypt &amp; get link</span>
+                <span class="submit-busy d-none align-items-center gap-2"><span class="spinner-border spinner-border-sm"
+                        aria-hidden="true"></span> Encrypting...</span>
             </button>
-        </div>
+        </aside>
     </div>
+
+    <ul class="trust-list">
+        <li>{{ icons.icon("shield") }}<div><strong>Encrypted in your browser</strong><span>AES-256-GCM via the Web
+                    Crypto API.</span></div></li>
+        <li>{{ icons.icon("link") }}<div><strong>The key stays in the link</strong><span>After the #, which browsers
+                    never send to the server.</span></div></li>
+        <li>{{ icons.icon("code") }}<div><strong>Open source</strong><span>Check the code yourself <a
+                        href="https://github.com/bleach86/e2epaste" target="_blank" rel="noopener noreferrer">on
+                        GitHub</a>.</span></div></li>
+    </ul>
 </div>
 
-<button type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
-    <i class="bi bi-arrow-up"></i>
-</button>
-
-<div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-l-Label"
+<div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-title"
     aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered link-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-success">
-                <h1 class="modal-title fs-5" id="url-modal-Label">Paste Success!</h1>
-                <button type="button" class="btn-close" id="url-modal-close" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="d-flex justify-content-center pb-3" id="qrcode-container"></div>
-                <p>Your paste has been created. Here is the URL:</p>
-                <input class="w-100 rounded-2" style="font-size: 10pt;" id="paste-url" disabled>
-            </div>
-            <div class="modal-footer">
-                <button id="copy-url-btn" type="button" class="btn btn-secondary" data-toggle="popover">Copy URL</button>
-                <button id="close-url-btn" style="display:none;" type="button" class="btn btn-secondary"
-                    data-toggle="popover">Close</button>
+            <div class="d-flex align-items-start gap-3">
+                <span class="dialog-badge">{{ icons.icon("check") }}</span>
+                <div class="flex-grow-1">
+                    <h2 id="url-modal-title" class="h5 fw-bold mb-0">Your encrypted link is ready</h2>
+                    <p class="mb-0 small text-secondary">Anyone with this link can read the paste.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
+            <div>
+                <label for="paste-url" class="field-label">Link</label>
+                <div class="input-group">
+                    <input id="paste-url" class="form-control font-monospace small" type="text" readonly>
+                    <button id="copy-url-btn" type="button" class="btn btn-accent">
+                        <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }} Copy</span>
+                        <span class="copy-done d-none align-items-center gap-2">{{ icons.icon("check") }} Copied</span>
+                    </button>
+                </div>
+            </div>
+
+            <ul id="link-summary" class="chips" aria-label="Paste settings"></ul>
+
+            <div class="notice notice-plain">
+                {{ icons.icon("info") }}
+                <p id="link-tip" class="mb-0"></p>
+            </div>
+
+            <details class="qr-details">
+                <summary>Show QR code</summary>
+                <div id="qrcode-container" class="qr-box"></div>
+            </details>
+
+            <div class="d-flex justify-content-end">
+                <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Create another paste</button>
+            </div>
         </div>
     </div>
 </div>
 
+{# Icons the script copies into the link summary chips. #}
+<template id="chip-icons">
+    <span data-icon="clock">{{ icons.icon("clock") }}</span>
+    <span data-icon="flame">{{ icons.icon("flame") }}</span>
+    <span data-icon="eye">{{ icons.icon("eye") }}</span>
+    <span data-icon="lock">{{ icons.icon("lock") }}</span>
+    <span data-icon="paperclip">{{ icons.icon("paperclip") }}</span>
+</template>
+
+<button type="button" class="btn btn-quiet" id="btn-back-to-top" aria-label="Back to top">
+    {{ icons.icon("arrow-up") }}
+</button>
 {% endblock %}
 
 {% block scripts %}

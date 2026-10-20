@@ -1,22 +1,20 @@
 {% extends "tool_layout" %}
+{% import "icons" as icons %}
 
 {% block tool %}
-<section class="alert alert-secondary mt-3" aria-labelledby="counter-heading">
-    <div class="d-flex justify-content-between align-items-center">
-        <h2 class="h4 text-light alert-heading mb-0" id="counter-heading">Count your text</h2>
-        <button type="button" class="btn btn-dark" data-clear="counter-in" title="Clear" aria-label="Clear">
-            <i class="bi bi-hurricane"></i>
-        </button>
+<section class="panel panel-pad tool-panel" aria-labelledby="counter-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <h2 class="h5 fw-semibold mb-0" id="counter-heading">Count your text</h2>
+        <button type="button" class="btn btn-quiet btn-sm" data-clear="counter-in">{{ icons.icon("eraser") }} Clear</button>
     </div>
-    <hr>
-    <div class="row">
+    <div class="row g-3 mt-1">
         <div class="col-md-7">
             <label class="visually-hidden" for="counter-in">Text to count</label>
-            <textarea id="counter-in" class="form-control paste-area focus-ring focus-ring-dark" rows="12"
-                style="overflow:auto;" placeholder="Type or paste text here..."></textarea>
+            <textarea id="counter-in" class="form-control tool-area" rows="12"
+                placeholder="Type or paste text here..."></textarea>
         </div>
         <div class="col-md-5">
-            <ul class="list-group">
+            <ul class="list-group stat-list">
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     Characters <span id="stat-length" class="badge text-bg-info rounded-pill">0</span></li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">

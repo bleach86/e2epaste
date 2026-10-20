@@ -1,37 +1,37 @@
 {% extends "layout" %}
+{% import "icons" as icons %}
 
 {# Base for templates/tools/<slug>: fill `tool` with the widget and `about`
    with the explanatory text. Loads /public/js/dist/tools/<slug>.js. #}
 
 {% block page %}
-<div class="spacer-50"></div>
-<div class="container bg-dark-subtle w-100 body-height rounded-2 mb-5 pb-4">
-    <nav aria-label="breadcrumb" class="pt-3">
-        <ol class="breadcrumb small mb-0">
+<div class="page">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb small mb-3">
             <li class="breadcrumb-item"><a href="/" class="link-secondary">Home</a></li>
             <li class="breadcrumb-item"><a href="{{ hub.path }}" class="link-secondary">{{ hub.name }}</a></li>
             <li class="breadcrumb-item active" aria-current="page">{{ tool.name }}</li>
         </ol>
     </nav>
 
-    <h1 class="text-center mt-4">{{ tool.name }}</h1>
-    <p class="text-center text-secondary mb-4">
-        {{ tool.summary }}<br>
-        <small><i class="bi bi-shield-lock"></i> Runs entirely in your browser. Nothing you enter is sent to
-            the server.</small>
+    <h1 class="page-title">{{ tool.name }}</h1>
+    <p class="page-lede">{{ tool.summary }}</p>
+    <p class="small text-secondary d-flex align-items-center gap-2 mt-2 mb-4">
+        <span class="text-accent d-inline-flex">{{ icons.icon("shield") }}</span>
+        Runs entirely in your browser. Nothing you enter is sent to the server.
     </p>
 
     {% block tool %}{% endblock %}
 
-    <article class="tool-about mx-auto mt-5">
+    <article class="tool-about mt-5">
         {% block about %}{% endblock %}
     </article>
 
     {% include "tool_list" %}
 </div>
 
-<button type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top" aria-label="Back to top">
-    <i class="bi bi-arrow-up"></i>
+<button type="button" class="btn btn-quiet" id="btn-back-to-top" aria-label="Back to top">
+    {{ icons.icon("arrow-up") }}
 </button>
 {% endblock %}
 

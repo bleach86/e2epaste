@@ -1,20 +1,18 @@
 {# nav_tools (every tool, grouped by hub) is a global set in main.rs. The
    current section is worked out from page.canonical. #}
+{% import "icons" as icons %}
 {% set path = page.canonical or "" %}
-<nav class="navbar fixed-top bg-dark-subtle navbar-expand-lg pt-2">
-  <div class="container-fluid container-lg">
-    <a class="navbar-brand" href="/">{{ title }}</a>
+<header class="site-header sticky-top">
+  <nav class="navbar navbar-expand-lg" aria-label="Main">
+    <a class="brand me-4" href="/">
+      <span class="brand-mark">{{ icons.icon("lock") }}</span>
+      <span>e2ePaste<span class="brand-suffix">.XYZ</span></span>
+    </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav">
-        <li class="nav-item">
-          <a class="nav-link{% if path == '/' %} active{% endif %}" {% if path == '/' %}aria-current="page" {% endif %}href="/">Home</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link{% if path == '/faq' %} active{% endif %}" {% if path == '/faq' %}aria-current="page" {% endif %}href="/faq">FAQ</a>
-        </li>
+      <ul class="navbar-nav gap-lg-2">
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle{% if path is startingwith('/tools') %} active{% endif %}" href="#"
             role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -32,10 +30,18 @@
             {% endfor %}
           </div>
         </li>
+        <li class="nav-item">
+          <a class="nav-link{% if path == '/faq' %} active{% endif %}" {% if path == '/faq' %}aria-current="page" {% endif %}href="/faq">FAQ</a>
+        </li>
       </ul>
-      <span class="navbar-text ms-auto" style="font-size: small;">
-        Fully End-to-End Encrypted Pastebin
-      </span>
+      <div class="d-flex align-items-center gap-3 ms-lg-auto mt-2 mt-lg-0 pb-2 pb-lg-0">
+        <a class="nav-link d-inline-flex align-items-center gap-2" href="https://github.com/bleach86/e2epaste" target="_blank" rel="noopener noreferrer">
+          {{ icons.icon("github") }} Open source
+        </a>
+        {% if path != '/' %}
+        <a class="btn btn-accent btn-sm" href="/">{{ icons.icon("plus") }} New paste</a>
+        {% endif %}
+      </div>
     </div>
-  </div>
-</nav>
+  </nav>
+</header>

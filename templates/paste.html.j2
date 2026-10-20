@@ -1,93 +1,105 @@
 {% extends "layout" %}
-
+{% import "icons" as icons %}
 
 {% block page %}
-<div class="spacer-50"></div>
-<div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
-    <div class="row">
-        <div class="col-md-12 rounded-2">
+<div class="page">
+    <div id="decrypted-notice" class="notice mb-3" hidden>
+        {{ icons.icon("shield-check") }}
+        <span>Decrypted in your browser. The server only ever had the encrypted version.</span>
+    </div>
+    <div id="decrypt-error" class="notice notice-danger mb-3" role="alert" hidden>
+        {{ icons.icon("alert") }}
+        <span>This paste couldn't be decrypted. Check that you have the complete link, including everything after
+            the <code>#</code>.</span>
+    </div>
 
-            <div class="d-flex flex-column">
-                <h2 class="text-center mt-3">{{ title }}</h2>
-
-            </div>
-
+    <div class="paste-head">
+        <div class="min-w-0">
             {# v3 titles are encrypted; js/pages/paste.mjs fills them in after decrypting. #}
-            <h4 class="text-center mt-3 paste-info" id="paste-title">{% if paste.version < 3 %}{{ paste.title }}{% endif %}</h4>
-
-            <div class="d-flex justify-content-center align-items-center mb-2 paste-info">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-calendar-heart me-2"></i>
-                    <span>Paste Date: <span id="paste-date"></span></span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <i class="bi bi-eye me-2"></i>
-                    <span id="views">Views: {{ paste.views }}</span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <i class="bi bi-eye-fill me-2"></i>
-                    <span>Max Views: <span id="max-views"></span></span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <i class="bi bi-clock me-2"></i>
-                    <span>Expires: <span id="expire-date"></span></span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <button class="btn" id="copy-paste-btn" data-bs-toggle="popover" data-bs-trigger="focus"
-                        data-bs-custom-class="bg-success" data-bs-content="Copied!">
-                        <i class="bi bi-clipboard"></i>
-                        <span>Copy</span>
-                </div>
-            </div>
-            <section id="view-section" class="h-100">
-                <pre
-                    class="theme-atom-one-dark"><span class="badge text-bg-info text-dark lang-info position-relative float-end me-3 opacity-50" style="top:3em;">{{ formatted_lang }}</span><code id="view-area" class="form-control mt-4 pt-4 paste-area focus-ring view-area language-{{ paste.syntax }}"></code></pre>
-            </section>
+            <h1 class="page-title paste-title" id="paste-title">{% if paste.version < 3 %}{{ paste.title }}{% else %}Encrypted paste{% endif %}</h1>
+            <ul class="chips mt-2" aria-label="Paste details">
+                <li class="chip">{{ icons.icon("code") }} {{ formatted_lang }}</li>
+                <li class="chip">Created <span id="paste-date"></span></li>
+                <li class="chip">{{ icons.icon("clock") }} <span id="expire-date"></span></li>
+                <li class="chip">{{ icons.icon("eye") }} <span id="views"></span></li>
+                <li class="chip chip-warn" id="final-view" hidden>{{ icons.icon("flame") }} Final view: it can't be opened again</li>
+            </ul>
+        </div>
+        <div class="paste-actions">
+            <button type="button" id="copy-paste-btn" class="btn btn-quiet" disabled>
+                <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }} Copy</span>
+                <span class="copy-done d-none align-items-center gap-2">{{ icons.icon("check") }} Copied</span>
+            </button>
+            <button type="button" id="download-paste-btn" class="btn btn-quiet" disabled>{{ icons.icon("download") }} Download</button>
+            <button type="button" id="wrap-btn" class="btn btn-quiet" aria-pressed="false" aria-label="Wrap long lines"
+                title="Wrap long lines">{{ icons.icon("wrap") }}</button>
         </div>
     </div>
 
-    <div id="attachment-section" class="d-flex py-2 d-none">
-        <label for="download-link" class="mt-2">Attachment:</label>
-        <a id="download-link" class="btn btn-link"></a>
-        <span id="download-spinner" class="d-none btn" role="status">
-            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-            <span id="download-status">Downloading encrypted file from server...</span>
-        </span>
+    <section class="panel mt-3" aria-label="Paste content">
+        <div class="code-view" id="code-view">
+            <pre class="code-gutter" id="code-gutter" aria-hidden="true"></pre>
+            <pre class="code-body"><code id="view-area" class="language-{{ paste.syntax }}"></code></pre>
+        </div>
+    </section>
 
-    </div>
-
+    <section id="attachment-section" class="panel attachment-panel mt-3" aria-label="Attachment" hidden>
+        <span class="attachment-icon">{{ icons.icon("file") }}</span>
+        <div class="min-w-0 flex-grow-1">
+            <div id="attachment-name" class="fw-semibold text-truncate"></div>
+            <div id="download-status" class="small text-secondary">Encrypted attachment</div>
+        </div>
+        <button type="button" id="download-link" class="btn btn-quiet btn-outline-accent">
+            <span class="dl-idle d-inline-flex align-items-center gap-2">{{ icons.icon("download") }} Decrypt &amp; download</span>
+            <span class="dl-busy d-none align-items-center gap-2"><span class="spinner-border spinner-border-sm"
+                    aria-hidden="true"></span> Working...</span>
+        </button>
+    </section>
 </div>
-<button type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
-    <i class="bi bi-arrow-up"></i>
+
+<button type="button" class="btn btn-quiet" id="btn-back-to-top" aria-label="Back to top">
+    {{ icons.icon("arrow-up") }}
 </button>
 
 <div class="modal fade" id="password-modal" data-bs-backdrop="static" tabindex="-1"
-    aria-labelledby="password-modal-Label" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    aria-labelledby="password-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered link-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-info">
-                <h1 class="modal-title fs-5 text-dark" id="password-modal-Label">Password Protected Paste</h1>
-            </div>
-            <div class="modal-body">
-                <p>Please enter the password in order to view the paste content:</p>
-                <div class="input-group mb-3">
-                    <button class="btn btn-outline-secondary" type="button" id="show-pass-button"><i id="show-pass-icon"
-                            class="bi bi-eye"></i></button>
-                    <input type="password"
-                        class="form-control" id="password-input" placeholder="Password">
+            <div class="d-flex align-items-start gap-3">
+                <span class="dialog-badge">{{ icons.icon("lock") }}</span>
+                <div>
+                    <h2 id="password-modal-title" class="h5 fw-bold mb-0">This paste is password protected</h2>
+                    <p class="mb-0 small text-secondary">Enter the password to decrypt it. It's checked in your
+                        browser and never sent anywhere.</p>
                 </div>
-
-                <div id="password-error" class="text-danger mt-2 bg-danger text-dark p-2 rounded-1"
-                    style="display: none;">Incorrect password. Please try again.</div>
             </div>
-            <div class="modal-footer d-flex justify-content-between">
-                <a class="link-secondary" style="font-size:small;" href="/">Take me Home</a>
-                <button id="submit-password-btn" type="button" class="btn btn-outline-light">Submit</button>
+
+            <div>
+                <label for="password-input" class="field-label">Password</label>
+                <div class="input-group">
+                    <input type="password" class="form-control" id="password-input" autocomplete="off"
+                        spellcheck="false" aria-describedby="password-error">
+                    <button class="btn btn-quiet" type="button" id="show-pass-button" aria-label="Show password"
+                        aria-pressed="false">
+                        <span class="pw-show d-inline-flex">{{ icons.icon("eye") }}</span>
+                        <span class="pw-hide d-none">{{ icons.icon("eye-off") }}</span>
+                    </button>
+                </div>
+                <div id="password-error" class="field-hint text-danger" role="alert" hidden>That password didn't work.
+                    Check it and try again.</div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center gap-3">
+                <a class="small" href="/">Go to the home page</a>
+                <button id="submit-password-btn" type="button" class="btn btn-accent">
+                    <span class="unlock-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Unlock</span>
+                    <span class="unlock-busy d-none align-items-center gap-2"><span
+                            class="spinner-border spinner-border-sm" aria-hidden="true"></span> Checking...</span>
+                </button>
             </div>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}

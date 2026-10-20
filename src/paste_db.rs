@@ -112,9 +112,11 @@ impl PasteDB {
     pub async fn delete_paste(&self, id: String) -> Result<()> {
         self.paste_db.remove(id.as_bytes())?;
 
+        // Only pastes with an attachment have a file, so a missing one is fine.
         let path = format!("./file_store/{}.bin", id);
         match tokio::fs::remove_file(path).await {
             Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
                 eprintln!("Error deleting file: {:?}", e);
             }

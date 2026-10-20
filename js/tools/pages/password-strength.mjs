@@ -66,11 +66,14 @@ function update() {
 }
 
 function toggleVisibility() {
+  const button = document.getElementById("strength-show");
   const show = input.type === "password";
   input.type = show ? "text" : "password";
-  const icon = document.getElementById("strength-show-icon");
-  icon.classList.toggle("bi-eye", !show);
-  icon.classList.toggle("bi-eye-slash", show);
+  button.setAttribute("aria-pressed", String(show));
+  button.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  button.querySelector(".pw-show").classList.toggle("d-none", show);
+  button.querySelector(".pw-hide").classList.toggle("d-none", !show);
+  button.querySelector(".pw-hide").classList.toggle("d-inline-flex", show);
 }
 
 input.value = "";

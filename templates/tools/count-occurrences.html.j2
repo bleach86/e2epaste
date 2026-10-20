@@ -1,33 +1,28 @@
 {% extends "tool_layout" %}
+{% import "icons" as icons %}
 
 {% block tool %}
-<section class="alert alert-secondary mt-3" aria-labelledby="occ-heading">
-    <div class="d-flex justify-content-between align-items-center">
-        <h2 class="h4 text-light alert-heading mb-0" id="occ-heading">Find and count</h2>
-        <button type="button" class="btn btn-dark" data-clear="occ-term occ-text" title="Clear" aria-label="Clear">
-            <i class="bi bi-hurricane"></i>
-        </button>
+<section class="panel panel-pad tool-panel" aria-labelledby="occ-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <h2 class="h5 fw-semibold mb-0" id="occ-heading">Find and count</h2>
+        <button type="button" class="btn btn-quiet btn-sm" data-clear="occ-term occ-text">{{ icons.icon("eraser") }} Clear</button>
     </div>
-    <hr>
-    <label class="form-label small text-secondary" for="occ-term">Word, phrase or character to find</label>
-    <input type="text" id="occ-term" class="form-control focus-ring focus-ring-dark mb-3" spellcheck="false"
-        placeholder="e.g. the">
-    <label class="form-label small text-secondary" for="occ-text">Text to search</label>
-    <textarea id="occ-text" class="form-control base64-area focus-ring focus-ring-dark" rows="8"
-        placeholder="Type or paste text here..."></textarea>
-    <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+    <label class="field-label mt-3" for="occ-term">Word, phrase or character to find</label>
+    <input type="text" id="occ-term" class="form-control mb-3" spellcheck="false" placeholder="e.g. the">
+    <label class="field-label" for="occ-text">Text to search</label>
+    <textarea id="occ-text" class="form-control tool-area" rows="8" placeholder="Type or paste text here..."></textarea>
+    <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
         <div class="form-check mb-0">
-            <input class="form-check-input bg-secondary" type="checkbox" id="occ-case">
-            <label class="form-check-label small text-secondary" for="occ-case">Case sensitive</label>
+            <input class="form-check-input" type="checkbox" id="occ-case">
+            <label class="form-check-label small" for="occ-case">Case sensitive</label>
         </div>
         <div class="form-check mb-0">
-            <input class="form-check-input bg-secondary" type="checkbox" id="occ-whole">
-            <label class="form-check-label small text-secondary" for="occ-whole">Whole words only</label>
+            <input class="form-check-input" type="checkbox" id="occ-whole">
+            <label class="form-check-label small" for="occ-whole">Whole words only</label>
         </div>
-        <span class="ms-auto">Matches: <span id="occ-count" class="badge text-bg-info fs-6">0</span></span>
+        <span class="ms-auto">Matches: <span id="occ-count" class="count-badge">0</span></span>
     </div>
-    <div id="occ-preview" class="form-control view-area mt-3 small" style="min-height:3rem;"
-        aria-label="Text with matches highlighted"></div>
+    <div id="occ-preview" class="form-control tool-preview mt-3" aria-label="Text with matches highlighted"></div>
 </section>
 {% endblock %}
 

@@ -4,7 +4,7 @@
 {% macro faq(id, question, open=false) %}
 <div class="accordion-item">
     <h3 class="accordion-header">
-        <button class="accordion-button bg-dark{% if not open %} collapsed{% endif %}" type="button"
+        <button class="accordion-button{% if not open %} collapsed{% endif %}" type="button"
             data-bs-toggle="collapse" data-bs-target="#faq-{{ id }}" aria-expanded="{{ 'true' if open else 'false' }}"
             aria-controls="faq-{{ id }}">
             {{ question }}
@@ -19,10 +19,9 @@
 {% endmacro %}
 
 {% block page %}
-<div class="spacer-50"></div>
-<div class="container bg-dark-subtle w-100 body-height rounded-2 mb-5 pb-5">
-    <h1 class="text-center pt-4">Frequently Asked Questions</h1>
-    <p class="text-center text-secondary">How e2ePaste.XYZ works, what it protects, and what it doesn't.</p>
+<div class="page page-narrow">
+    <h1 class="page-title">Frequently asked questions</h1>
+    <p class="page-lede">How e2ePaste.XYZ works, what it protects, and what it doesn't.</p>
 
     <section class="mt-4" aria-labelledby="faq-basics">
         <h2 class="h4 mb-3" id="faq-basics">The basics</h2>

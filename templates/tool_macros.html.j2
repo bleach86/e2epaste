@@ -1,28 +1,30 @@
 {# One input -> output panel. js/tools/common.mjs wires up ids "<id>-in",
    "<id>-out" and "<id>-error", plus the data-copy / data-clear buttons. #}
+{% import "icons" as icons %}
 {% macro panel(id, heading, description, in_placeholder, out_placeholder) %}
-<section class="alert alert-secondary mt-3" aria-labelledby="{{ id }}-heading">
-    <div class="d-flex justify-content-between align-items-center">
-        <h2 class="h4 text-light alert-heading mb-0" id="{{ id }}-heading">{{ heading }}</h2>
-        <button type="button" class="btn btn-dark" data-clear="{{ id }}-in" title="Clear" aria-label="Clear">
-            <i class="bi bi-hurricane"></i>
-        </button>
+<section class="panel panel-pad tool-panel" aria-labelledby="{{ id }}-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <h2 class="h5 fw-semibold mb-1" id="{{ id }}-heading">{{ heading }}</h2>
+            <p class="small text-secondary mb-0">{{ description }}</p>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm" data-clear="{{ id }}-in">{{ icons.icon("eraser") }} Clear</button>
     </div>
-    <p class="text-secondary small mb-0">{{ description }}</p>
-    <hr>
-    <div class="row">
+    <div class="row g-3 mt-1">
         <div class="col-md-6">
             <label class="visually-hidden" for="{{ id }}-in">Input</label>
-            <textarea id="{{ id }}-in" class="form-control base64-area focus-ring focus-ring-dark" rows="8"
+            <textarea id="{{ id }}-in" class="form-control tool-area" rows="8"
                 placeholder="{{ in_placeholder }}" spellcheck="false"></textarea>
         </div>
         <div class="col-md-6">
             <label class="visually-hidden" for="{{ id }}-out">Output</label>
-            <textarea id="{{ id }}-out" class="form-control base64-area" rows="8"
+            <textarea id="{{ id }}-out" class="form-control tool-area" rows="8"
                 placeholder="{{ out_placeholder }}" spellcheck="false" readonly></textarea>
-            <div id="{{ id }}-error" class="text-warning small mb-2" role="status"></div>
+            <div id="{{ id }}-error" class="small text-warn mt-1" role="status"></div>
         </div>
     </div>
-    <button type="button" class="btn btn-outline-light" data-copy="{{ id }}-out">Copy</button>
+    <div class="mt-3">
+        <button type="button" class="btn btn-accent" data-copy="{{ id }}-out">{{ icons.icon("copy") }} Copy result</button>
+    </div>
 </section>
 {% endmacro %}
