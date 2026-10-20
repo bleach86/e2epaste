@@ -7,7 +7,7 @@ import {
   decryptText,
   getPasteSecrets,
 } from "../crypto.mjs";
-import { readPageData } from "../ui.mjs";
+import { cryptoAvailable, readPageData } from "../ui.mjs";
 
 const { paste, has_password: hasPassword } = readPageData();
 const linkHash = window.location.hash.substring(1);
@@ -275,7 +275,10 @@ document.addEventListener("keydown", (event) => {
 
 // --- Start ------------------------------------------------------------------
 
-if (hasPassword) {
+if (!cryptoAvailable()) {
+  // Plain-HTTP page: the banner from layout.html.j2 explains. Nothing is
+  // decrypted, so no view is used up.
+} else if (hasPassword) {
   passwordModal = new bootstrap.Modal(document.getElementById("password-modal"));
   document.getElementById("password-modal").addEventListener("shown.bs.modal", () => passwordInput.focus());
   passwordModal.show();

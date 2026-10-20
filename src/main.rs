@@ -2,16 +2,14 @@
 extern crate rocket;
 
 mod assets;
+mod config;
 mod paste_db;
 mod paste_id;
 mod tools;
 
 use rocket::data::ToByteUnit;
 use rocket::fairing::Fairing;
-use rocket::fs::{relative, FileServer, NamedFile};
-use rocket::futures::SinkExt;
-use rocket::futures::StreamExt;
-use rocket::http::uri::Absolute;
+use rocket::fs::{FileServer, NamedFile};
 use rocket::http::ContentType;
 use rocket::http::Header;
 use rocket::http::Status;
@@ -19,26 +17,24 @@ use rocket::request::Request;
 use rocket::response::Response;
 use rocket::serde::json::Json;
 use rocket::tokio;
-use rocket::tokio::fs::File;
 use rocket::State;
 use rocket::{post, Data};
 use rocket_dyn_templates::{context, Template};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast;
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 
 use chrono::prelude::*;
 
+use config::AppConfig;
 use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
 
-const HOST: Absolute<'static> = uri!("https://e2epaste.xyz");
 const TITLE: &str = "e2ePaste.XYZ";
 const ID_LENGTH: usize = 8;
+/// The browser allows 25 MiB attachments; this leaves room for the encryption
+/// and compression overhead.
+const MAX_ATTACHMENT_MIB: u64 = 26;
 
 /// Per-page <title>, meta description and link-preview text, rendered by
 /// layout.html.j2.
@@ -110,6 +106,10 @@ pub struct IncomingPaste {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IncomingPasteRes {
     pub id: Option<String>,
+    /// Only for pastes with an attachment: the one-time token for
+    /// /api/upload-attachment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upload_token: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -204,6 +204,20 @@ async fn upload(
         file_name: paste.file_name,
     };
 
+    let failed = Json(IncomingPasteRes { id: None, upload_token: None });
+
+    // The token goes in first, so it exists by the time the paste does.
+    let upload_token: Option<String> = if paste_data.file_name.is_some() {
+        let token = new_upload_token();
+        if let Err(e) = db.set_upload_token(&id.to_string(), &token) {
+            eprintln!("Error saving upload token: {:?}", e);
+            return failed;
+        }
+        Some(token)
+    } else {
+        None
+    };
+
     match db.set_paste(&paste_data) {
         Ok(_) => {
             match db.increment_pastes() {
@@ -214,11 +228,33 @@ async fn upload(
             };
             Json(IncomingPasteRes {
                 id: Some(id.to_string()),
+                upload_token,
             })
         }
         Err(e) => {
             eprintln!("Error saving paste: {:?}", e);
-            Json(IncomingPasteRes { id: None })
+            failed
+        }
+    }
+}
+
+/// 256 random bits, hex encoded.
+fn new_upload_token() -> String {
+    let bytes: [u8; 32] = rand::random();
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The X-Upload-Token header.
+struct UploadToken(String);
+
+#[rocket::async_trait]
+impl<'r> rocket::request::FromRequest<'r> for UploadToken {
+    type Error = ();
+
+    async fn from_request(req: &'r Request<'_>) -> rocket::request::Outcome<Self, ()> {
+        match req.headers().get_one("X-Upload-Token") {
+            Some(token) => rocket::request::Outcome::Success(UploadToken(token.to_string())),
+            None => rocket::request::Outcome::Error((Status::Forbidden, ())),
         }
     }
 }
@@ -291,20 +327,73 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "bot_filter",
-        context! {title: TITLE, page: PASTE_PAGE, paste_id: id.to_string(), host: HOST, site_stats, year: Utc::now().year()},
+        context! {title: TITLE, page: PASTE_PAGE, paste_id: id.to_string(), site_stats, year: Utc::now().year()},
     )
 }
 
 #[post("/api/upload-attachment/<id>", data = "<data>")]
-async fn upload_attachment(data: Data<'_>, id: PasteId<'_>) -> std::io::Result<&'static str> {
-    let mut file = File::create(format!("./file_store/{}.bin", id.to_string())).await?;
-    data.open(100_u64.megabytes()).stream_to(&mut file).await?;
+async fn upload_attachment(
+    db: &State<Arc<PasteDB>>,
+    data: Data<'_>,
+    id: PasteId<'_>,
+    token: UploadToken,
+) -> Result<&'static str, Status> {
+    let id = id.to_string();
+    let internal = |e: &dyn std::fmt::Debug| {
+        eprintln!("Error saving attachment for {id}: {e:?}");
+        Status::InternalServerError
+    };
+
+    // Only the paste's creator has the token, and only until an upload
+    // succeeds. It's removed when the paste is deleted, so this also checks
+    // the paste exists.
+    if !db.upload_token_matches(&id, &token.0).map_err(|e| internal(&e))? {
+        return Err(Status::Forbidden);
+    }
+
+    // Written to a temporary file, so a failed upload can be retried and never
+    // leaves a partial attachment.
+    let partial = db.partial_upload_path(&id);
+    let written = match data.open(MAX_ATTACHMENT_MIB.mebibytes()).into_file(&partial).await {
+        Ok(written) => written,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&partial).await;
+            return Err(internal(&e));
+        }
+    };
+    if !written.is_complete() {
+        let _ = tokio::fs::remove_file(&partial).await;
+        return Err(Status::PayloadTooLarge);
+    }
+
+    // Of concurrent uploads with the right token, only one gets past here.
+    match db.consume_upload_token(&id, &token.0) {
+        Ok(true) => {}
+        Ok(false) => {
+            let _ = tokio::fs::remove_file(&partial).await;
+            return Err(Status::Forbidden);
+        }
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&partial).await;
+            return Err(internal(&e));
+        }
+    }
+    let path = db.attachment_path(&id);
+    if let Err(e) = tokio::fs::rename(&partial, &path).await {
+        let _ = tokio::fs::remove_file(&partial).await;
+        return Err(internal(&e));
+    }
+
+    // The paste may have expired while the file was uploading.
+    if db.get_paste(id.clone()).is_none() {
+        let _ = tokio::fs::remove_file(&path).await;
+        return Err(Status::NotFound);
+    }
     Ok("Upload successful")
 }
 #[get("/api/download-attachment/<id>")]
-async fn download_attachment(id: PasteId<'_>) -> Option<NamedFile> {
-    let file_path = format!("./file_store/{}.bin", id.to_string());
-    NamedFile::open(file_path).await.ok()
+async fn download_attachment(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Option<NamedFile> {
+    NamedFile::open(db.attachment_path(&id.to_string())).await.ok()
 }
 
 #[get("/paste/<id>")]
@@ -379,7 +468,6 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
             page: PASTE_PAGE,
             paste: paste_data,
             has_password,
-            host: HOST,
             site_stats,
             year: now.year(),
             formatted_lang,
@@ -401,7 +489,7 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
         "faq",
-        context! {title: TITLE, page: FAQ_PAGE, site_stats, host: HOST, year: Utc::now().year()},
+        context! {title: TITLE, page: FAQ_PAGE, site_stats, year: Utc::now().year()},
     )
 }
 
@@ -462,7 +550,7 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
     let languages: Vec<(&str, &str)> = get_languages();
     Template::render(
         "index",
-        context! {title: TITLE, page: INDEX_PAGE, site_stats, host: HOST, languages, year: Utc::now().year()},
+        context! {title: TITLE, page: INDEX_PAGE, site_stats, languages, year: Utc::now().year()},
     )
 }
 
@@ -471,19 +559,21 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
 // crawlable so link previews work; those pages are noindex and hold no paste
 // data.
 #[get("/robots.txt")]
-fn robots() -> (ContentType, String) {
+fn robots(config: &State<AppConfig>) -> (ContentType, String) {
     let body = format!(
-        "User-agent: *\nDisallow: /paste/\nDisallow: /api/\n\nSitemap: {HOST}/sitemap.xml\n"
+        "User-agent: *\nDisallow: /paste/\nDisallow: /api/\n\nSitemap: {}/sitemap.xml\n",
+        config.site_url
     );
     (ContentType::Plain, body)
 }
 
 #[get("/sitemap.xml")]
-fn sitemap() -> (ContentType, String) {
+fn sitemap(config: &State<AppConfig>) -> (ContentType, String) {
+    let site_url = &config.site_url;
     let urls: String = SITEMAP_PATHS
         .into_iter()
         .chain(tools::sitemap_paths())
-        .map(|path| format!("  <url><loc>{HOST}{path}</loc></url>\n"))
+        .map(|path| format!("  <url><loc>{site_url}{path}</loc></url>\n"))
         .collect();
     let body = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -545,13 +635,33 @@ fn get_languages() -> Vec<(&'static str, &'static str)> {
 
 #[launch]
 async fn rocket() -> _ {
-    let db: Arc<PasteDB> = Arc::new(PasteDB::new());
+    let rocket = rocket::build();
+
+    let config = AppConfig::from_figment(rocket.figment()).unwrap_or_else(|e| exit_with(&e));
+    for warning in config.warnings() {
+        eprintln!("Warning: {warning}");
+    }
+    for dir in [config.db_dir(), config.file_dir()] {
+        config::ensure_dir(&dir).unwrap_or_else(|e| exit_with(&e));
+    }
+    let db: Arc<PasteDB> = match PasteDB::open(&config.db_dir(), config.file_dir()) {
+        Ok(db) => Arc::new(db),
+        Err(e) => exit_with(&format!("can't open the database in {:?}: {e}", config.db_dir())),
+    };
+    db.remove_partial_uploads();
     let db_clone = db.clone();
+    println!(
+        "Site URL {}, data in {:?}, static files from {:?}",
+        config.site_url, config.data_dir, config.static_dir
+    );
+    let site_url = config.site_url.clone();
+    let static_dir = config.static_dir.clone();
 
     // Build the Rocket instance
-    let rocket = rocket::build()
+    let rocket = rocket
         .manage(db)
-        .mount("/public", FileServer::from(relative!("static")))
+        .manage(config)
+        .mount("/public", FileServer::from(static_dir))
         .mount(
             "/",
             routes![
@@ -573,11 +683,11 @@ async fn rocket() -> _ {
                 assets::dist_asset,
             ],
         )
-        .attach(Template::custom(|engines| {
+        .attach(Template::custom(move |engines| {
             engines
                 .minijinja
                 .add_global("asset_version", env!("ASSET_VERSION"));
-            engines.minijinja.add_global("site_url", HOST.to_string());
+            engines.minijinja.add_global("site_url", site_url.clone());
             // For the Tools menu in nav.html.j2.
             engines.minijinja.add_global(
                 "nav_tools",
@@ -603,4 +713,9 @@ async fn rocket() -> _ {
 
     // Launch the Rocket instance
     rocket
+}
+
+fn exit_with(message: &str) -> ! {
+    eprintln!("Error: {message}");
+    std::process::exit(1);
 }

@@ -1,7 +1,21 @@
+# Settings for every profile. Any key can be overridden with an environment
+# variable: ROCKET_<KEY>, e.g. ROCKET_SITE_URL=https://paste.example.com
 [default]
 address = "0.0.0.0"
 port = 8001
 
+# The site's public address. Used for canonical links, the sitemap and link
+# previews. Set it to your own domain, with https:// and no trailing path.
+site_url = "http://localhost:8001"
+
+# Where the paste database (paste_db/) and attachments (file_store/) are kept.
+data_dir = "."
+
+# Front-end files served at /public, and the page templates.
+static_dir = "static"
+template_dir = "templates"
 
 [default.limits]
-json = "100 MiB"
+# Encrypted pastes are at most about 1.4 MiB (1 MB of text). Attachments are
+# uploaded separately and capped at 26 MiB.
+json = "4 MiB"

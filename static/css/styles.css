@@ -712,6 +712,53 @@ body {
   --bs-btn-font-weight: 600;
 }
 
+/* Plain-HTTP warning under the header (layout.html.j2). */
+.insecure-warning {
+  background: #2a2112;
+  border-bottom: 1px solid var(--e2e-warn-border);
+  color: #fde9c4;
+  font-size: 14px;
+}
+
+.insecure-warning-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: var(--e2e-page-width);
+  margin: 0 auto;
+  padding: 14px 24px;
+}
+
+.insecure-warning-inner > .icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--e2e-warn);
+}
+
+.insecure-warning-admin {
+  color: #d9c49d;
+  font-size: 13px;
+}
+
+.insecure-warning code {
+  color: inherit;
+}
+
+.btn-warn {
+  --bs-btn-bg: var(--e2e-warn);
+  --bs-btn-border-color: var(--e2e-warn);
+  --bs-btn-color: #1d1505;
+  --bs-btn-hover-bg: #f8d79c;
+  --bs-btn-hover-border-color: #f8d79c;
+  --bs-btn-hover-color: #1d1505;
+  --bs-btn-active-bg: #f8d79c;
+  --bs-btn-active-border-color: #f8d79c;
+  --bs-btn-active-color: #1d1505;
+  font-weight: 600;
+}
+
 .notice-danger {
   background: #2a1416;
   border-color: #5c2a2e;

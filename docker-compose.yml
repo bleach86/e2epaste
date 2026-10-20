@@ -1,0 +1,17 @@
+# Settings come from .env (copy .env.example). See README.md for HTTPS setup.
+services:
+  e2epaste:
+    build: .
+    image: e2epaste
+    restart: unless-stopped
+    environment:
+      ROCKET_SITE_URL: ${SITE_URL:-http://localhost:8001}
+    ports:
+      # Only reachable from this machine: put a reverse proxy with HTTPS in
+      # front. Browsers won't run the encryption on plain HTTP.
+      - "127.0.0.1:${PORT:-8001}:8001"
+    volumes:
+      - e2epaste-data:/data
+
+volumes:
+  e2epaste-data:

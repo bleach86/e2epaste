@@ -4,14 +4,15 @@
 //! dictionaries alone are 1.6 MB uncompressed.
 
 use std::convert::Infallible;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use rocket::fs::{relative, NamedFile};
+use rocket::fs::NamedFile;
 use rocket::http::ContentType;
 use rocket::request::{self, FromRequest, Request};
 use rocket::response::{self, Responder};
+use rocket::State;
 
-const DIST_DIR: &str = relative!("static/js/dist");
+use crate::config::AppConfig;
 
 /// Which precompressed encodings the client accepts, from Accept-Encoding.
 pub struct AcceptEncoding {
@@ -68,8 +69,12 @@ impl<'r> Responder<'r, 'static> for DistAsset {
 
 // Outranks the /public FileServer (rank 10) for this directory.
 #[get("/public/js/dist/<path..>")]
-pub async fn dist_asset(path: PathBuf, accepts: AcceptEncoding) -> Option<DistAsset> {
-    let file_path = Path::new(DIST_DIR).join(&path);
+pub async fn dist_asset(
+    path: PathBuf,
+    accepts: AcceptEncoding,
+    config: &State<AppConfig>,
+) -> Option<DistAsset> {
+    let file_path = config.dist_dir().join(&path);
     if !file_path.is_file() {
         return None;
     }

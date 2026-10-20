@@ -10,7 +10,7 @@ import {
   encryptText,
   generateLinkSecret,
 } from "../crypto.mjs";
-import { readPageData } from "../ui.mjs";
+import { cryptoAvailable } from "../ui.mjs";
 
 const MAX_PASTE_BYTES = 1048576;
 const MAX_FILE_BYTES = 26214400;
@@ -31,8 +31,6 @@ const EXPIRE_SECONDS = {
   "6months": 15552000,
   "1year": 31536000,
 };
-
-const { host } = readPageData();
 
 const pasteArea = document.getElementById("paste-area");
 const pasteEditor = document.getElementById("paste-editor");
@@ -197,12 +195,16 @@ function setBusy(busy) {
   submitButton.querySelector(".submit-busy").classList.toggle("d-inline-flex", busy);
 }
 
-async function uploadEncryptedFile(file, id) {
-  await fetch(`/api/upload-attachment/${id}`, {
+// `token` is the one-time upload token the server returned with the paste ID.
+async function uploadEncryptedFile(file, id, token) {
+  const response = await fetch(`/api/upload-attachment/${id}`, {
     method: "POST",
-    headers: { "Content-Type": "application/octet-stream" },
+    headers: { "Content-Type": "application/octet-stream", "X-Upload-Token": token },
     body: file,
   });
+  if (!response.ok) {
+    throw new Error(`The server didn't accept the attachment (${response.status})`);
+  }
 }
 
 async function createPaste() {
@@ -267,12 +269,14 @@ async function createPaste() {
     throw new Error("The server didn't accept the paste");
   }
   if (encryptedFile) {
-    await uploadEncryptedFile(encryptedFile, data.id);
+    await uploadEncryptedFile(encryptedFile, data.id, data.upload_token);
   }
 
   // Hand out /s/ (short for /share/) links: link-preview bots can fetch that
-  // page (robots.txt blocks /paste/) and it forwards browsers on.
-  showLink(`${host}/s/${data.id}#${linkSecret}`, {
+  // page (robots.txt blocks /paste/) and it forwards browsers on. The origin
+  // is the address this page was loaded from, so links work whatever
+  // site_url is set to.
+  showLink(`${location.origin}/s/${data.id}#${linkSecret}`, {
     expiry: expiryLabel(expire),
     views,
     password: password !== "",
@@ -280,8 +284,14 @@ async function createPaste() {
   });
 }
 
+// Without Web Crypto (a plain-HTTP page) nothing can be encrypted; the
+// banner from layout.html.j2 explains why.
+if (!cryptoAvailable()) {
+  submitButton.disabled = true;
+}
+
 submitButton.addEventListener("click", async () => {
-  if (submitting) {
+  if (submitting || !cryptoAvailable()) {
     return;
   }
   setBusy(true);

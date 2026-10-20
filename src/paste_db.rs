@@ -2,7 +2,7 @@ extern crate sled;
 use rocket::tokio;
 use serde::{Deserialize, Serialize};
 use sled::{Db, Result, Tree};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::paste_id::PasteId;
@@ -44,28 +44,83 @@ pub struct PasteDB {
     pub paste_db: Tree,
     pub site_stats: Tree,
     pub expire_index: Tree,
+    /// Paste ID -> one-time token for uploading its attachment. Kept out of
+    /// PasteData so it's never sent to viewers.
+    upload_tokens: Tree,
     pub db: Db,
+    /// Where attachments are stored, one `<id>.bin` per paste.
+    file_dir: PathBuf,
 }
 
 impl PasteDB {
-    pub fn new() -> Self {
-        let db_dir: std::path::PathBuf = PathBuf::from("paste_db");
+    pub fn open(db_dir: &Path, file_dir: PathBuf) -> Result<Self> {
         let db: Db = sled::Config::new()
-            .path(&db_dir)
+            .path(db_dir)
             .use_compression(true)
             .compression_factor(18)
-            .open()
-            .unwrap();
-        let paste_db: Tree = db.open_tree(b"paste").unwrap();
-        let site_stats: Tree = db.open_tree(b"site_stats").unwrap();
-        let expire_index: Tree = db.open_tree(b"expire_index").unwrap();
+            .open()?;
+        let paste_db: Tree = db.open_tree(b"paste")?;
+        let site_stats: Tree = db.open_tree(b"site_stats")?;
+        let expire_index: Tree = db.open_tree(b"expire_index")?;
+        let upload_tokens: Tree = db.open_tree(b"upload_tokens")?;
 
-        PasteDB {
+        Ok(PasteDB {
             paste_db,
             site_stats,
             expire_index,
+            upload_tokens,
             db,
+            file_dir,
+        })
+    }
+
+    /// The attachment file for a paste (it may not exist).
+    pub fn attachment_path(&self, id: &str) -> PathBuf {
+        self.file_dir.join(format!("{id}.bin"))
+    }
+
+    /// Where an upload is written until it's complete and its token is used.
+    pub fn partial_upload_path(&self, id: &str) -> PathBuf {
+        let suffix: u64 = rand::random();
+        self.file_dir.join(format!("{id}.{suffix:016x}.part"))
+    }
+
+    /// Deletes uploads left half-written by a crash or restart.
+    pub fn remove_partial_uploads(&self) {
+        let Ok(entries) = std::fs::read_dir(&self.file_dir) else {
+            return;
+        };
+        for path in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
+            if path.extension().is_some_and(|ext| ext == "part") {
+                if let Err(e) = std::fs::remove_file(&path) {
+                    eprintln!("Error deleting partial upload {:?}: {:?}", path, e);
+                }
+            }
         }
+    }
+
+    pub fn set_upload_token(&self, id: &str, token: &str) -> Result<()> {
+        self.upload_tokens.insert(id.as_bytes(), token.as_bytes())?;
+        Ok(())
+    }
+
+    /// Whether `token` is the paste's unused upload token.
+    pub fn upload_token_matches(&self, id: &str, token: &str) -> Result<bool> {
+        Ok(self
+            .upload_tokens
+            .get(id.as_bytes())?
+            .is_some_and(|stored| constant_time_eq(&stored, token.as_bytes())))
+    }
+
+    /// Uses up the upload token. Atomic, so of several uploads with the right
+    /// token only one gets `true`.
+    pub fn consume_upload_token(&self, id: &str, token: &str) -> Result<bool> {
+        let swapped = self.upload_tokens.compare_and_swap(
+            id.as_bytes(),
+            Some(token.as_bytes()),
+            None as Option<&[u8]>,
+        )?;
+        Ok(swapped.is_ok())
     }
 
     pub fn set_paste(&self, paste_data: &PasteData<'_>) -> Result<()> {
@@ -111,10 +166,10 @@ impl PasteDB {
 
     pub async fn delete_paste(&self, id: String) -> Result<()> {
         self.paste_db.remove(id.as_bytes())?;
+        self.upload_tokens.remove(id.as_bytes())?;
 
         // Only pastes with an attachment have a file, so a missing one is fine.
-        let path = format!("./file_store/{}.bin", id);
-        match tokio::fs::remove_file(path).await {
+        match tokio::fs::remove_file(self.attachment_path(&id)).await {
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
@@ -257,4 +312,8 @@ impl PasteDB {
         self.set_site_stats(&site_stats)?;
         Ok(())
     }
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0, |acc, (x, y)| acc | (x ^ y)) == 0
 }

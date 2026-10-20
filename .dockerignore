@@ -1,0 +1,9 @@
+.git
+target
+node_modules
+paste_db
+file_store
+static/js/dist
+.env
+Dockerfile
+docker-compose.yml

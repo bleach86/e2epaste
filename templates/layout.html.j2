@@ -1,4 +1,5 @@
 <!doctype html>
+{% import "icons" as icons %}
 <html data-bs-theme="dark" lang="en-US">
 
 <head>
@@ -32,13 +33,28 @@
     <link href="/public/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/public/css/atom-one-dark.min.css">
     {# Last, so the theme overrides Bootstrap. #}
-    <link rel="stylesheet" href="/public/css/styles.css?v=2.4">
+    <link rel="stylesheet" href="/public/css/styles.css?v=2.5">
     <script src="/public/js/taboverride.min.js"></script>
 </head>
 
 <body class="d-flex flex-column min-vh-100">
     <a href="#main" class="visually-hidden-focusable position-absolute top-0 start-0 m-2 btn btn-accent" style="z-index: 1100">Skip to content</a>
     {% include "nav" %}
+    {# Shown by common.mjs when the page isn't a secure context (plain HTTP),
+       where browsers turn off the Web Crypto API. #}
+    <div id="insecure-warning" class="insecure-warning" role="alert" hidden>
+        <div class="insecure-warning-inner">
+            {{ icons.icon("alert") }}
+            <div>
+                <p class="mb-1"><strong>Encryption doesn't work on this connection.</strong> This page wasn't loaded
+                    over HTTPS, and browsers only allow the encryption {{ title }} uses on secure pages. You can't
+                    create or open pastes until you use the HTTPS address.</p>
+                <a id="insecure-https-link" class="btn btn-sm btn-warn mt-1 mb-2" hidden>Open this page over HTTPS</a>
+                <p class="insecure-warning-admin mb-0">Running this site? Put it behind HTTPS, or use
+                    <code>http://localhost</code> while testing.</p>
+            </div>
+        </div>
+    </div>
     <main id="main" class="flex-grow-1">
         {% block page %}{% endblock %}
     </main>

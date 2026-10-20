@@ -7,6 +7,12 @@ export function readPageData() {
   return el ? JSON.parse(el.textContent) : {};
 }
 
+// The Web Crypto API (crypto.subtle), which all encryption here uses, only
+// exists in secure contexts: HTTPS pages and http://localhost.
+export function cryptoAvailable() {
+  return window.isSecureContext && Boolean(window.crypto?.subtle);
+}
+
 // Briefly shows a "copied" popover on `button`.
 export function showCopiedPopover(button) {
   const popover = new bootstrap.Popover(button, {

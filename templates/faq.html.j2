@@ -61,7 +61,7 @@
                 <li>uploads only the encrypted result.</li>
             </ol>
             <p class="mb-0">The secret goes into the link after the <code>#</code>, like
-                <code>https://e2epaste.xyz/s/Ab3dE5gH#<em>secret</em></code>. Browsers never send the part after
+                <code>{{ site_url }}/s/Ab3dE5gH#<em>secret</em></code>. Browsers never send the part after
                 <code>#</code> to the server, so the server never has the key. When someone opens the link, their
                 browser reads the secret and decrypts the paste locally.</p>
             {% endcall %}
