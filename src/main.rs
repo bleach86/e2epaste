@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+mod assets;
 mod paste_db;
 mod paste_id;
 mod tools;
@@ -546,6 +547,7 @@ async fn rocket() -> _ {
                 upload_attachment,
                 robots,
                 sitemap,
+                assets::dist_asset,
             ],
         )
         .attach(Template::custom(|engines| {

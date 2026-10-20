@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
+const CompressionPlugin = require("compression-webpack-plugin");
 
 // Every js/tools/pages/<slug>.mjs becomes the bundle tools/<slug>.js, loaded
 // by templates/tool_layout.html.j2.
@@ -31,4 +33,28 @@ module.exports = {
     clean: true,
   },
   devtool: "source-map",
+  // Only warn about the size of bundles pages load up front; lazy chunks like
+  // the zxcvbn dictionaries are expected to be large.
+  performance: {
+    assetFilter: (file) => file.endsWith(".js") && !file.startsWith("chunks/"),
+  },
+  // Precompressed copies (<file>.br, <file>.gz) that the dist_asset route in
+  // main.rs serves to browsers that accept them. Skipped for small files and
+  // when compression saves less than 20%.
+  plugins: [
+    new CompressionPlugin({
+      filename: "[path][base].br",
+      algorithm: "brotliCompress",
+      test: /\.js$/,
+      compressionOptions: { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } },
+      threshold: 1024,
+    }),
+    new CompressionPlugin({
+      filename: "[path][base].gz",
+      algorithm: "gzip",
+      test: /\.js$/,
+      compressionOptions: { level: 9 },
+      threshold: 1024,
+    }),
+  ],
 };
