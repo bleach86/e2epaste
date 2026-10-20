@@ -11,6 +11,7 @@ import {
   encryptText,
   generateLinkSecret,
 } from "../crypto.mjs";
+import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable } from "../ui.mjs";
 
 const MAX_PASTE_BYTES = 1048576;
@@ -20,6 +21,8 @@ const DEFAULT_EXPIRY = "3days";
 // Above this many characters, re-highlight once typing pauses instead of on
 // every keystroke.
 const LIVE_HIGHLIGHT_MAX = 20000;
+// How long typing has to pause before the language is guessed again.
+const DETECT_DELAY_MS = 250;
 
 const EXPIRE_SECONDS = {
   "10min": 600,
@@ -76,10 +79,26 @@ function updateStats() {
   pasteStats.classList.toggle("text-danger", bytes > MAX_PASTE_BYTES);
 }
 
-// The selected highlight.js language, or null for plain text.
+// "Auto-detect"'s current guess, or null for plain text.
+let detectedLanguage = null;
+let detectTimer;
+const autoOption = syntaxSelect.querySelector(`option[value="${AUTO}"]`);
+
+// The highlight.js language to use, or null for plain text.
 function selectedLanguage() {
   const language = syntaxSelect.value;
+  if (language === AUTO) {
+    return detectedLanguage;
+  }
   return language !== "plaintext" && hljs.getLanguage(language) ? language : null;
+}
+
+// Guesses the language again and shows it in the picker, e.g.
+// "Auto-detect (Rust)".
+function redetect() {
+  detectedLanguage = detectLanguage(pasteArea.value);
+  autoOption.textContent = detectedLanguage ? `Auto-detect (${languageName(detectedLanguage)})` : "Auto-detect";
+  updateHighlight();
 }
 
 function renderHighlight() {
@@ -110,12 +129,21 @@ function updateHighlight() {
 
 pasteArea.addEventListener("input", () => {
   resizePasteArea();
+  // Keeps the last guess's colours while typing; guesses again on a pause.
   updateHighlight();
   updateStats();
+  if (syntaxSelect.value === AUTO) {
+    clearTimeout(detectTimer);
+    detectTimer = setTimeout(redetect, DETECT_DELAY_MS);
+  }
 });
 
 syntaxSelect.addEventListener("change", () => {
-  updateHighlight();
+  if (syntaxSelect.value === AUTO) {
+    redetect();
+  } else {
+    updateHighlight();
+  }
   resizePasteArea();
 });
 
@@ -427,7 +455,10 @@ urlModalEl.addEventListener("hidden.bs.modal", () => {
 function resetForm() {
   pasteArea.value = "";
   titleInput.value = "";
-  syntaxSelect.value = "plaintext";
+  syntaxSelect.value = AUTO;
+  clearTimeout(detectTimer);
+  detectedLanguage = null;
+  autoOption.textContent = "Auto-detect";
   clearAttachment();
   document.getElementById(`expire-${DEFAULT_EXPIRY}`).checked = true;
   burnSwitch.checked = false;

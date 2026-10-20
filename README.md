@@ -14,7 +14,10 @@ uploaded, and the key never reaches the server, so the server only ever stores d
   "burn after reading". Views are counted by the server, and the paste is deleted on its last one.
 - **Delete links.** The creator gets a separate link to delete the paste early.
 - **File attachments** up to 25 MB, alongside up to 1 MB of text.
-- **Syntax highlighting** for 35 languages, live while you type.
+- **Syntax highlighting** for 35 languages, live while you type, with the language detected automatically.
+  The guess is made in the browser, so the server doesn't learn what kind of content a paste holds.
+- **Markdown rendering.** Markdown pastes can be viewed rendered or as source. Rendering is sanitized: no
+  raw HTML, no scripts, and remote images are shown as links so they can't track who opens the paste.
 - **Short links and QR codes** for sharing. Link previews in chat apps show a generic card, never the
   content.
 - **No accounts, no tracking**, and no third-party requests: fonts and scripts are served by the site itself.

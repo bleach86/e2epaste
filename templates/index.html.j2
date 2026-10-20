@@ -21,9 +21,11 @@
                     autocomplete="off">
                 <label for="syntax" class="visually-hidden">Syntax highlighting</label>
                 <select id="syntax" class="form-select form-select-sm w-auto">
-                    <option value="plaintext" selected>Plain text</option>
+                    {# Guessed in the browser; the server only stores "auto". #}
+                    <option value="auto" selected>Auto-detect</option>
+                    <option value="plaintext">Plain text</option>
                     <optgroup label="Syntax highlighting">
-                        {% for language in languages if language[0] != "plaintext" %}
+                        {% for language in languages if language[0] not in ["plaintext", "auto"] %}
                         <option value="{{ language[0] }}">{{ language[1] }}</option>
                         {% endfor %}
                     </optgroup>

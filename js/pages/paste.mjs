@@ -12,6 +12,7 @@ import {
   decryptText,
   getPasteSecrets,
 } from "../crypto.mjs";
+import { AUTO, effectiveLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
 
 // Details only; the encrypted content comes from /api/open.
@@ -50,6 +51,9 @@ let opened = null;
 let pasteText = "";
 let pasteTitle = "";
 let fileName = null;
+// The language the paste is highlighted in (chosen, or guessed for "Auto-
+// detect"), or null for plain text.
+let pasteLanguage = null;
 let passwordModal;
 
 // --- Decrypting -----------------------------------------------------------
@@ -65,10 +69,63 @@ function showText(text) {
   }
   gutter.textContent = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
 
-  if (paste.syntax && paste.syntax !== "plaintext" && hljs.getLanguage(paste.syntax)) {
-    hljs.highlightElement(viewArea);
+  pasteLanguage = effectiveLanguage(paste.syntax, text);
+  if (pasteLanguage) {
+    // highlight.js escapes the text; its output is safe as HTML.
+    viewArea.innerHTML = hljs.highlight(text, { language: pasteLanguage, ignoreIllegals: true }).value;
+    viewArea.className = `hljs language-${pasteLanguage}`;
+  }
+  if (paste.syntax === AUTO) {
+    document.getElementById("language-name").textContent = pasteLanguage
+      ? `${languageName(pasteLanguage)} (detected)`
+      : "Plain text";
+  }
+
+  if (pasteLanguage === "markdown") {
+    markdownToggle.hidden = false;
+    // Rendered by default when the creator chose Markdown; a guess might be
+    // wrong, so then it starts as source.
+    if (paste.syntax === "markdown") {
+      showMarkdown("rendered");
+    }
   }
 }
+
+// --- Markdown ---------------------------------------------------------------
+
+const markdownToggle = document.getElementById("markdown-toggle");
+const markdownView = document.getElementById("markdown-view");
+let markdownRendered = false;
+
+async function showMarkdown(view) {
+  const rendered = view === "rendered";
+  if (rendered && !markdownRendered) {
+    // Loaded only for Markdown pastes.
+    const { renderMarkdown } = await import(/* webpackChunkName: "markdown" */ "../markdown.mjs");
+    markdownView.replaceChildren(renderMarkdown(pasteText));
+    for (const code of markdownView.querySelectorAll("pre code[class^='language-']")) {
+      const language = code.className.slice("language-".length);
+      if (hljs.getLanguage(language)) {
+        code.innerHTML = hljs.highlight(code.textContent, { language, ignoreIllegals: true }).value;
+        code.classList.add("hljs");
+      }
+    }
+    markdownRendered = true;
+  }
+  markdownView.hidden = !rendered;
+  codeView.hidden = rendered;
+  wrapButton.hidden = rendered;
+  for (const button of markdownToggle.querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.view === view));
+  }
+}
+
+markdownToggle.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-view]");
+  if (button) {
+    showMarkdown(button.dataset.view);
+  }
+});
 
 // Why /api/open refused: "wrong-key" (link or password), "not-found",
 // "rate-limited" (with `retryAfter` seconds) or "failed".
@@ -244,7 +301,7 @@ function saveBlob(blob, name) {
 
 downloadButton.addEventListener("click", () => {
   const base = (pasteTitle || "paste").replace(/[\\/:*?"<>|\x00-\x1f]+/g, "-").trim() || "paste";
-  const ext = EXTENSIONS[paste.syntax] ?? "txt";
+  const ext = EXTENSIONS[pasteLanguage] ?? "txt";
   saveBlob(new Blob([pasteText], { type: "text/plain;charset=utf-8" }), `${base}.${ext}`);
 });
 

@@ -474,6 +474,7 @@ fn get_formatted_lang(lang: &str) -> String {
 
 fn get_languages() -> Vec<(&'static str, &'static str)> {
     vec![
+        ("auto", "Auto-detect"),
         ("bash", "Bash"),
         ("c", "C"),
         ("cpp", "C++"),
