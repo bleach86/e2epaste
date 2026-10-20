@@ -113,8 +113,8 @@
                 <button type="button" class="btn-close" onclick="copyToClipboard();" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Your paste has been created. Here is the URL:</p>
                 <div class="d-flex justify-content-center pb-3" id="qrcode-container"></div>
+                <p>Your paste has been created. Here is the URL:</p>
                 <input class="w-100 rounded-2" style="font-size: 10pt;" id="paste-url" disabled>
             </div>
             <div class="modal-footer">
@@ -128,6 +128,7 @@
     </div>
 </div>
 
+<script type="text/javascript" src="/public/js/webrtc_handler.js?v=1.105"></script>
 <script type="text/javascript" src="/public/js/qrcode.js"></script>
 <script>
     let paste_el = document.getElementById("paste-area");

@@ -85,6 +85,48 @@ function get_password_strength(pass) {
   pass_strength_el.innerText = strength;
 }
 
+function get_pass_strength(pass) {
+  let score = 0;
+
+  if (pass.length >= 8) score++;
+  if (pass.length >= 12) score++;
+  if (/[A-Z]/.test(pass)) score++;
+  if (/[a-z]/.test(pass)) score++;
+  if (/[0-9]/.test(pass)) score++;
+  if (/[^A-Za-z0-9]/.test(pass)) score++;
+
+  if (score <= 2) return "Weak";
+  else if (score <= 4) return "Medium";
+  else if (score === 5) return "Strong";
+  else return "Very Strong";
+}
+
+function randomInt(length) {
+  const array = new Uint32Array(1);
+  window.crypto.getRandomValues(array);
+  return array[0] % length;
+}
+
+function generatePassword(length, useSpecialChars) {
+  const lowerChars = "abcdefghijklmnopqrstuvwxyz";
+  const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const numberChars = "0123456789";
+  const specialChars = "!@#$%^&*()_+[]{}|;:,.<>?";
+
+  let allChars = lowerChars + upperChars + numberChars;
+  if (useSpecialChars) {
+    allChars += specialChars;
+  }
+
+  let password = "";
+  for (let i = 0; i < length; i++) {
+    const randomIndex = randomInt(allChars.length);
+    password += allChars[randomIndex];
+  }
+
+  return password;
+}
+
 window.get_password_strength = get_password_strength;
 
 page_load();

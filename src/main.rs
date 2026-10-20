@@ -4,9 +4,11 @@ extern crate rocket;
 mod paste_db;
 mod paste_id;
 
-use crate::rocket::data::ToByteUnit;
+use rocket::data::ToByteUnit;
 use rocket::fairing::Fairing;
 use rocket::fs::{relative, FileServer, NamedFile};
+use rocket::futures::SinkExt;
+use rocket::futures::StreamExt;
 use rocket::http::uri::Absolute;
 use rocket::http::ContentType;
 use rocket::http::Header;
@@ -19,8 +21,12 @@ use rocket::State;
 use rocket::{post, Data};
 use rocket_dyn_templates::{context, Template};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 use chrono::prelude::*;
 
@@ -99,6 +105,194 @@ impl Fairing for WasmFairing {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignalMessage {
+    pub msg_type: String, // "offer", "answer", "candidate"
+    pub from: String,
+    pub to: Option<String>,
+    pub data: String,
+}
+
+#[derive(Debug)]
+pub struct Room {
+    pub sender: broadcast::Sender<SignalMessage>,
+    pub subscribers: usize,
+    pub clients: Vec<String>,
+    pub tasks: Vec<JoinHandle<()>>,
+}
+
+#[derive(Debug)]
+pub struct RoomManager {
+    rooms: Mutex<HashMap<String, Room>>,
+}
+
+impl RoomManager {
+    pub fn new() -> Self {
+        Self {
+            rooms: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub async fn join(
+        &self,
+        room_id: &str,
+        client_id: String,
+    ) -> broadcast::Receiver<SignalMessage> {
+        let mut rooms = self.rooms.lock().await;
+        let room = rooms.entry(room_id.to_string()).or_insert_with(|| {
+            let (tx, _) = broadcast::channel(32);
+            println!("Room {} created", room_id);
+            Room {
+                sender: tx,
+                subscribers: 0,
+                clients: vec![client_id.clone()],
+                tasks: vec![],
+            }
+        });
+
+        // Notify existing peers about the new client
+        let new_peer_msg = SignalMessage {
+            msg_type: "new_peer".to_string(),
+            from: client_id.clone(),
+            to: None,
+            data: "".to_string(),
+        };
+        let _ = room.sender.send(new_peer_msg);
+
+        if !room.clients.contains(&client_id) {
+            room.clients.push(client_id.clone());
+        }
+        room.subscribers += 1;
+
+        room.sender.subscribe()
+    }
+
+    /// Leave a room and clean up if empty
+    pub async fn leave(&self, room_id: &str, client_id: &str) {
+        let mut rooms = self.rooms.lock().await;
+        if let Some(room) = rooms.get_mut(room_id) {
+            if room.subscribers > 0 {
+                room.subscribers -= 1;
+
+                let client_index = room.clients.iter().position(|c| c == client_id);
+
+                match client_index {
+                    Some(index) => {
+                        room.clients.remove(index);
+                    }
+                    None => {}
+                }
+            }
+
+            let peer_left_msg = SignalMessage {
+                msg_type: "peer_left".to_string(),
+                from: client_id.to_string(),
+                to: None,
+                data: "".to_string(),
+            };
+
+            let _ = room.sender.send(peer_left_msg);
+
+            if room.subscribers == 0 {
+                for task in room.tasks.drain(..) {
+                    task.abort();
+                }
+                rooms.remove(room_id);
+                println!("Room {} cleaned up", room_id);
+            }
+        }
+    }
+
+    /// Broadcast a signaling message to the room
+    pub async fn broadcast(&self, room_id: &str, msg: SignalMessage) {
+        let rooms = self.rooms.lock().await;
+        if let Some(room) = rooms.get(room_id) {
+            let _ = room.sender.send(msg);
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct WsClientRequest {
+    pub msg_type: String,
+    pub data: String,
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WSResponse {
+    pub msg_type: String,
+    pub data: String,
+    pub from: String,
+}
+
+#[get("/ws/webrtc/<room_id>/<client_id>")]
+async fn webrtc_websocket<'r>(
+    room_id: &'r str,
+    ws: ws::WebSocket,
+    manager: &'r State<Arc<RoomManager>>,
+    client_id: &'r str,
+) -> ws::Channel<'r> {
+    // Subscribe to the room broadcast
+    let mut rx = manager.join(room_id, client_id.to_string()).await;
+
+    ws.channel(move |mut stream| {
+        Box::pin(async move {
+            loop {
+                tokio::select! {
+                    // Receive messages from other peers
+                    Ok(msg) = rx.recv() => {
+                        // Optionally filter out messages from self
+                        if msg.from != client_id {
+                            let _ = stream.send(ws::Message::Text(serde_json::to_string(&msg).unwrap())).await;
+                        }
+                    }
+
+                    // Receive messages from this client
+                    msg = stream.next() => {
+                        match msg {
+                            Some(Ok(msg)) => {
+                                let client_req: WsClientRequest = match serde_json::from_str(&msg.to_string()) {
+                                    Ok(value) => value,
+                                    Err(_) => {
+                                        continue;
+                                    }
+                                };
+
+                                // Wrap into a broadcast message
+                                let broadcast_msg = SignalMessage {
+                                    msg_type: client_req.msg_type,
+                                    data: client_req.data,
+                                    from: client_id.to_string(),
+                                    to: client_req.to,
+                                };
+
+                                // Broadcast to the room
+                                manager.broadcast(room_id, broadcast_msg).await;
+                            }
+                            _ => {
+                                break; // Client disconnected
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Clean up when client leaves
+            manager.leave(room_id, client_id).await;
+            Ok(())
+        })
+    })
+}
+
+#[get("/chat/<room_id>")]
+async fn chat_room(room_id: String) -> Template {
+    Template::render(
+        "chat_room",
+        context! {title: TITLE, room_id, host: HOST, year: Utc::now().year()},
+    )
 }
 
 #[post("/api/submit_paste", format = "application/json", data = "<raw_paste>")]
@@ -410,10 +604,12 @@ fn get_languages() -> Vec<(&'static str, &'static str)> {
 async fn rocket() -> _ {
     let db: Arc<PasteDB> = Arc::new(PasteDB::new());
     let db_clone = db.clone();
+    let manager = Arc::new(RoomManager::new());
 
     // Build the Rocket instance
     let rocket = rocket::build()
         .manage(db)
+        .manage(manager)
         .mount("/public", FileServer::from(relative!("static")))
         .mount(
             "/",
@@ -427,7 +623,8 @@ async fn rocket() -> _ {
                 password_gen,
                 string_tools,
                 download_attachment,
-                upload_attachment
+                upload_attachment,
+                webrtc_websocket
             ],
         )
         .attach(Template::fairing())

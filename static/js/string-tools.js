@@ -121,13 +121,14 @@ async function page_load() {
 
   hex_decode_btn.addEventListener("click", (e) => {
     let input = hex_decode_input.value;
-    let decoded = hex_to_str(input);
+    let decoded = hex_decode(input);
     hex_decode_output.value = decoded;
   });
 
   hex_encode_btn.addEventListener("click", (e) => {
     let input = hex_encode_input.value;
-    let encoded = str_to_hex(input);
+    console.log("Encoding hex for input:", input);
+    let encoded = hex_encode(input);
     hex_encode_output.value = encoded;
   });
 
@@ -157,6 +158,108 @@ function set_string_info(input) {
   stringLines.innerText = stringInfo.lines;
   stringUwords.innerText = stringInfo.unique_words;
   stringUchars.innerText = stringInfo.unique_chars;
+}
+
+function get_string(input) {
+  let length = input.length;
+  let bytes = new Blob([input]).size;
+  let words = input.trim().split(/\s+/).filter(Boolean).length;
+  let lines = input.split(/\r\n|\r|\n/).length;
+  let unique_words = new Set(
+    input.trim().toLowerCase().split(/\s+/).filter(Boolean),
+  ).size;
+  let unique_chars = new Set(input).size;
+
+  return {
+    length,
+    bytes,
+    words,
+    lines,
+    unique_words,
+    unique_chars,
+  };
+}
+
+function bin_to_str(bin) {
+  let bytes = bin.split(" ");
+  let str = "";
+  for (let i = 0; i < bytes.length; i++) {
+    str += String.fromCharCode(parseInt(bytes[i], 2));
+  }
+  return str;
+}
+
+function str_to_bin(str) {
+  let bin = "";
+  for (let i = 0; i < str.length; i++) {
+    bin += str.charCodeAt(i).toString(2) + " ";
+  }
+  return bin.trim();
+}
+
+function rev_str(str) {
+  return str.split("").reverse().join("");
+}
+
+function randBoolean() {
+  const array = new Uint32Array(1);
+  window.crypto.getRandomValues(array);
+  return array[0] % 2 === 0;
+}
+
+function rand_uppercase(str) {
+  let result = "";
+  for (let i = 0; i < str.length; i++) {
+    let char = str.charAt(i);
+    result += randBoolean() ? char.toUpperCase() : char.toLowerCase();
+  }
+  return result;
+}
+
+function substr_in_str(str, sub_str, case_sensitive) {
+  let count = 0;
+  let modified_str = "";
+  let search_str = case_sensitive ? str : str.toLowerCase();
+  let search_sub_str = case_sensitive ? sub_str : sub_str.toLowerCase();
+
+  let index = search_str.indexOf(search_sub_str);
+  let lastIndex = 0;
+
+  while (index !== -1) {
+    count++;
+    modified_str += str.substring(lastIndex, index);
+    modified_str += `<span contenteditable="true" class="highlight">${str.substring(index, index + sub_str.length)}</span>`;
+    lastIndex = index + sub_str.length;
+    index = search_str.indexOf(search_sub_str, lastIndex);
+  }
+
+  modified_str += str.substring(lastIndex);
+
+  return { count, modified_str };
+}
+
+function base64_encode(str) {
+  return btoa(str);
+}
+
+function base64_decode(b64) {
+  return atob(b64);
+}
+
+function hex_encode(str) {
+  let hex = "";
+  for (let i = 0; i < str.length; i++) {
+    hex += str.charCodeAt(i).toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+function hex_decode(hex) {
+  let str = "";
+  for (let i = 0; i < hex.length; i += 2) {
+    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+  }
+  return str;
 }
 
 window.set_string_info = set_string_info;
