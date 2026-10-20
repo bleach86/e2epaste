@@ -17,6 +17,9 @@ import { readPageData, showCopiedPopover } from "../ui.mjs";
 const MAX_PASTE_BYTES = 1048576;
 const MAX_FILE_BYTES = 26214400;
 const MAX_VIEWS = 999999999999;
+// Above this many characters, re-highlight once typing pauses instead of on
+// every keystroke.
+const LIVE_HIGHLIGHT_MAX = 20000;
 
 const EXPIRE_SECONDS = {
   "10min": 600,
@@ -33,6 +36,8 @@ const EXPIRE_SECONDS = {
 const { host } = readPageData();
 
 const pasteArea = document.getElementById("paste-area");
+const pasteEditor = document.getElementById("paste-editor");
+const pasteHighlight = document.getElementById("paste-highlight");
 const maxViewsInput = document.getElementById("max-views");
 const titleInput = document.getElementById("paste-title");
 const passwordInput = document.getElementById("paste-password");
@@ -48,6 +53,7 @@ let urlModal;
 let copied = false;
 let fileData;
 let fileName;
+let highlightTimer;
 
 pasteArea.value = "";
 maxViewsInput.value = "0";
@@ -62,7 +68,42 @@ function resizePasteArea() {
   pasteArea.style.height = pasteArea.scrollHeight + "px";
 }
 
-pasteArea.addEventListener("input", resizePasteArea);
+// The selected highlight.js language, or null for plain text.
+function selectedLanguage() {
+  const language = displayDropdown.getAttribute("data-value");
+  return language !== "plaintext" && hljs.getLanguage(language) ? language : null;
+}
+
+function renderHighlight() {
+  const language = selectedLanguage();
+  if (language) {
+    pasteHighlight.innerHTML = hljs.highlight(pasteArea.value, {
+      language,
+      ignoreIllegals: true,
+    }).value;
+  }
+}
+
+function updateHighlight() {
+  clearTimeout(highlightTimer);
+  const language = selectedLanguage();
+  pasteEditor.classList.toggle("highlighting", language !== null);
+
+  if (!language) {
+    pasteHighlight.textContent = "";
+  } else if (pasteArea.value.length <= LIVE_HIGHLIGHT_MAX) {
+    renderHighlight();
+  } else {
+    // Keep the text lined up right away and colour it once typing pauses.
+    pasteHighlight.textContent = pasteArea.value;
+    highlightTimer = setTimeout(renderHighlight, 300);
+  }
+}
+
+pasteArea.addEventListener("input", () => {
+  resizePasteArea();
+  updateHighlight();
+});
 
 fileInput.addEventListener("change", (event) => {
   const file = event.target.files[0];
@@ -81,18 +122,23 @@ fileInput.addEventListener("change", (event) => {
   reader.readAsArrayBuffer(file);
 });
 
-function bindDropdown(itemSelector, button) {
+function bindDropdown(itemSelector, button, onChange) {
   document.querySelectorAll(itemSelector).forEach((item) => {
     item.addEventListener("click", (event) => {
       event.preventDefault();
       button.innerText = item.innerText;
       button.setAttribute("data-value", item.getAttribute("data-value"));
+      onChange?.();
     });
   });
 }
 
 bindDropdown(".dropdown-item.expire-dropdown", expireDropdown);
-bindDropdown(".dropdown-item.display-dropdown", displayDropdown);
+// Switching to/from highlighting changes the font, so re-measure the height.
+bindDropdown(".dropdown-item.display-dropdown", displayDropdown, () => {
+  updateHighlight();
+  resizePasteArea();
+});
 
 function parseMaxViews(value) {
   if (value === "" || value === "0" || value < 0) {
@@ -218,6 +264,7 @@ function resetForm() {
 
   displayDropdown.setAttribute("data-value", "plaintext");
   displayDropdown.innerText = "Plaintext";
+  updateHighlight();
 
   pasteArea.focus();
 }

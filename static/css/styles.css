@@ -38,6 +38,56 @@
   border-color: #fafafa !important;
 }
 
+/* Live syntax highlighting on the create page: a highlighted copy of the
+   text sits behind the textarea, whose own text is made transparent. Both
+   must use identical font, padding and wrapping so the text lines up. */
+.paste-editor {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.paste-editor .paste-area {
+  margin-bottom: 0;
+}
+
+.paste-editor textarea {
+  position: relative;
+}
+
+.paste-editor .paste-highlight {
+  display: none;
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.paste-editor.highlighting .paste-highlight {
+  display: block;
+}
+
+.paste-editor pre code.hljs,
+.paste-editor.highlighting textarea {
+  font-family: var(--bs-font-monospace);
+  line-height: 1.5;
+  padding: 6px 12px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 8;
+}
+
+.paste-editor pre code.hljs {
+  height: 100%;
+  overflow: hidden;
+}
+
+.paste-editor.highlighting textarea {
+  background: transparent;
+  color: transparent;
+  caret-color: #abb2bf;
+}
+
 .view-area {
   white-space: break-spaces;
 }

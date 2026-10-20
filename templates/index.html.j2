@@ -7,8 +7,12 @@
         <div class="col-md-12 rounded-2">
             <h2 class="text-center mt-3">{{ title }}</h2>
             <section id="hello" class="h-100">
-                <textarea placeholder="Paste here..." id="paste-area"
-                    class="form-control mt-4 paste-area focus-ring focus-ring-dark"></textarea>
+                <div id="paste-editor" class="paste-editor mt-4">
+                    <pre class="paste-highlight" aria-hidden="true"><code id="paste-highlight"
+                            class="form-control paste-area hljs"></code></pre>
+                    <textarea placeholder="Paste here..." id="paste-area"
+                        class="form-control paste-area focus-ring focus-ring-dark"></textarea>
+                </div>
             </section>
         </div>
     </div>
@@ -132,5 +136,6 @@
 {% block scripts %}
 <script type="application/json" id="page-data">{{ {"host": host} | tojson }}</script>
 <script src="/public/js/qrcode.js"></script>
+<script src="/public/js/highlight.min.js"></script>
 <script src="/public/js/dist/create.js?v={{ asset_version }}"></script>
 {% endblock %}
