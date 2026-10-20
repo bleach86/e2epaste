@@ -6,11 +6,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rocket = { version = "0.5.1", features = ["json"] }
+# No "http2" (a default feature): Rocket only uses HTTP/2 with its own TLS, and
+# the reverse proxy handles TLS here. Leaving it out drops h2 0.3, which has
+# an unfixed advisory (RUSTSEC-2026-0258) on Rocket 0.5's hyper 0.14.
+rocket = { version = "0.5.1", default-features = false, features = ["json"] }
 rocket_dyn_templates = { version = "0.2.0", features = ["minijinja"] }
 sled = { version = "0.34.7", features = ["compression"] }
-rand = "0.8.5"
-serde = { version = "1.0.166", features = ["derive"] }
-serde_json = "1.0.100"
-chrono = "0.4.38"
+rand = "0.10"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+chrono = "0.4.45"
 fs4 = "1.1.0"
