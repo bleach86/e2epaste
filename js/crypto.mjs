@@ -3,18 +3,24 @@
 // Paste format versions:
 //   1 - legacy: IV = SHA-256(password || salt)[0..12], password only checked
 //       against a hash. Only decrypted, never created.
-//   2 - IV is random. With a password, the AES key is derived from both the
-//       random paste key and the password, so the password is required to
-//       decrypt.
+//   2 - legacy: IV is random. The server stores the AES key with 6-10
+//       characters swapped out and the link holds the real ones, but the
+//       key's structure gives most of them away. Only decrypted.
+//   3 - the link holds a 128-bit random secret and the server stores no key
+//       material. The AES key is derived from the secret (and the password,
+//       if any) with HKDF.
 
 import { deflate, inflate } from "pako";
 
-export const PASTE_VERSION = 2;
+export const PASTE_VERSION = 3;
 
 const PBKDF2_ITERATIONS = 600000;
-const HKDF_INFO = "e2epaste-v2-password";
+const HKDF_INFO_V2_PASSWORD = "e2epaste-v2-password";
+const HKDF_INFO_V3 = "e2epaste-v3";
+const HKDF_INFO_V3_PASSWORD = "e2epaste-v3-password";
+const LINK_SECRET_BYTES = 16;
 
-// Characters used to encode key-fragment positions in the URL hash.
+// Characters used to encode v2 key-fragment positions in the URL hash.
 const BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const EXPORTED_KEY_LENGTH = 58;
 
@@ -47,21 +53,61 @@ export function base64ToArrayBuffer(base64) {
 
 // --- Keys -------------------------------------------------------------------
 
-export function generateKey() {
-  return crypto.subtle.generateKey(
+// A new paste's link secret: 128 random bits as 22 base64url characters.
+export function generateLinkSecret() {
+  const bytes = crypto.getRandomValues(new Uint8Array(LINK_SECRET_BYTES));
+  return arrayBufferToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeLinkSecret(secret) {
+  const base64 = secret.replace(/-/g, "+").replace(/_/g, "/");
+  const bytes = new Uint8Array(base64ToArrayBuffer(base64));
+  if (bytes.length !== LINK_SECRET_BYTES) {
+    throw new Error("Invalid link secret");
+  }
+  return bytes;
+}
+
+async function passwordBits(password, salt) {
+  const passwordKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: PBKDF2_ITERATIONS },
+    passwordKey,
+    256,
+  );
+  return new Uint8Array(bits);
+}
+
+async function hkdfAesKey(ikm, salt, info) {
+  const hkdfKey = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt, info: new TextEncoder().encode(info) },
+    hkdfKey,
     { name: "AES-GCM", length: 256 },
-    true, // extractable
+    false,
     ["encrypt", "decrypt"],
   );
 }
 
-export async function exportCryptoKey(key) {
-  const jwk = await crypto.subtle.exportKey("jwk", key);
-  const base64 = btoa(jwk.k);
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+// v3: the AES key for a paste, from its link secret, its stored IV (used as
+// the salt, so every paste's derivation differs) and the password, if any.
+export async function deriveV3Key(linkSecret, salt, password = null) {
+  const secret = decodeLinkSecret(linkSecret);
+  if (password === null) {
+    return hkdfAesKey(secret, salt, HKDF_INFO_V3);
+  }
+  return hkdfAesKey(concatBytes(secret, await passwordBits(password, salt)), salt, HKDF_INFO_V3_PASSWORD);
 }
 
-export function importCryptoKey(urlSafeBase64Key) {
+
+// v2: imports the key rebuilt by reconstructKey.
+function importCryptoKey(urlSafeBase64Key) {
   const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
   const jwk = {
     kty: "oct",
@@ -79,61 +125,9 @@ export function importCryptoKey(urlSafeBase64Key) {
   );
 }
 
-function getRandomInt(min, max) {
-  min = Math.ceil(min);
-  max = Math.floor(max);
 
-  const range = max - min + 1;
-  const bytesNeeded = Math.ceil(Math.log2(range) / 8);
-  const maxByteValue = Math.pow(2, bytesNeeded * 8) - 1;
-
-  if (range > maxByteValue) {
-    throw new Error("Range too large for random number generation");
-  }
-
-  const array = new Uint8Array(bytesNeeded);
-  let randomValue;
-
-  // Rejection sampling to avoid modulo bias.
-  do {
-    crypto.getRandomValues(array);
-    randomValue = array.reduce((acc, byte) => (acc << 8) | byte, 0);
-  } while (randomValue > maxByteValue - (maxByteValue % range));
-
-  return min + (randomValue % range);
-}
-
-// Splits an exported key into a copy for the server with 6-10 characters
-// replaced by random ones, and a URL hash fragment holding the real ones.
-export function fragmentKey(key) {
-  const numPositions = getRandomInt(6, 10);
-  const positions = new Set();
-
-  while (positions.size < numPositions) {
-    positions.add(getRandomInt(0, key.length - 1));
-  }
-
-  const keyArray = key.split("");
-  const removedBytes = [];
-
-  positions.forEach((pos) => {
-    removedBytes.push({ position: BASE64_CHARS.charAt(pos), byte: keyArray[pos] });
-
-    let randomByte;
-    do {
-      randomByte = BASE64_CHARS[getRandomInt(0, BASE64_CHARS.length - 1)];
-    } while (randomByte === keyArray[pos]);
-
-    keyArray[pos] = randomByte;
-  });
-
-  return {
-    serverKey: keyArray.join(""),
-    hashFragment: removedBytes.map((item) => `${item.position}${item.byte}`).join(""),
-  };
-}
-
-export function reconstructKey(serverKey, hashFragment) {
+// v2: puts the real characters from the URL hash back into the server's copy.
+function reconstructKey(serverKey, hashFragment) {
   const keyArray = Array(EXPORTED_KEY_LENGTH).fill("");
 
   for (let i = 0; i < hashFragment.length; i += 2) {
@@ -158,38 +152,11 @@ export function reconstructKey(serverKey, hashFragment) {
   return keyArray.join("");
 }
 
-// Combines the random paste key with a password-derived key. `pasteKey` must
-// be extractable; `salt` is the paste's stored IV.
-export async function deriveKeyWithPassword(pasteKey, password, salt) {
-  const encoder = new TextEncoder();
-  const passwordKey = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
-  const passwordBits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations: PBKDF2_ITERATIONS },
-    passwordKey,
-    256,
-  );
-  const rawPasteKey = await crypto.subtle.exportKey("raw", pasteKey);
-
-  const hkdfKey = await crypto.subtle.importKey(
-    "raw",
-    concatBytes(new Uint8Array(rawPasteKey), new Uint8Array(passwordBits)),
-    "HKDF",
-    false,
-    ["deriveKey"],
-  );
-  return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt, info: encoder.encode(HKDF_INFO) },
-    hkdfKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
-  );
+// v2: combines the paste key with a password-derived key. `pasteKey` must be
+// extractable; `salt` is the paste's stored IV.
+async function deriveKeyWithPassword(pasteKey, password, salt) {
+  const rawPasteKey = new Uint8Array(await crypto.subtle.exportKey("raw", pasteKey));
+  return hkdfAesKey(concatBytes(rawPasteKey, await passwordBits(password, salt)), salt, HKDF_INFO_V2_PASSWORD);
 }
 
 // --- IVs --------------------------------------------------------------------
@@ -249,10 +216,18 @@ export async function decryptText(encrypted, key, iv) {
 // --- Viewing a stored paste -------------------------------------------------
 
 // Returns the key and base IV for a paste as stored by the server.
-// `paste` has `key_fragment`, `iv` and `version`.
-export async function getPasteSecrets(paste, keyFragment, hasPassword, password) {
+// `paste` has `key_fragment`, `iv` and `version`; `linkHash` is the part of
+// the link after "#".
+export async function getPasteSecrets(paste, linkHash, hasPassword, password) {
   const salt = new Uint8Array(paste.iv);
-  const pasteKey = await importCryptoKey(reconstructKey(paste.key_fragment, keyFragment));
+
+  if (paste.version >= 3) {
+    const key = await deriveV3Key(linkHash, salt, hasPassword ? password : null);
+    return { key, iv: salt, version: paste.version };
+  }
+
+  // v1/v2: the link holds the characters swapped out of the server's copy.
+  const pasteKey = await importCryptoKey(reconstructKey(paste.key_fragment, linkHash));
 
   if (paste.version >= 2) {
     const key = hasPassword ? await deriveKeyWithPassword(pasteKey, password, salt) : pasteKey;

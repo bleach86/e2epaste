@@ -5,12 +5,10 @@ import {
   PASTE_VERSION,
   arrayBufferToBase64,
   deriveIv,
-  deriveKeyWithPassword,
+  deriveV3Key,
   encryptBytes,
   encryptText,
-  exportCryptoKey,
-  fragmentKey,
-  generateKey,
+  generateLinkSecret,
 } from "../crypto.mjs";
 import { readPageData, showCopiedPopover } from "../ui.mjs";
 
@@ -175,11 +173,10 @@ submitButton.addEventListener("click", async () => {
   const password = passwordInput.value.trim();
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
-  const pasteKey = await generateKey();
-  // With a password, the content key also depends on the password, so the
-  // link alone isn't enough to decrypt.
-  const key = password === "" ? pasteKey : await deriveKeyWithPassword(pasteKey, password, iv);
-  const keyFragments = fragmentKey(await exportCryptoKey(pasteKey));
+  // The secret only ever goes in the link's #fragment, which browsers never
+  // send to the server. With a password, the key also depends on it.
+  const linkSecret = generateLinkSecret();
+  const key = await deriveV3Key(linkSecret, iv, password === "" ? null : password);
 
   const encrypted = await encryptText(text, key, iv);
   let encryptedFile = null;
@@ -199,7 +196,7 @@ submitButton.addEventListener("click", async () => {
     iv: Array.from(iv),
     expires: Date.now() + expireSeconds * 1000,
     max_views: parseMaxViews(maxViewsInput.value),
-    key_fragment: keyFragments.serverKey,
+    key_fragment: "", // v3 stores no key material on the server
     has_password: password !== "",
     version: PASTE_VERSION,
     title: title.substring(0, 64),
@@ -221,9 +218,9 @@ submitButton.addEventListener("click", async () => {
 
     loadingButton.style.display = "none";
     submitButton.style.display = "block";
-    // Hand out /share/ links: link-preview bots can fetch that page (robots.txt
-    // blocks /paste/) and it forwards browsers to the paste.
-    openModal(`${host}/share/${data.id}#${keyFragments.hashFragment}`);
+    // Hand out /s/ (short for /share/) links: link-preview bots can fetch
+    // that page (robots.txt blocks /paste/) and it forwards browsers on.
+    openModal(`${host}/s/${data.id}#${linkSecret}`);
   } else {
     alert("Failed to create paste");
   }

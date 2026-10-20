@@ -1,64 +1,150 @@
 {% extends "layout" %}
 
-{% block page %}
-    <div class="spacer-50"></div>
-    <div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
-        <div class="row">
-            <div class="col-md-12 rounded-2 pb-5">
-                <h2 class="text-center mt-3">FAQ</h2>
-                <section id="faq" class="h-100">
-                    <div class="accordion" id="accordionExample">
-                        <div class="accordion-item">
-                            <h2 class="accordion-header" id="headingOne">
-                                <button class="accordion-button bg-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
-                                    What is e2ePaste.XYZ?
-                                </button>
-                            </h2>
-                            <div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne" data-bs-parent="#accordionExample">
-                                <div class="accordion-body">
-                                    e2ePaste.XYZ is a fully end-to-end encrypted pastebin. It allows you to store and share text securely.
-                                </div>
-                            </div>
-                        </div>
-                        <div class="accordion-item">
-                            <h2 class="accordion-header" id="headingTwo">
-                                <button class="accordion-button collapsed bg-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
-                                    How does e2ePaste.XYZ work?
-                                </button>
-                            </h2>
-                            <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#accordionExample">
-                                <div class="accordion-body">
-                                    e2ePaste.XYZ uses the Web Crypto API to encrypt your pastes in the browser before sending them to the server. The server never sees your plaintext data.
-                                </div>
-                            </div>
-                        </div>
-                        <div class="accordion-item">
-                            <h2 class="accordion-header" id="headingThree">
-                                <button class="accordion-button collapsed bg-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
-                                    How secure is e2ePaste.XYZ?
-                                </button>
-                            </h2>
-                            <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#accordionExample">
-                                <div class="accordion-body">
-                                    e2ePaste.XYZ is as secure as your browser's implementation of the Web Crypto API. The server never sees your plaintext data.
-                                </div>
-                            </div>
-                        </div>
-                         <div class="accordion-item">
-                            <h2 class="accordion-header" id="headingFour">
-                                <button class="accordion-button collapsed bg-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
-                                    How large can a paste be?
-                                </button>
-                            </h2>
-                            <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-bs-parent="#accordionExample">
-                                <div class="accordion-body">
-                                    e2ePaste.XYZ has a limit of 1MB per paste.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
+{# One collapsible question. The answer is the body of the {% call %} block. #}
+{% macro faq(id, question, open=false) %}
+<div class="accordion-item">
+    <h3 class="accordion-header">
+        <button class="accordion-button bg-dark{% if not open %} collapsed{% endif %}" type="button"
+            data-bs-toggle="collapse" data-bs-target="#faq-{{ id }}" aria-expanded="{{ 'true' if open else 'false' }}"
+            aria-controls="faq-{{ id }}">
+            {{ question }}
+        </button>
+    </h3>
+    <div id="faq-{{ id }}" class="accordion-collapse collapse{% if open %} show{% endif %}">
+        <div class="accordion-body">
+            {{ caller() }}
         </div>
     </div>
+</div>
+{% endmacro %}
+
+{% block page %}
+<div class="spacer-50"></div>
+<div class="container bg-dark-subtle w-100 body-height rounded-2 mb-5 pb-5">
+    <h1 class="text-center pt-4">Frequently Asked Questions</h1>
+    <p class="text-center text-secondary">How e2ePaste.XYZ works, what it protects, and what it doesn't.</p>
+
+    <section class="mt-4" aria-labelledby="faq-basics">
+        <h2 class="h4 mb-3" id="faq-basics">The basics</h2>
+        <div class="accordion">
+            {% call faq("what", "What is e2ePaste.XYZ?", open=true) %}
+            <p>A pastebin for sharing text and files privately. Your paste is encrypted in your browser before it's
+                uploaded, so the server only ever stores data it can't read. You get a link to share; whoever opens
+                it can read the paste. There's no account to create.</p>
+            <p class="mb-0">You can add a password, an expiry time, a view limit (for example, "burn after one
+                read"), a file attachment and syntax highlighting for code.</p>
+            {% endcall %}
+
+            {% call faq("who", "Who can read my paste?") %}
+            <p class="mb-0">Anyone who has the full link, plus the password if you set one. Treat the link like the
+                secret itself: share it only with the people you mean to, and use a view limit or a short expiry for
+                anything sensitive.</p>
+            {% endcall %}
+
+            {% call faq("cost", "Is it free? Is it open source?") %}
+            <p class="mb-0">Yes to both. The code is <a href="https://github.com/bleach86/e2epaste" target="_blank"
+                    rel="noopener noreferrer">on GitHub</a> under the MIT licence, so anyone can check how the
+                encryption works.</p>
+            {% endcall %}
+        </div>
+    </section>
+
+    <section class="mt-5" aria-labelledby="faq-security">
+        <h2 class="h4 mb-3" id="faq-security">Security and privacy</h2>
+        <div class="accordion">
+            {% call faq("how", "How does the encryption work?") %}
+            <p>When you create a paste, your browser:</p>
+            <ol>
+                <li>generates a random 128-bit secret,</li>
+                <li>derives an AES-256 key from it (with HKDF-SHA256),</li>
+                <li>compresses and encrypts the text, the file and the file's name with AES-256-GCM, using your
+                    browser's built-in Web Crypto API, and</li>
+                <li>uploads only the encrypted result.</li>
+            </ol>
+            <p class="mb-0">The secret goes into the link after the <code>#</code>, like
+                <code>https://e2epaste.xyz/s/Ab3dE5gH#<em>secret</em></code>. Browsers never send the part after
+                <code>#</code> to the server, so the server never has the key. When someone opens the link, their
+                browser reads the secret and decrypts the paste locally.</p>
+            {% endcall %}
+
+            {% call faq("server", "What can the server see?") %}
+            <p>The server stores the encrypted paste, which it can't read, plus some information it needs to work:</p>
+            <ul>
+                <li>the <strong>title</strong>, which is <strong>not encrypted</strong>, so don't put anything
+                    private in it,</li>
+                <li>the syntax highlighting choice,</li>
+                <li>the size of the paste and attachment,</li>
+                <li>when it was created and when it expires,</li>
+                <li>how many times it has been viewed, and the view limit,</li>
+                <li>whether it has a password.</li>
+            </ul>
+            <p class="mb-0">Like any website, the server can also see the IP addresses that create and open pastes.</p>
+            {% endcall %}
+
+            {% call faq("password", "What does adding a password do?") %}
+            <p>Without a password, the link alone is enough to read the paste. With one, the encryption key depends
+                on both the link and the password, so someone who gets hold of the link still can't read it. The
+                password is never sent to the server; it's stretched with PBKDF2-SHA256 (600,000 rounds) in the
+                browser, which makes guessing it slow.</p>
+            <p class="mb-0">For the best protection, send the password through a different channel from the link,
+                for example the link by email and the password by text message. Need a strong one? Use the
+                <a href="/tools/password-generator">password generator</a>.</p>
+            {% endcall %}
+
+            {% call faq("secure", "How secure is it?") %}
+            <p>The encryption itself, AES-256-GCM with a key derived from a 128-bit random secret, is the same class
+                of cryptography used to protect banking and messaging. Guessing a link's secret by brute force
+                isn't feasible. In practice, the weak points are elsewhere:</p>
+            <ul>
+                <li><strong>The link.</strong> Anyone who sees it can read the paste, so it's only as private as the
+                    channel you send it through. A password protects against this.</li>
+                <li><strong>Your devices.</strong> Malware or a malicious browser extension on your device, or the
+                    recipient's, can read the paste after it's decrypted.</li>
+                <li><strong>Trusting the website.</strong> As with every browser-based encrypted service, the
+                    encryption code is delivered by the site itself. A compromised server could send altered code.
+                    Because the code is open source, it can be checked.</li>
+            </ul>
+            {% endcall %}
+
+            {% call faq("recover", "I lost the link or the password. Can you recover my paste?") %}
+            <p class="mb-0">No. Only the link holds the key, and the password is never sent to the server, so there's
+                nothing to recover it from. This is what keeps the server from reading your pastes.</p>
+            {% endcall %}
+        </div>
+    </section>
+
+    <section class="mt-5" aria-labelledby="faq-using">
+        <h2 class="h4 mb-3" id="faq-using">Using e2ePaste.XYZ</h2>
+        <div class="accordion">
+            {% call faq("limits", "How large can a paste be?") %}
+            <p class="mb-0">Text can be up to 1 MB, and you can attach one file of up to 25 MB.</p>
+            {% endcall %}
+
+            {% call faq("expiry", "How do expiry and view limits work?") %}
+            <p>Every paste expires, after anywhere from 10 minutes to 1 year (3 days by default). Expired pastes can't
+                be opened and are deleted from the server.</p>
+            <p class="mb-0">A view limit caps how many times a paste can be opened; set it to 1 for "burn after
+                reading". A view is counted when someone opens the paste and it decrypts. After the last allowed view,
+                the paste can't be opened again and is deleted from the server within about 12 hours. Leave it at 0
+                for no limit.</p>
+            {% endcall %}
+
+            {% call faq("delete", "Can I delete a paste?") %}
+            <p class="mb-0">Not by hand at the moment. To make sure a paste disappears, give it a short expiry or a
+                view limit when you create it.</p>
+            {% endcall %}
+
+            {% call faq("preview", "Why don't link previews show what's in my paste?") %}
+            <p class="mb-0">On purpose. Chat apps and social networks only ever see a generic "Encrypted Paste" card,
+                because the server has nothing else to show them. Paste pages are also hidden from search engines.</p>
+            {% endcall %}
+
+            {% call faq("tools", "What are the tools?") %}
+            <p class="mb-0">Free <a href="/tools/password">password tools</a> and
+                <a href="/tools/strings">text tools</a>, such as a password generator, a strength checker, Base64 and
+                hex converters and a character counter. Like pastes, they run entirely in your browser.</p>
+            {% endcall %}
+        </div>
+    </section>
+</div>
 {% endblock %}

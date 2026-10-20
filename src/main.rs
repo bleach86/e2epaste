@@ -59,8 +59,8 @@ const INDEX_PAGE: PageMeta = PageMeta {
 
 const FAQ_PAGE: PageMeta = PageMeta {
     title: "FAQ - e2ePaste.XYZ",
-    description: "What e2ePaste.XYZ is, how it encrypts your pastes in the browser with the Web Crypto \
-        API so the server never sees their contents, and how large a paste can be.",
+    description: "How e2ePaste.XYZ encrypts pastes in your browser so the server can't read them, what \
+        the server can see, how passwords, expiry and view limits work, and size limits.",
     canonical: Some("/faq"),
 };
 
@@ -274,6 +274,12 @@ async fn advance_views(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Json<Advanc
     })
 }
 
+// /s/ is the short form handed out for new pastes.
+#[get("/s/<id>")]
+async fn share_short(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
+    filter_bots(id, db).await
+}
+
 #[get("/share/<id>")]
 async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -447,8 +453,9 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
 }
 
 // Paste URLs are private, so keep crawlers off them (and off the API, where a
-// JS-running crawler could use up a paste's views). /share/ stays crawlable so
-// link previews work; that page is noindex and holds no paste data.
+// JS-running crawler could use up a paste's views). /share/ and /s/ stay
+// crawlable so link previews work; those pages are noindex and hold no paste
+// data.
 #[get("/robots.txt")]
 fn robots() -> (ContentType, String) {
     let body = format!(
@@ -539,6 +546,7 @@ async fn rocket() -> _ {
                 retrieve,
                 faq,
                 filter_bots,
+                share_short,
                 advance_views,
                 password_tools,
                 string_tools,
