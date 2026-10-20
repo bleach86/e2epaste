@@ -214,15 +214,37 @@ const plain = await createPaste({ text: "the quick brown fox" });
   check("admin: deleting again reports nothing deleted", (await again.json()).deleted === false);
 }
 
-// ---------------------------------------------------- pastes before proofs
+// --------------------------------------------- what the server accepts
 {
-  // A v3 paste created by an older page, with no access hash.
-  const old = await (await api("/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json", "X-Real-IP": freshIp() },
-    body: JSON.stringify({ content: "x", iv: [1, 2, 3], expires: null, max_views: null, key_fragment: "", version: 3, title: "t", syntax: "plaintext", file_name: null }) })).json();
-  const res = await openApi(old.id, null);
-  check("legacy: a paste without an access hash opens without a proof", res.status === 200 && (await res.json()).views === 1);
-  check("create: a malformed access hash is rejected", (await api("/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: "x", iv: [1], expires: null, max_views: null, key_fragment: "", version: 3, title: "t", syntax: "plaintext", file_name: null, access_hash: "nope" }) })).status === 400);
+  // A valid paste as the create page sends it; each check below spoils it.
+  const valid = () => ({ content: "Y2lwaGVydGV4dA==", iv: Array(12).fill(7), expires_in: 3600, max_views: null,
+    key_fragment: "", version: 3, title: "dGl0bGU=", syntax: "auto", file_name: null, access_hash: "ab".repeat(32) });
+  const submit = (body) => api("/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json", "X-Real-IP": freshIp() }, body: JSON.stringify(body) });
+  const pageData = async (id) => JSON.parse((await (await api(`/paste/${id}`)).text()).match(/id="page-data">(.*?)<\/script>/s)[1]).paste;
+
+  const ok = await submit(valid());
+  check("create: a valid paste is accepted", ok.status === 200, ok.status);
+  const year = 365 * 24 * 60 * 60 * 1000;
+  const forever = await (await submit({ ...valid(), expires_in: Number.MAX_SAFE_INTEGER })).json();
+  check("create: lifetime capped at a year", (await pageData(forever.id)).expires <= Date.now() + year);
+  const absolute = await (await submit({ ...valid(), expires_in: undefined, expires: Number.MAX_SAFE_INTEGER })).json();
+  check("create: older clients' absolute expiry capped too", absolute.id && (await pageData(absolute.id)).expires <= Date.now() + year);
+
+  for (const [label, body] of [
+    ["no access hash", { ...valid(), access_hash: undefined }],
+    ["a malformed access hash", { ...valid(), access_hash: "nope" }],
+    ["an old format (v2)", { ...valid(), version: 2, key_fragment: "abc" }],
+    ["key material in a v3 paste", { ...valid(), key_fragment: "abc" }],
+    ["an expiry in the past", { ...valid(), expires_in: 0 }],
+    ["an unknown language", { ...valid(), syntax: "<script>" }],
+    ["a view limit of 0", { ...valid(), max_views: 0 }],
+    ["a short IV", { ...valid(), iv: [1, 2, 3] }],
+    ["a huge title", { ...valid(), title: "a".repeat(5000) }],
+  ]) {
+    const res = await submit(body);
+    const reason = res.status === 400 ? (await res.json()).reason : "";
+    check(`create: refuses ${label}`, res.status === 400 && reason.length > 0, `${res.status} ${reason}`);
+  }
 }
 
 // --------------------------------------------------------- service worker

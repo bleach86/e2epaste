@@ -311,7 +311,9 @@ async function createPaste() {
   const paste = {
     content: arrayBufferToBase64(encrypted),
     iv: Array.from(iv),
-    expires: Date.now() + (EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"]) * 1000,
+    // A lifetime, not a time: the server works out when, so a wrong clock here
+    // doesn't matter.
+    expires_in: EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"],
     max_views: views,
     key_fragment: "", // v3 stores no key material on the server
     has_password: password !== "",

@@ -1,5 +1,8 @@
 // Pastes made by older versions: a v2 paste created with the old crypto code
-// opens end to end through /api/open, including a wrong password first.
+// opens end to end through /api/open, including a wrong password first, and
+// a v3 paste from before access proofs opens without one. The server only
+// accepts these old formats because tests/run-e2e.mjs starts it with
+// E2EPASTE_TEST_LEGACY_PASTES (debug builds only).
 import * as OLD from "../fixtures/crypto_v2.mjs";
 import { BASE, check, finish, launch, watch } from "./lib.mjs";
 
@@ -38,6 +41,15 @@ await page.click("#submit-password-btn");
 await page.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
 check("v2 password: right one decrypts", (await page.$eval("#view-area", (e) => e.textContent)) === "v2 text ✓");
 check("v2 password: one view used, not two", (await page.$eval("#views", (e) => e.textContent.trim())) === "1 of 2 views", await page.$eval("#views", (e) => e.textContent.trim()));
+// A v3 paste created before access proofs: no access hash, so it opens
+// without a proof (and the view is still counted by the server).
+{
+  const body = { content: "x", iv: Array(12).fill(1), expires_in: 3600, max_views: null, key_fragment: "", version: 3,
+    title: "t", syntax: "plaintext", file_name: null };
+  const { id } = await (await fetch(BASE + "/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
+  const res = await fetch(`${BASE}/api/open/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proof: null }) });
+  check("v3 without a proof: opens, view counted", res.status === 200 && (await res.json()).views === 1);
+}
 check("no JS errors or CSP violations", errors.length === 0, JSON.stringify(errors));
 await browser.close();
 finish();

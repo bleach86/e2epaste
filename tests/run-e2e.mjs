@@ -30,7 +30,8 @@ const SUITES = [
     env: { ...NO_PASTE_LIMITS, ROCKET_UNLOCK_ATTEMPTS_PER_HOUR: "8", ROCKET_ADMIN_TOKEN: ADMIN_TOKEN },
   },
   { file: "markdown_and_detection.mjs", env: NO_PASTE_LIMITS },
-  { file: "legacy_pastes.mjs", env: NO_PASTE_LIMITS },
+  // Lets the server create pastes in old formats (debug builds only).
+  { file: "legacy_pastes.mjs", env: { ...NO_PASTE_LIMITS, E2EPASTE_TEST_LEGACY_PASTES: "1" } },
   { file: "insecure_context.mjs", env: NO_PASTE_LIMITS },
   { file: "tools.mjs", env: NO_PASTE_LIMITS },
   { file: "nav.mjs", env: NO_PASTE_LIMITS },

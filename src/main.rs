@@ -5,6 +5,7 @@ mod access;
 mod api;
 mod assets;
 mod config;
+mod incoming;
 mod migrate;
 mod paste_db;
 mod paste_id;
@@ -24,7 +25,7 @@ use rocket::tokio;
 use rocket::State;
 use rocket::{post, Data};
 use rocket_dyn_templates::{context, Template};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,6 +33,7 @@ use chrono::prelude::*;
 
 use api::{ApiError, ClientIp};
 use config::{AppConfig, MAX_ATTACHMENT_MIB, MIB};
+use incoming::{IncomingPaste, IncomingPasteRes};
 use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
 use rate_limit::{RateLimiter, UnlockLimiter};
@@ -96,45 +98,6 @@ const NOT_FOUND_PAGE: PageMeta = PageMeta {
 // Pages listed in sitemap.xml, besides the tool pages.
 const SITEMAP_PATHS: [&str; 3] = ["/", "/faq", "/credits"];
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct IncomingPaste {
-    pub content: String,
-    pub iv: Vec<u8>,
-    pub expires: Option<u64>,
-    pub max_views: Option<u64>,
-    pub key_fragment: String,
-    // Only sent by v1 clients. v2 never sends a password hash.
-    #[serde(default)]
-    pub password_hash: Option<String>,
-    #[serde(default)]
-    pub has_password: bool,
-    #[serde(default = "paste_db::legacy_version")]
-    pub version: u32,
-    pub title: String,
-    pub syntax: String,
-    pub file_name: Option<String>,
-    /// Size of the encrypted attachment that will be uploaded. Older clients
-    /// don't send it; they're allowed the maximum.
-    #[serde(default)]
-    pub file_size: Option<u64>,
-    /// SHA-256 (hex) of the access proof the browser derived from the link
-    /// (see access.rs). Older clients don't send one.
-    #[serde(default)]
-    pub access_hash: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct IncomingPasteRes {
-    pub id: Option<String>,
-    /// Only for pastes with an attachment: the one-time token for
-    /// /api/upload-attachment.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub upload_token: Option<String>,
-    /// For the creator's delete link (/delete/<id>#<token>).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delete_token: Option<String>,
-}
-
 #[post("/api/submit_paste", format = "application/json", data = "<raw_paste>")]
 async fn upload(
     db: &State<Arc<PasteDB>>,
@@ -144,13 +107,10 @@ async fn upload(
     raw_paste: Json<IncomingPaste>,
 ) -> Result<Json<IncomingPasteRes>, ApiError> {
     let paste: IncomingPaste = raw_paste.clone().into_inner();
-    if paste
-        .access_hash
-        .as_deref()
-        .is_some_and(|hash| !secrets::is_sha256_hex(hash))
-    {
-        return Err(Status::BadRequest.into());
-    }
+    let now: DateTime<Utc> = Utc::now();
+    let expires = paste
+        .check(now.timestamp_millis() as u64)
+        .map_err(ApiError::Invalid)?;
 
     // The attachment's size is checked and charged now, so a paste is never
     // created whose attachment would then be refused.
@@ -168,23 +128,13 @@ async fn upload(
         .take(client.0, attachment_bytes)
         .map_err(ApiError::RateLimited)?;
 
-    let now: DateTime<Utc> = Utc::now();
-
-    let expires = match paste.expires {
-        Some(expires) => Some(expires),
-        None => Some(
-            now.timestamp_millis() as u64
-                + (Duration::from_secs(60 * 60 * 24 * 365).as_millis() as u64),
-        ),
-    };
-
     let mut paste_data: PasteData = PasteData {
         content: paste.content,
         iv: paste.iv,
         key_fragment: paste.key_fragment,
         id: PasteId::new(ID_LENGTH),
         timestamp: now.timestamp(),
-        expires,
+        expires: Some(expires),
         views: 0,
         max_views: paste.max_views,
         has_password: paste.has_password || paste.password_hash.is_some(),

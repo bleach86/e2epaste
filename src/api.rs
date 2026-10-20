@@ -14,14 +14,17 @@ use crate::config::{AppConfig, MIB};
 use crate::paste_db::PasteDB;
 
 /// Errors the create page tells the user about. Bodies are JSON:
-/// `{"error": "rate_limited", "retry_after": <seconds>}` or
-/// `{"error": "storage_full"}`. Other failures are a bare status.
+/// `{"error": "rate_limited", "retry_after": <seconds>}`,
+/// `{"error": "storage_full"}` or `{"error": "invalid", "reason": "..."}`.
+/// Other failures are a bare status.
 #[derive(Debug)]
 pub enum ApiError {
     /// 429, with a Retry-After header.
     RateLimited(Duration),
     /// 507: the disk is nearly full or the attachment storage cap is reached.
     StorageFull,
+    /// 400: the request isn't valid, and why.
+    Invalid(&'static str),
     Status(Status),
 }
 
@@ -47,6 +50,12 @@ impl<'r> Responder<'r, 'static> for ApiError {
                 let body = Json(serde_json::json!({"error": "storage_full"}));
                 Response::build_from(body.respond_to(req)?)
                     .status(Status::InsufficientStorage)
+                    .ok()
+            }
+            ApiError::Invalid(reason) => {
+                let body = Json(serde_json::json!({"error": "invalid", "reason": reason}));
+                Response::build_from(body.respond_to(req)?)
+                    .status(Status::BadRequest)
                     .ok()
             }
             ApiError::Status(status) => Err(status),
