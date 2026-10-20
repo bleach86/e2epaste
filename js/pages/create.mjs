@@ -195,6 +195,39 @@ function setBusy(busy) {
   submitButton.querySelector(".submit-busy").classList.toggle("d-inline-flex", busy);
 }
 
+// An error with a message for the user, from a refused API request.
+class RefusedError extends Error {}
+
+// "4 minutes", "30 seconds", "2 hours"
+function waitText(seconds) {
+  let [count, unit] = [seconds, "second"];
+  if (seconds >= 5400) {
+    [count, unit] = [Math.ceil(seconds / 3600), "hour"];
+  } else if (seconds >= 90) {
+    [count, unit] = [Math.ceil(seconds / 60), "minute"];
+  }
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
+}
+
+// Turns a refused request into a RefusedError explaining why.
+async function refusal(response, what) {
+  const body = await response.json().catch(() => ({}));
+  switch (response.status) {
+    case 429: {
+      const retryAfter = Number(body.retry_after ?? response.headers.get("Retry-After")) || 60;
+      return new RefusedError(
+        `You've created a lot of pastes in a short time. Please try again in ${waitText(retryAfter)}.`,
+      );
+    }
+    case 507:
+      return new RefusedError("The server is out of storage space right now, so it can't take new pastes.");
+    case 413:
+      return new RefusedError("The attachment is too large. Please keep it under 25 MB.");
+    default:
+      return new Error(`The server didn't accept the ${what} (${response.status})`);
+  }
+}
+
 // `token` is the one-time upload token the server returned with the paste ID.
 async function uploadEncryptedFile(file, id, token) {
   const response = await fetch(`/api/upload-attachment/${id}`, {
@@ -203,7 +236,7 @@ async function uploadEncryptedFile(file, id, token) {
     body: file,
   });
   if (!response.ok) {
-    throw new Error(`The server didn't accept the attachment (${response.status})`);
+    throw await refusal(response, "attachment");
   }
 }
 
@@ -256,6 +289,8 @@ async function createPaste() {
     title: arrayBufferToBase64(title),
     syntax: syntaxSelect.value,
     file_name: encryptedFileName,
+    // So the server can check it against the limits before creating anything.
+    file_size: encryptedFile ? encryptedFile.byteLength : null,
   };
 
   const response = await fetch("/api/submit_paste", {
@@ -263,6 +298,9 @@ async function createPaste() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(paste),
   });
+  if (!response.ok) {
+    throw await refusal(response, "paste");
+  }
   const data = await response.json();
 
   if (!data.id) {
@@ -299,7 +337,7 @@ submitButton.addEventListener("click", async () => {
     await createPaste();
   } catch (e) {
     console.error(e);
-    alert("Failed to create paste. Please try again.");
+    alert(e instanceof RefusedError ? e.message : "Failed to create paste. Please try again.");
   } finally {
     setBusy(false);
   }

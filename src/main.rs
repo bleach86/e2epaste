@@ -1,10 +1,12 @@
 #[macro_use]
 extern crate rocket;
 
+mod api;
 mod assets;
 mod config;
 mod paste_db;
 mod paste_id;
+mod rate_limit;
 mod tools;
 
 use rocket::data::ToByteUnit;
@@ -26,15 +28,14 @@ use std::time::Duration;
 
 use chrono::prelude::*;
 
-use config::AppConfig;
+use api::{ApiError, ClientIp};
+use config::{AppConfig, MAX_ATTACHMENT_MIB, MIB};
+use rate_limit::RateLimiter;
 use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
 
 const TITLE: &str = "e2ePaste.XYZ";
 const ID_LENGTH: usize = 8;
-/// The browser allows 25 MiB attachments; this leaves room for the encryption
-/// and compression overhead.
-const MAX_ATTACHMENT_MIB: u64 = 26;
 
 /// Per-page <title>, meta description and link-preview text, rendered by
 /// layout.html.j2.
@@ -101,6 +102,10 @@ pub struct IncomingPaste {
     pub title: String,
     pub syntax: String,
     pub file_name: Option<String>,
+    /// Size of the encrypted attachment that will be uploaded. Older clients
+    /// don't send it; they're allowed the maximum.
+    #[serde(default)]
+    pub file_size: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -167,9 +172,25 @@ impl Fairing for WasmFairing {
 #[post("/api/submit_paste", format = "application/json", data = "<raw_paste>")]
 async fn upload(
     db: &State<Arc<PasteDB>>,
+    config: &State<AppConfig>,
+    limiter: &State<Arc<RateLimiter>>,
+    client: ClientIp,
     raw_paste: Json<IncomingPaste>,
-) -> Json<IncomingPasteRes> {
+) -> Result<Json<IncomingPasteRes>, ApiError> {
     let paste: IncomingPaste = raw_paste.clone().into_inner();
+
+    // The attachment's size is checked and charged now, so a paste is never
+    // created whose attachment would then be refused.
+    let max_attachment = MAX_ATTACHMENT_MIB * MIB;
+    let attachment_bytes: u64 = match (&paste.file_name, paste.file_size) {
+        (None, _) => 0,
+        (Some(_), Some(size)) if size > max_attachment => return Err(Status::PayloadTooLarge.into()),
+        (Some(_), Some(size)) => size,
+        (Some(_), None) => max_attachment,
+    };
+    api::check_storage(db, config, attachment_bytes)?;
+    limiter.take(client.0, attachment_bytes).map_err(ApiError::RateLimited)?;
+
     let id: PasteId<'_> = loop {
         // Generate a new paste ID until we find one that isn't already in use.
         let id: PasteId<'_> = PasteId::new(ID_LENGTH);
@@ -204,12 +225,12 @@ async fn upload(
         file_name: paste.file_name,
     };
 
-    let failed = Json(IncomingPasteRes { id: None, upload_token: None });
+    let failed = Ok(Json(IncomingPasteRes { id: None, upload_token: None }));
 
     // The token goes in first, so it exists by the time the paste does.
     let upload_token: Option<String> = if paste_data.file_name.is_some() {
         let token = new_upload_token();
-        if let Err(e) = db.set_upload_token(&id.to_string(), &token) {
+        if let Err(e) = db.set_upload_token(&id.to_string(), &token, attachment_bytes) {
             eprintln!("Error saving upload token: {:?}", e);
             return failed;
         }
@@ -226,10 +247,10 @@ async fn upload(
                     eprintln!("Error incrementing pastes: {:?}", e);
                 }
             };
-            Json(IncomingPasteRes {
+            Ok(Json(IncomingPasteRes {
                 id: Some(id.to_string()),
                 upload_token,
-            })
+            }))
         }
         Err(e) => {
             eprintln!("Error saving paste: {:?}", e);
@@ -334,36 +355,46 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
 #[post("/api/upload-attachment/<id>", data = "<data>")]
 async fn upload_attachment(
     db: &State<Arc<PasteDB>>,
+    config: &State<AppConfig>,
     data: Data<'_>,
     id: PasteId<'_>,
     token: UploadToken,
-) -> Result<&'static str, Status> {
+) -> Result<&'static str, ApiError> {
     let id = id.to_string();
     let internal = |e: &dyn std::fmt::Debug| {
         eprintln!("Error saving attachment for {id}: {e:?}");
-        Status::InternalServerError
+        ApiError::Status(Status::InternalServerError)
     };
 
     // Only the paste's creator has the token, and only until an upload
     // succeeds. It's removed when the paste is deleted, so this also checks
     // the paste exists.
-    if !db.upload_token_matches(&id, &token.0).map_err(|e| internal(&e))? {
-        return Err(Status::Forbidden);
-    }
+    // The size limit was set (and charged to the client's allowance) when the
+    // paste was created.
+    let max_bytes = match db.upload_allowance(&id, &token.0).map_err(|e| internal(&e))? {
+        Some(max_bytes) => max_bytes,
+        None => return Err(Status::Forbidden.into()),
+    };
+    // Only the free-space check: the attachment already counts towards the
+    // storage cap from when the paste was created.
+    api::check_storage(db, config, 0)?;
 
     // Written to a temporary file, so a failed upload can be retried and never
     // leaves a partial attachment.
     let partial = db.partial_upload_path(&id);
-    let written = match data.open(MAX_ATTACHMENT_MIB.mebibytes()).into_file(&partial).await {
+    // One byte over the limit is read so a body of exactly `max_bytes` ends
+    // inside it: Rocket logs "Data limit reached" whenever a read uses up the
+    // limit, even when the body ends there.
+    let written = match data.open((max_bytes + 1).bytes()).into_file(&partial).await {
         Ok(written) => written,
         Err(e) => {
             let _ = tokio::fs::remove_file(&partial).await;
             return Err(internal(&e));
         }
     };
-    if !written.is_complete() {
+    if !written.is_complete() || written.n.written > max_bytes {
         let _ = tokio::fs::remove_file(&partial).await;
-        return Err(Status::PayloadTooLarge);
+        return Err(Status::PayloadTooLarge.into());
     }
 
     // Of concurrent uploads with the right token, only one gets past here.
@@ -371,7 +402,7 @@ async fn upload_attachment(
         Ok(true) => {}
         Ok(false) => {
             let _ = tokio::fs::remove_file(&partial).await;
-            return Err(Status::Forbidden);
+            return Err(Status::Forbidden.into());
         }
         Err(e) => {
             let _ = tokio::fs::remove_file(&partial).await;
@@ -383,11 +414,13 @@ async fn upload_attachment(
         let _ = tokio::fs::remove_file(&partial).await;
         return Err(internal(&e));
     }
+    db.add_attachment_bytes(written.n.written);
 
-    // The paste may have expired while the file was uploading.
+    // The paste may have expired while the file was uploading. Deleting it
+    // again also takes the file off the storage total.
     if db.get_paste(id.clone()).is_none() {
-        let _ = tokio::fs::remove_file(&path).await;
-        return Err(Status::NotFound);
+        let _ = db.delete_paste(id.clone()).await;
+        return Err(Status::NotFound.into());
     }
     Ok("Upload successful")
 }
@@ -650,9 +683,25 @@ async fn rocket() -> _ {
     };
     db.remove_partial_uploads();
     let db_clone = db.clone();
+    let limiter = Arc::new(RateLimiter::new(
+        config.pastes_per_minute,
+        config.pastes_per_hour,
+        config.upload_mib_per_hour * MIB,
+    ));
+    let limiter_clone = limiter.clone();
     println!(
         "Site URL {}, data in {:?}, static files from {:?}",
         config.site_url, config.data_dir, config.static_dir
+    );
+    let limit = |n: u64, unit: &str| if n == 0 { "off".to_string() } else { format!("{n} {unit}") };
+    println!(
+        "Limits per IP: pastes {} / {}, attachments {}. Free disk to keep: {}. \
+         Attachment storage cap: {}",
+        limit(config.pastes_per_minute, "a minute"),
+        limit(config.pastes_per_hour, "an hour"),
+        limit(config.upload_mib_per_hour, "MiB an hour"),
+        limit(config.min_free_disk_mib, "MiB"),
+        limit(config.max_attachment_storage_mib, "MiB"),
     );
     let site_url = config.site_url.clone();
     let static_dir = config.static_dir.clone();
@@ -661,6 +710,7 @@ async fn rocket() -> _ {
     let rocket = rocket
         .manage(db)
         .manage(config)
+        .manage(limiter)
         .mount("/public", FileServer::from(static_dir))
         .mount(
             "/",
@@ -707,6 +757,7 @@ async fn rocket() -> _ {
                     eprintln!("Error removing expired paste: {:?}", e);
                 }
             }
+            limiter_clone.prune();
             tokio::time::sleep(Duration::from_secs(60 * 15)).await;
         }
     });

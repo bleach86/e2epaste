@@ -3,6 +3,8 @@ use rocket::tokio;
 use serde::{Deserialize, Serialize};
 use sled::{Db, Result, Tree};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::paste_id::PasteId;
@@ -44,12 +46,15 @@ pub struct PasteDB {
     pub paste_db: Tree,
     pub site_stats: Tree,
     pub expire_index: Tree,
-    /// Paste ID -> one-time token for uploading its attachment. Kept out of
+    /// Paste ID -> one-time token for uploading its attachment, followed by
+    /// the attachment's maximum size (8 bytes, big endian). Kept out of
     /// PasteData so it's never sent to viewers.
     upload_tokens: Tree,
     pub db: Db,
     /// Where attachments are stored, one `<id>.bin` per paste.
     file_dir: PathBuf,
+    /// Total size of the files in `file_dir`.
+    attachment_bytes: Arc<AtomicU64>,
 }
 
 impl PasteDB {
@@ -63,6 +68,7 @@ impl PasteDB {
         let site_stats: Tree = db.open_tree(b"site_stats")?;
         let expire_index: Tree = db.open_tree(b"expire_index")?;
         let upload_tokens: Tree = db.open_tree(b"upload_tokens")?;
+        let attachment_bytes = Arc::new(AtomicU64::new(dir_size(&file_dir)));
 
         Ok(PasteDB {
             paste_db,
@@ -71,7 +77,19 @@ impl PasteDB {
             upload_tokens,
             db,
             file_dir,
+            attachment_bytes,
         })
+    }
+
+    /// Total size of all stored attachments.
+    pub fn attachment_storage_used(&self) -> u64 {
+        self.attachment_bytes.load(Ordering::Relaxed)
+    }
+
+    /// Free space on the disk holding the attachments (and the database, when
+    /// they share a data_dir).
+    pub fn available_disk_space(&self) -> std::io::Result<u64> {
+        fs4::available_space(&self.file_dir)
     }
 
     /// The attachment file for a paste (it may not exist).
@@ -99,28 +117,42 @@ impl PasteDB {
         }
     }
 
-    pub fn set_upload_token(&self, id: &str, token: &str) -> Result<()> {
-        self.upload_tokens.insert(id.as_bytes(), token.as_bytes())?;
+    /// Allows one attachment upload of at most `max_bytes` for the paste.
+    pub fn set_upload_token(&self, id: &str, token: &str, max_bytes: u64) -> Result<()> {
+        let mut record = token.as_bytes().to_vec();
+        record.extend_from_slice(&max_bytes.to_be_bytes());
+        self.upload_tokens.insert(id.as_bytes(), record)?;
         Ok(())
     }
 
-    /// Whether `token` is the paste's unused upload token.
-    pub fn upload_token_matches(&self, id: &str, token: &str) -> Result<bool> {
-        Ok(self
-            .upload_tokens
-            .get(id.as_bytes())?
-            .is_some_and(|stored| constant_time_eq(&stored, token.as_bytes())))
+    /// The upload's size limit, if `token` is the paste's unused upload token.
+    pub fn upload_allowance(&self, id: &str, token: &str) -> Result<Option<u64>> {
+        let Some(record) = self.upload_tokens.get(id.as_bytes())? else {
+            return Ok(None);
+        };
+        Ok(parse_upload_record(&record, token))
     }
 
     /// Uses up the upload token. Atomic, so of several uploads with the right
     /// token only one gets `true`.
     pub fn consume_upload_token(&self, id: &str, token: &str) -> Result<bool> {
+        let Some(record) = self.upload_tokens.get(id.as_bytes())? else {
+            return Ok(false);
+        };
+        if parse_upload_record(&record, token).is_none() {
+            return Ok(false);
+        }
         let swapped = self.upload_tokens.compare_and_swap(
             id.as_bytes(),
-            Some(token.as_bytes()),
+            Some(record),
             None as Option<&[u8]>,
         )?;
         Ok(swapped.is_ok())
+    }
+
+    /// Counts a newly stored attachment towards the storage total.
+    pub fn add_attachment_bytes(&self, bytes: u64) {
+        self.attachment_bytes.fetch_add(bytes, Ordering::Relaxed);
     }
 
     pub fn set_paste(&self, paste_data: &PasteData<'_>) -> Result<()> {
@@ -169,8 +201,21 @@ impl PasteDB {
         self.upload_tokens.remove(id.as_bytes())?;
 
         // Only pastes with an attachment have a file, so a missing one is fine.
-        match tokio::fs::remove_file(self.attachment_path(&id)).await {
-            Ok(_) => {}
+        let path = self.attachment_path(&id);
+        let size = tokio::fs::metadata(&path).await.map_or(0, |m| m.len());
+        match tokio::fs::remove_file(&path).await {
+            Ok(_) => {
+                // Subtract without wrapping below zero.
+                let mut used = self.attachment_bytes.load(Ordering::Relaxed);
+                while let Err(actual) = self.attachment_bytes.compare_exchange_weak(
+                    used,
+                    used.saturating_sub(size),
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    used = actual;
+                }
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
                 eprintln!("Error deleting file: {:?}", e);
@@ -312,6 +357,27 @@ impl PasteDB {
         self.set_site_stats(&site_stats)?;
         Ok(())
     }
+}
+
+/// The size limit from an upload-token record, if its token is `token`.
+fn parse_upload_record(record: &[u8], token: &str) -> Option<u64> {
+    let (stored_token, size) = record.split_at_checked(record.len().checked_sub(8)?)?;
+    let size = u64::from_be_bytes(size.try_into().ok()?);
+    constant_time_eq(stored_token, token.as_bytes()).then_some(size)
+}
+
+/// Total size of the attachment files (`*.bin`) in `dir`.
+fn dir_size(dir: &Path) -> u64 {
+    std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "bin"))
+                .filter_map(|e| e.metadata().ok())
+                .map(|m| m.len())
+                .sum()
+        })
+        .unwrap_or(0)
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {

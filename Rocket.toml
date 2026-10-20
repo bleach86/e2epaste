@@ -1,7 +1,9 @@
 # Settings for every profile. Any key can be overridden with an environment
 # variable: ROCKET_<KEY>, e.g. ROCKET_SITE_URL=https://paste.example.com
 [default]
-address = "0.0.0.0"
+# Only reachable from this machine, by the reverse proxy. Use 0.0.0.0 if the
+# proxy runs on another machine (the Docker image sets that itself).
+address = "127.0.0.1"
 port = 8001
 
 # The site's public address. Used for canonical links, the sitemap and link
@@ -14,6 +16,22 @@ data_dir = "."
 # Front-end files served at /public, and the page templates.
 static_dir = "static"
 template_dir = "templates"
+
+# Header holding the visitor's IP, set by the reverse proxy. The rate limits
+# below are per IP, so the proxy must set (overwrite) it on every request.
+ip_header = "X-Real-IP"
+
+# Limits per visitor IP (IPv6: per /64). 0 turns a limit off.
+pastes_per_minute = 10
+pastes_per_hour = 60
+# Attachment data. At least 26, the largest attachment.
+upload_mib_per_hour = 250
+
+# Storage limits. 0 turns a limit off.
+# Stop taking new pastes when the disk has less than this free.
+min_free_disk_mib = 1024
+# Cap on the total size of all attachments.
+max_attachment_storage_mib = 0
 
 [default.limits]
 # Encrypted pastes are at most about 1.4 MiB (1 MB of text). Attachments are

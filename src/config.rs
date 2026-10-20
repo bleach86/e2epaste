@@ -7,6 +7,10 @@ use rocket::figment::Figment;
 use rocket::http::uri::Absolute;
 use serde::Deserialize;
 
+/// Largest attachment upload. The browser allows 25 MiB; this leaves room for
+/// the encryption and compression overhead.
+pub const MAX_ATTACHMENT_MIB: u64 = 26;
+
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
     /// Public address of the site, e.g. `https://paste.example.com`. Used for
@@ -19,6 +23,22 @@ pub struct AppConfig {
     /// Served at /public. Must contain the webpack bundles in `js/dist/`.
     #[serde(default = "default_static_dir")]
     pub static_dir: PathBuf,
+
+    // Per-client limits (see rate_limit.rs). 0 turns a limit off.
+    #[serde(default = "default_pastes_per_minute")]
+    pub pastes_per_minute: u64,
+    #[serde(default = "default_pastes_per_hour")]
+    pub pastes_per_hour: u64,
+    #[serde(default = "default_upload_mib_per_hour")]
+    pub upload_mib_per_hour: u64,
+
+    // Storage limits. 0 turns a limit off.
+    /// New pastes are refused when the disk holding data_dir has less free.
+    #[serde(default = "default_min_free_disk_mib")]
+    pub min_free_disk_mib: u64,
+    /// Cap on the total size of all attachments.
+    #[serde(default)]
+    pub max_attachment_storage_mib: u64,
 }
 
 fn default_site_url() -> String {
@@ -33,10 +53,36 @@ fn default_static_dir() -> PathBuf {
     PathBuf::from("static")
 }
 
+fn default_pastes_per_minute() -> u64 {
+    10
+}
+
+fn default_pastes_per_hour() -> u64 {
+    60
+}
+
+fn default_upload_mib_per_hour() -> u64 {
+    250
+}
+
+fn default_min_free_disk_mib() -> u64 {
+    1024
+}
+
+pub const MIB: u64 = 1024 * 1024;
+
 impl AppConfig {
     pub fn from_figment(figment: &Figment) -> Result<Self, String> {
         let mut config: AppConfig = figment.extract().map_err(|e| e.to_string())?;
         config.site_url = normalize_site_url(&config.site_url)?;
+
+        if config.upload_mib_per_hour != 0 && config.upload_mib_per_hour < MAX_ATTACHMENT_MIB {
+            return Err(format!(
+                "upload_mib_per_hour is {}, but one attachment can be up to {MAX_ATTACHMENT_MIB} \
+                 MiB. Set it to at least {MAX_ATTACHMENT_MIB}, or 0 for no limit.",
+                config.upload_mib_per_hour
+            ));
+        }
 
         if !config.static_dir.join("js/dist").is_dir() {
             return Err(format!(

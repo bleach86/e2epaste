@@ -52,7 +52,8 @@ You can run your own instance with Docker or as a native binary. Either way:
 
 - **It needs HTTPS.** Browsers only allow the Web Crypto API on HTTPS pages (and on `localhost`), so
   encryption won't work over plain HTTP. Run the server behind a reverse proxy that handles TLS, such as
-  Caddy or nginx ([examples below](#https-with-a-reverse-proxy)).
+  Caddy, nginx or Apache ([examples below](#https-with-a-reverse-proxy)). Visitors who reach it over plain
+  HTTP get a warning banner instead of a broken page.
 - **Set `site_url` to your address**, for example `https://paste.example.com`. It's used for canonical
   links, the sitemap, robots.txt and link previews. Paste links always use the address the page was
   opened at, so they work even before you set it.
@@ -66,14 +67,40 @@ variable named `ROCKET_` plus the setting in capitals, such as `ROCKET_SITE_URL`
 |---|---|---|
 | `site_url` | `http://localhost:8001` | The site's public address: `https://` plus the domain, with no path |
 | `data_dir` | `.` (working directory) | Where the database (`paste_db/`) and attachments (`file_store/`) are kept. Both are created if missing |
-| `address` | `0.0.0.0` | Address to listen on. Use `127.0.0.1` when the reverse proxy is on the same machine |
+| `address` | `127.0.0.1` | Address to listen on. The default only accepts connections from the same machine, for a reverse proxy there. Use `0.0.0.0` if the proxy is on another machine |
 | `port` | `8001` | Port to listen on |
+| `ip_header` | `X-Real-IP` | Header the reverse proxy puts the visitor's IP in (see [Limits](#limits)) |
+| `pastes_per_minute` | `10` | Pastes one IP can create per minute |
+| `pastes_per_hour` | `60` | Pastes one IP can create per hour |
+| `upload_mib_per_hour` | `250` | Attachment data one IP can upload per hour, in MiB. At least 26, the largest attachment |
+| `min_free_disk_mib` | `1024` | New pastes are refused when the disk holding `data_dir` has less free space than this |
+| `max_attachment_storage_mib` | `0` | Cap on the total size of all stored attachments |
 | `static_dir` | `static` | Front-end files, served at `/public` |
 | `template_dir` | `templates` | Page templates |
+
+For the limits, `0` turns a limit off.
 
 `static_dir` and `template_dir` are relative to the working directory, so run the server from the
 repository directory or set them to absolute paths. The server prints the site URL and directories it's
 using when it starts, and warns if `site_url` is still `localhost` in a release build.
+
+### Limits
+
+To stop one visitor from flooding the site or filling the disk, the server limits how many pastes each
+IP address can create, and how much attachment data it can upload. IPv6 addresses are grouped by /64,
+since one user usually has a whole /64. Only creating pastes and uploading attachments count; viewing
+pastes and using the tools are never limited. A visitor over a limit is told how long to wait.
+
+These limits are kept in memory, so they reset when the server restarts. Because they can't stop many
+addresses working together, the server also stops taking new pastes when the disk is nearly full
+(`min_free_disk_mib`), and can cap the total size of attachments (`max_attachment_storage_mib`).
+
+**The reverse proxy must pass the visitor's IP.** Behind a proxy, every request comes from the proxy's
+own address, so without this all visitors would share one limit. The server reads the IP from the
+`X-Real-IP` header, which every [proxy example below](#https-with-a-reverse-proxy) sets. The proxy must
+*overwrite* the header rather than pass on one sent by the visitor. Also make sure visitors can't reach
+the server's port directly, bypassing the proxy: the default `address` of `127.0.0.1` and the Docker
+setup's `127.0.0.1:8001` port binding both take care of that.
 
 ### With Docker
 
@@ -161,7 +188,6 @@ This sets it up with systemd, with the code in `/opt/e2epaste` and the data in `
    WorkingDirectory=/opt/e2epaste
    ExecStart=/opt/e2epaste/target/release/e2epaste
    Environment=ROCKET_SITE_URL=https://paste.example.com
-   Environment=ROCKET_ADDRESS=127.0.0.1
    Environment=ROCKET_DATA_DIR=/var/lib/e2epaste
    # Runs as a throwaway user that can only write to /var/lib/e2epaste.
    DynamicUser=yes
@@ -188,16 +214,21 @@ in step.
 
 ### HTTPS with a reverse proxy
 
-Point the proxy at the port the server listens on. With [Caddy](https://caddyserver.com/), which gets a
-certificate automatically, the whole `Caddyfile` is:
+Point the proxy at the port the server listens on, and have it set the `X-Real-IP` header to the
+visitor's address so the [limits](#limits) work per visitor.
+
+With [Caddy](https://caddyserver.com/), which gets a certificate automatically, the whole `Caddyfile`
+is:
 
 ```
 paste.example.com {
-    reverse_proxy 127.0.0.1:8001
+    reverse_proxy 127.0.0.1:8001 {
+        header_up X-Real-IP {remote_host}
+    }
 }
 ```
 
-With nginx, raise the request size limit. The default of 1 MB is too small for large pastes and
+With nginx, also raise the request size limit. The default of 1 MB is too small for large pastes and
 attachments:
 
 ```nginx
@@ -219,6 +250,33 @@ server {
     }
 }
 ```
+
+With Apache, enable the modules with `sudo a2enmod ssl proxy proxy_http headers`, then:
+
+```apache
+<VirtualHost *:443>
+    ServerName paste.example.com
+
+    SSLEngine on
+    SSLCertificateFile    /etc/letsencrypt/live/paste.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/paste.example.com/privkey.pem
+
+    ProxyPreserveHost On
+    ProxyPass        / http://127.0.0.1:8001/
+    ProxyPassReverse / http://127.0.0.1:8001/
+
+    # "set" replaces any X-Real-IP the visitor sent, so it can't be faked.
+    RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"
+    RequestHeader set X-Forwarded-Proto "https"
+
+    # The largest request is a 26 MiB attachment.
+    LimitRequestBody 31457280
+</VirtualHost>
+```
+
+If a CDN such as Cloudflare sits in front of the proxy, the proxy sees the CDN's address rather than the
+visitor's. Configure the proxy to take the real address from the CDN first (with Apache, `mod_remoteip`;
+with nginx, `set_real_ip_from`), or every visitor will share the CDN's limits.
 
 ### Data
 
