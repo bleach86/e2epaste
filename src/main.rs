@@ -563,6 +563,11 @@ async fn rocket() -> _ {
                 .minijinja
                 .add_global("asset_version", env!("ASSET_VERSION"));
             engines.minijinja.add_global("site_url", HOST.to_string());
+            // For the Tools menu in nav.html.j2.
+            engines.minijinja.add_global(
+                "nav_tools",
+                rocket_dyn_templates::minijinja::Value::from_serialize(tools::listings()),
+            );
         }))
         .attach(CacheControlFairing)
         .attach(WasmFairing);

@@ -150,6 +150,51 @@
   padding: 0.1em;
 }
 
+/* Tools menu in the navbar: one column per group, side by side on wide
+   screens and stacked in the collapsed mobile menu. */
+.navbar .tools-menu {
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* The 10pt .dropdown-toggle rule is for form dropdowns, not the navbar. */
+.navbar .nav-link.dropdown-toggle {
+  font-size: inherit !important;
+  height: auto;
+}
+
+.tools-menu-heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+
+.tools-menu-group + .tools-menu-group {
+  border-top: var(--bs-border-width) solid var(--bs-border-color);
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+}
+
+@media (min-width: 992px) {
+  /* .navbar prefix: Bootstrap's .dropdown-menu.show loads later and would win. */
+  .navbar .tools-menu.show {
+    display: flex;
+  }
+
+  .tools-menu-group {
+    min-width: 14rem;
+  }
+
+  .tools-menu-group + .tools-menu-group {
+    border-top: 0;
+    border-left: var(--bs-border-width) solid var(--bs-border-color);
+    margin-top: 0;
+    padding-top: 0;
+  }
+}
+
 /* Tool pages */
 .tool-about {
   max-width: 50rem;
