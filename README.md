@@ -66,7 +66,7 @@ variable named `ROCKET_` plus the setting in capitals, such as `ROCKET_SITE_URL`
 | Setting | Default | What it does |
 |---|---|---|
 | `site_url` | `http://localhost:8001` | The site's public address: `https://` plus the domain, with no path |
-| `data_dir` | `.` (working directory) | Where the database (`paste_db/`) and attachments (`file_store/`) are kept. Both are created if missing |
+| `data_dir` | `.` (working directory) | Where the database (`e2epaste.redb`) and attachments (`file_store/`) are kept. Both are created if missing |
 | `address` | `127.0.0.1` | Address to listen on. The default only accepts connections from the same machine, for a reverse proxy there. Use `0.0.0.0` if the proxy is on another machine |
 | `port` | `8001` | Port to listen on |
 | `ip_header` | `X-Real-IP` | Header the reverse proxy puts the visitor's IP in (see [Limits](#limits)) |
@@ -161,7 +161,7 @@ cd e2epaste
 cargo run --release
 ```
 
-Open <http://localhost:8001>. Pastes are stored in `paste_db/` and `file_store/` in the repository
+Open <http://localhost:8001>. Pastes are stored in `e2epaste.redb` and `file_store/` in the repository
 directory.
 
 #### Running it as a service
@@ -208,9 +208,9 @@ This sets it up with systemd, with the code in `/opt/e2epaste` and the data in `
 
 To update: `git pull && cargo build --release && sudo systemctl restart e2epaste`.
 
-If you already run an instance with the data in the repository directory, stop it and move `paste_db/`
-and `file_store/` into the new `data_dir`. Copy both directories so the database and attachments stay
-in step.
+If you already run an instance with the data in the repository directory, stop it and move the
+database (`e2epaste.redb`, or `paste_db/` from older versions) and `file_store/` into the new
+`data_dir`. Move them together so the database and attachments stay in step.
 
 ### HTTPS with a reverse proxy
 
@@ -282,10 +282,35 @@ with nginx, `set_real_ip_from`), or every visitor will share the CDN's limits.
 
 | Path (in `data_dir`) | Contents |
 |---|---|
-| `paste_db/` | The paste database ([sled](https://github.com/spacejam/sled)): encrypted pastes and site stats |
+| `e2epaste.redb` | The paste database ([redb](https://www.redb.org/)): encrypted pastes, the expiry index and site stats |
 | `file_store/` | Encrypted attachments, one file per paste |
 
-Expired pastes are deleted every 15 minutes. Back up both directories together, with the server stopped.
+Expired pastes can't be opened. A cleanup every 15 minutes deletes them from disk, leaving pastes less
+than a day old for a later run. Back up the database and `file_store/` together, with the server
+stopped.
+
+### Upgrading from a version before redb
+
+Versions before October 2026 stored pastes in a [sled](https://github.com/spacejam/sled) database, the
+`paste_db/` directory. The first time a newer version starts, it imports that database automatically:
+
+1. It copies everything into `e2epaste.redb`: pastes, pending attachment uploads and site stats.
+   Attachments in `file_store/` stay where they are.
+2. It renames `paste_db/` to `paste_db.sled-backup/`. Nothing in the old database is changed or deleted.
+3. It logs what it imported. Check that your pastes open, then delete `paste_db.sled-backup/`.
+
+The import happens in a temporary file that only replaces `e2epaste.redb` once it's complete, so if
+it's interrupted, the next start simply runs it again. To go back to the old version, stop the server,
+delete `e2epaste.redb` and rename `paste_db.sled-backup/` back to `paste_db/`. Any pastes created since
+the upgrade will be lost.
+
+The database also records its schema version, and future changes to its layout are applied
+automatically at startup, the same way. A version that finds a database written by a newer version
+refuses to start rather than risk damaging it.
+
+The import is built in by default, through the `sled-import` cargo feature. A build without it
+(`cargo build --no-default-features`) has no sled code, and refuses to start if it finds a `paste_db/`
+that hasn't been imported.
 
 ### Build options
 
@@ -307,7 +332,7 @@ Expired pastes are deleted every 15 minutes. Back up both directories together, 
 
 ## Credits
 
-e2ePaste.XYZ is built on open source projects, including Rocket, sled, Bootstrap, highlight.js, pako and
+e2ePaste.XYZ is built on open source projects, including Rocket, redb, Bootstrap, highlight.js, pako and
 zxcvbn-ts. The full list, with licences, is on the [credits page](https://e2epaste.xyz/credits).
 
 ## License

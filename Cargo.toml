@@ -5,15 +5,23 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["sled-import"]
+# Imports the sled database (paste_db/) that releases before redb used, on the
+# first start. Builds without it refuse to start if one is found.
+sled-import = ["dep:sled"]
+
 [dependencies]
 # No "http2" (a default feature): Rocket only uses HTTP/2 with its own TLS, and
 # the reverse proxy handles TLS here. Leaving it out drops h2 0.3, which has
 # an unfixed advisory (RUSTSEC-2026-0258) on Rocket 0.5's hyper 0.14.
 rocket = { version = "0.5.1", default-features = false, features = ["json"] }
 rocket_dyn_templates = { version = "0.2.0", features = ["minijinja"] }
-sled = { version = "0.34.7", features = ["compression"] }
+# Only for importing data from releases before redb (see src/migrate.rs).
+sled = { version = "0.34.7", features = ["compression"], optional = true }
 rand = "0.10"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 chrono = "0.4.45"
 fs4 = "1.1.0"
+redb = "4.4.0"

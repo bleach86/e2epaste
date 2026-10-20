@@ -17,7 +17,7 @@ pub struct AppConfig {
     /// canonical links, the sitemap and link previews.
     #[serde(default = "default_site_url")]
     pub site_url: String,
-    /// Holds `paste_db/` (the database) and `file_store/` (attachments).
+    /// Holds `e2epaste.redb` (the database) and `file_store/` (attachments).
     #[serde(default = "default_data_dir")]
     pub data_dir: PathBuf,
     /// Served at /public. Must contain the webpack bundles in `js/dist/`.
@@ -94,7 +94,12 @@ impl AppConfig {
         Ok(config)
     }
 
-    pub fn db_dir(&self) -> PathBuf {
+    pub fn db_path(&self) -> PathBuf {
+        self.data_dir.join("e2epaste.redb")
+    }
+
+    /// The sled database used before redb, imported on the first start.
+    pub fn legacy_sled_dir(&self) -> PathBuf {
         self.data_dir.join("paste_db")
     }
 

@@ -3,6 +3,9 @@
 debug/
 target/
 paste_db/
+paste_db.sled-backup*/
+*.redb
+*.redb.importing
 file_store/
 node_modules/
 

@@ -4,6 +4,7 @@ extern crate rocket;
 mod api;
 mod assets;
 mod config;
+mod migrate;
 mod paste_db;
 mod paste_id;
 mod rate_limit;
@@ -191,13 +192,6 @@ async fn upload(
     api::check_storage(db, config, attachment_bytes)?;
     limiter.take(client.0, attachment_bytes).map_err(ApiError::RateLimited)?;
 
-    let id: PasteId<'_> = loop {
-        // Generate a new paste ID until we find one that isn't already in use.
-        let id: PasteId<'_> = PasteId::new(ID_LENGTH);
-        if db.get_paste(id.to_string()).is_none() {
-            break id;
-        }
-    };
     let now: DateTime<Utc> = Utc::now();
 
     let expires = match paste.expires {
@@ -208,11 +202,11 @@ async fn upload(
         ),
     };
 
-    let paste_data: PasteData = PasteData {
+    let mut paste_data: PasteData = PasteData {
         content: paste.content,
         iv: paste.iv,
         key_fragment: paste.key_fragment,
-        id: id.clone(),
+        id: PasteId::new(ID_LENGTH),
         timestamp: now.timestamp(),
         expires,
         views: 0,
@@ -225,38 +219,24 @@ async fn upload(
         file_name: paste.file_name,
     };
 
-    let failed = Ok(Json(IncomingPasteRes { id: None, upload_token: None }));
+    let upload_token: Option<String> = paste_data.file_name.is_some().then(new_upload_token);
+    let upload = upload_token.as_deref().map(|token| (token, attachment_bytes));
 
-    // The token goes in first, so it exists by the time the paste does.
-    let upload_token: Option<String> = if paste_data.file_name.is_some() {
-        let token = new_upload_token();
-        if let Err(e) = db.set_upload_token(&id.to_string(), &token, attachment_bytes) {
-            eprintln!("Error saving upload token: {:?}", e);
-            return failed;
-        }
-        Some(token)
-    } else {
-        None
-    };
-
-    match db.set_paste(&paste_data) {
-        Ok(_) => {
-            match db.increment_pastes() {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Error incrementing pastes: {:?}", e);
-                }
-            };
-            Ok(Json(IncomingPasteRes {
-                id: Some(id.to_string()),
-                upload_token,
-            }))
-        }
-        Err(e) => {
-            eprintln!("Error saving paste: {:?}", e);
-            failed
+    // A new random ID until one isn't taken.
+    loop {
+        match db.create_paste(&paste_data, upload) {
+            Ok(true) => break,
+            Ok(false) => paste_data.id = PasteId::new(ID_LENGTH),
+            Err(e) => {
+                eprintln!("Error saving paste: {e}");
+                return Ok(Json(IncomingPasteRes { id: None, upload_token: None }));
+            }
         }
     }
+    Ok(Json(IncomingPasteRes {
+        id: Some(paste_data.id.to_string()),
+        upload_token,
+    }))
 }
 
 /// 256 random bits, hex encoded.
@@ -282,59 +262,25 @@ impl<'r> rocket::request::FromRequest<'r> for UploadToken {
 
 #[post("/api/advance-views/<id>")]
 async fn advance_views(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Json<AdvanceViewsRes> {
-    let mut paste_data: PasteData = match db.get_paste(id.to_string()) {
-        Some(paste_data) => paste_data,
-        None => {
-            return Json(AdvanceViewsRes {
-                error: Some("Paste not found".to_string()),
-                views: None,
-                total_views: None,
-            })
-        }
+    let error = |message: &str| {
+        Json(AdvanceViewsRes {
+            error: Some(message.to_string()),
+            views: None,
+            total_views: None,
+        })
     };
-
-    paste_data.views += 1;
-
-    if let Some(max_views) = paste_data.max_views {
-        if paste_data.views >= max_views {
-            match paste_data.expires {
-                Some(expires) => match db.delete_expired_index(expires) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("Error deleting expired index: {:?}", e);
-                    }
-                },
-                None => {}
-            }
-
-            let now: DateTime<Utc> = Utc::now();
-            let twelve_hours_from_now = now + chrono::Duration::hours(12);
-
-            paste_data.expires = Some(twelve_hours_from_now.timestamp_millis() as u64);
+    match db.record_view(&id.to_string()) {
+        Ok(Some((views, total_views))) => Json(AdvanceViewsRes {
+            error: None,
+            views: Some(views),
+            total_views: Some(total_views),
+        }),
+        Ok(None) => error("Paste not found"),
+        Err(e) => {
+            eprintln!("Error counting view of {}: {e}", id.to_string());
+            error("Couldn't count the view")
         }
     }
-
-    match db.increment_views() {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("Error incrementing views: {:?}", e);
-        }
-    };
-
-    match db.set_paste(&paste_data) {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("Error saving paste: {:?}", e);
-        }
-    };
-
-    let site_stats: paste_db::SiteStats = db.get_site_stats();
-
-    Json(AdvanceViewsRes {
-        error: None,
-        views: Some(paste_data.views),
-        total_views: Some(site_stats.views),
-    })
 }
 
 // /s/ is the short form handed out for new pastes.
@@ -418,8 +364,8 @@ async fn upload_attachment(
 
     // The paste may have expired while the file was uploading. Deleting it
     // again also takes the file off the storage total.
-    if db.get_paste(id.clone()).is_none() {
-        let _ = db.delete_paste(id.clone()).await;
+    if db.get_paste(&id).is_none() {
+        let _ = db.delete_paste(&id).await;
         return Err(Status::NotFound.into());
     }
     Ok("Upload successful")
@@ -434,7 +380,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     let now: DateTime<Utc> = chrono::Utc::now();
 
-    let mut paste_data: PasteData = match db.get_paste(id.to_string()) {
+    let mut paste_data: PasteData = match db.get_paste(id) {
         Some(paste_data) => paste_data,
         None => {
             return paste_not_found(site_stats, now.year());
@@ -447,47 +393,17 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
     paste_data.password_hash = None;
 
     let views: u64 = paste_data.views + 1;
+    let used_up = paste_data.max_views.is_some_and(|max_views| views > max_views);
+    let expired = paste_data
+        .expires
+        .is_some_and(|expires| now.timestamp_millis() as u64 >= expires);
 
-    if let Some(max_views) = paste_data.max_views {
-        if views > max_views {
-            println!("Deleting paste with ID: {}", id);
-            match db.delete_paste(id.to_string()).await {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Error deleting paste: {:?}", e);
-                }
-            };
-            match paste_data.expires {
-                Some(expires) => match db.delete_expired_index(expires) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("Error deleting expired index: {:?}", e);
-                    }
-                },
-                None => {}
-            }
-            return paste_not_found(site_stats, now.year());
+    if used_up || expired {
+        println!("Deleting paste with ID: {}", id);
+        if let Err(e) = db.delete_paste(id).await {
+            eprintln!("Error deleting paste: {e}");
         }
-    }
-
-    if let Some(expires) = paste_data.expires {
-        let now_millis: u64 = now.timestamp_millis() as u64;
-        if now_millis as u64 >= expires {
-            println!("Deleting paste with ID: {}", id);
-            match db.delete_paste(id.to_string()).await {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Error deleting paste: {:?}", e);
-                }
-            };
-            match db.delete_expired_index(expires) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Error deleting expired index: {:?}", e);
-                }
-            };
-            return paste_not_found(site_stats, now.year());
-        }
+        return paste_not_found(site_stats, now.year());
     }
 
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -674,12 +590,12 @@ async fn rocket() -> _ {
     for warning in config.warnings() {
         eprintln!("Warning: {warning}");
     }
-    for dir in [config.db_dir(), config.file_dir()] {
+    for dir in [config.data_dir.clone(), config.file_dir()] {
         config::ensure_dir(&dir).unwrap_or_else(|e| exit_with(&e));
     }
-    let db: Arc<PasteDB> = match PasteDB::open(&config.db_dir(), config.file_dir()) {
+    let db: Arc<PasteDB> = match PasteDB::open(&config.db_path(), &config.legacy_sled_dir(), config.file_dir()) {
         Ok(db) => Arc::new(db),
-        Err(e) => exit_with(&format!("can't open the database in {:?}: {e}", config.db_dir())),
+        Err(e) => exit_with(&format!("can't open the database {:?}: {e}", config.db_path())),
     };
     db.remove_partial_uploads();
     let db_clone = db.clone();
@@ -751,7 +667,7 @@ async fn rocket() -> _ {
     tokio::spawn(async move {
         let db_clone_task = db_clone.clone();
         loop {
-            match db_clone_task.remove_expired_paste().await {
+            match db_clone_task.remove_expired_pastes().await {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("Error removing expired paste: {:?}", e);
