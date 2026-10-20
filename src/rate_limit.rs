@@ -97,7 +97,12 @@ impl RateLimiter {
         self.take_or_check(ip, 0, false)
     }
 
-    fn take_or_check(&self, ip: Option<IpAddr>, upload_bytes: u64, take: bool) -> Result<(), Duration> {
+    fn take_or_check(
+        &self,
+        ip: Option<IpAddr>,
+        upload_bytes: u64,
+        take: bool,
+    ) -> Result<(), Duration> {
         let mut costs = [0.0; 3];
         costs[PASTES_PER_MINUTE] = 1.0;
         costs[PASTES_PER_HOUR] = 1.0;
@@ -105,7 +110,9 @@ impl RateLimiter {
 
         let now = Instant::now();
         let mut clients = self.clients.lock().unwrap_or_else(|e| e.into_inner());
-        let buckets = clients.entry(client_key(ip)).or_insert_with(|| self.full_buckets(now));
+        let buckets = clients
+            .entry(client_key(ip))
+            .or_insert_with(|| self.full_buckets(now));
 
         let mut wait = Duration::ZERO;
         for (i, rule) in self.rules.iter().enumerate() {
@@ -192,7 +199,10 @@ mod tests {
         let limiter = RateLimiter::new(10, 0, 100);
         assert!(limiter.take(A, 80).is_ok());
         assert!(limiter.take(A, 30).is_err());
-        assert!(limiter.take(A, 20).is_ok(), "the refused 30 bytes weren't taken");
+        assert!(
+            limiter.take(A, 20).is_ok(),
+            "the refused 30 bytes weren't taken"
+        );
     }
 
     #[test]
@@ -200,8 +210,14 @@ mod tests {
         let ip = |s: &str| Some(s.parse::<IpAddr>().unwrap());
         let limiter = RateLimiter::new(1, 0, 0);
         assert!(limiter.take(ip("2001:db8:1:2::1"), 0).is_ok());
-        assert!(limiter.take(ip("2001:db8:1:2:ffff::9"), 0).is_err(), "same /64");
-        assert!(limiter.take(ip("2001:db8:1:3::1"), 0).is_ok(), "different /64");
+        assert!(
+            limiter.take(ip("2001:db8:1:2:ffff::9"), 0).is_err(),
+            "same /64"
+        );
+        assert!(
+            limiter.take(ip("2001:db8:1:3::1"), 0).is_ok(),
+            "different /64"
+        );
         assert_eq!(client_key(ip("::ffff:203.0.113.7")), A.unwrap());
     }
 
@@ -228,8 +244,13 @@ mod tests {
         limiter.take(A, 0).unwrap();
         limiter.prune();
         assert_eq!(limiter.clients.lock().unwrap().len(), 1, "still refilling");
-        limiter.clients.lock().unwrap().get_mut(&A.unwrap()).unwrap()[0].updated -=
-            Duration::from_secs(60);
+        limiter
+            .clients
+            .lock()
+            .unwrap()
+            .get_mut(&A.unwrap())
+            .unwrap()[0]
+            .updated -= Duration::from_secs(60);
         limiter.prune();
         assert!(limiter.clients.lock().unwrap().is_empty());
     }

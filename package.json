@@ -4,7 +4,8 @@
   "description": "Fully End-to-End Encrypted Pastebin",
   "scripts": {
     "build": "webpack",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/unit/",
+    "test:e2e": "node tests/run-e2e.mjs"
   },
   "repository": {
     "type": "git",

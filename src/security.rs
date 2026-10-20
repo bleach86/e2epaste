@@ -35,7 +35,10 @@ impl Fairing for SecurityHeaders {
         let path = req.uri().path();
         let public_asset = path.starts_with("/public/");
 
-        res.set_header(Header::new("Content-Security-Policy", CONTENT_SECURITY_POLICY));
+        res.set_header(Header::new(
+            "Content-Security-Policy",
+            CONTENT_SECURITY_POLICY,
+        ));
         res.set_header(Header::new("X-Content-Type-Options", "nosniff"));
         res.set_header(Header::new("X-Frame-Options", "DENY"));
         // Paste IDs are in the path; don't pass them on to other sites.

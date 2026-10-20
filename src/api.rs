@@ -36,7 +36,8 @@ impl<'r> Responder<'r, 'static> for ApiError {
         match self {
             ApiError::RateLimited(wait) => {
                 let seconds = (wait.as_secs_f64().ceil() as u64).max(1);
-                let body = Json(serde_json::json!({"error": "rate_limited", "retry_after": seconds}));
+                let body =
+                    Json(serde_json::json!({"error": "rate_limited", "retry_after": seconds}));
                 Response::build_from(body.respond_to(req)?)
                     .status(Status::TooManyRequests)
                     .raw_header("Retry-After", seconds.to_string())
@@ -68,7 +69,11 @@ impl<'r> FromRequest<'r> for ClientIp {
 
 /// Refuses new data when the disk is nearly full, or when `attachment_bytes`
 /// more would go over the attachment storage cap.
-pub fn check_storage(db: &PasteDB, config: &AppConfig, attachment_bytes: u64) -> Result<(), ApiError> {
+pub fn check_storage(
+    db: &PasteDB,
+    config: &AppConfig,
+    attachment_bytes: u64,
+) -> Result<(), ApiError> {
     if config.min_free_disk_mib > 0 {
         match db.available_disk_space() {
             Ok(free) if free < config.min_free_disk_mib * MIB + attachment_bytes => {

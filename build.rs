@@ -8,7 +8,12 @@ const DIST_DIR: &str = "static/js/dist";
 // Installs node_modules and runs webpack so `cargo build` / `cargo run`
 // produce the bundles in static/js/dist. Set SKIP_NPM_BUILD=1 to skip.
 fn main() {
-    for path in ["package.json", "package-lock.json", "webpack.config.js", "js"] {
+    for path in [
+        "package.json",
+        "package-lock.json",
+        "webpack.config.js",
+        "js",
+    ] {
         println!("cargo:rerun-if-changed={path}");
     }
     println!("cargo:rerun-if-env-changed=SKIP_NPM_BUILD");
@@ -22,7 +27,10 @@ fn main() {
 
     // Cache-busting query string for the bundles (?v={{ asset_version }}),
     // since /public is served with a long max-age.
-    println!("cargo:rustc-env=ASSET_VERSION={:x}", hash_dir(Path::new(DIST_DIR)));
+    println!(
+        "cargo:rustc-env=ASSET_VERSION={:x}",
+        hash_dir(Path::new(DIST_DIR))
+    );
 }
 
 fn npm(args: &[&str]) {

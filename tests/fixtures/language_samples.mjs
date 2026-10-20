@@ -1,0 +1,30 @@
+// Realistic paste samples, labelled with the language a person would pick.
+// "plain:" samples should be left as plain text by auto-detection.
+export const SAMPLES = {
+  rust: `use std::collections::HashMap;\n\nfn main() {\n    let mut counts: HashMap<&str, usize> = HashMap::new();\n    for word in "a b a".split_whitespace() {\n        *counts.entry(word).or_insert(0) += 1;\n    }\n    println!("{:?}", counts);\n}\n`,
+  python: `import os\nimport sys\n\ndef main(argv):\n    """Print files bigger than a limit."""\n    limit = int(argv[1]) if len(argv) > 1 else 1024\n    for root, dirs, files in os.walk("."):\n        for name in files:\n            path = os.path.join(root, name)\n            if os.path.getsize(path) > limit:\n                print(path)\n\nif __name__ == "__main__":\n    main(sys.argv)\n`,
+  javascript: `const express = require("express");\nconst app = express();\n\napp.get("/api/users/:id", async (req, res) => {\n  const user = await db.users.findOne({ id: req.params.id });\n  if (!user) {\n    return res.status(404).json({ error: "not found" });\n  }\n  res.json(user);\n});\n\napp.listen(3000, () => console.log("listening"));\n`,
+  typescript: `interface User {\n  id: number;\n  name: string;\n  email?: string;\n}\n\nexport function greet(user: User): string {\n  return \`Hello, \${user.name}\`;\n}\n\nconst users: Array<User> = [];\n`,
+  json: `{\n  "name": "e2epaste",\n  "version": "1.0.0",\n  "dependencies": {\n    "pako": "^3.0.2",\n    "marked": "^18.1.1"\n  },\n  "private": true\n}\n`,
+  xml: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <title>Test</title>\n</head>\n<body>\n  <div class="container">\n    <p>Hello <a href="/about">world</a></p>\n  </div>\n</body>\n</html>\n`,
+  css: `.header {\n  display: flex;\n  align-items: center;\n  padding: 0 16px;\n  background: #0e1116;\n}\n\n@media (max-width: 600px) {\n  .header { flex-direction: column; }\n}\n`,
+  sql: `SELECT u.id, u.name, COUNT(o.id) AS orders\nFROM users u\nLEFT JOIN orders o ON o.user_id = u.id\nWHERE u.created_at > '2024-01-01'\nGROUP BY u.id, u.name\nORDER BY orders DESC\nLIMIT 10;\n`,
+  bash: `#!/bin/bash\nset -euo pipefail\n\nfor f in *.log; do\n  if [ -s "$f" ]; then\n    gzip "$f"\n    echo "compressed $f"\n  fi\ndone\n\nexport PATH="$HOME/bin:$PATH"\n`,
+  go: `package main\n\nimport (\n\t"fmt"\n\t"net/http"\n)\n\nfunc handler(w http.ResponseWriter, r *http.Request) {\n\tfmt.Fprintf(w, "Hello, %s!", r.URL.Path[1:])\n}\n\nfunc main() {\n\thttp.HandleFunc("/", handler)\n\thttp.ListenAndServe(":8080", nil)\n}\n`,
+  java: `import java.util.ArrayList;\nimport java.util.List;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> names = new ArrayList<>();\n        names.add("Ada");\n        for (String name : names) {\n            System.out.println("Hello " + name);\n        }\n    }\n}\n`,
+  c: `#include <stdio.h>\n#include <stdlib.h>\n\nint main(int argc, char **argv) {\n    int *buf = malloc(10 * sizeof(int));\n    if (buf == NULL) {\n        return 1;\n    }\n    printf("%d\\n", argc);\n    free(buf);\n    return 0;\n}\n`,
+  cpp: `#include <iostream>\n#include <vector>\n\nint main() {\n    std::vector<int> v{1, 2, 3};\n    for (const auto& x : v) {\n        std::cout << x << std::endl;\n    }\n    return 0;\n}\n`,
+  csharp: `using System;\nusing System.Linq;\n\nnamespace Demo\n{\n    public class Program\n    {\n        public static void Main(string[] args)\n        {\n            var evens = Enumerable.Range(1, 10).Where(n => n % 2 == 0);\n            Console.WriteLine(string.Join(", ", evens));\n        }\n    }\n}\n`,
+  yaml: `version: "3.8"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "80:80"\n    volumes:\n      - ./html:/usr/share/nginx/html\n    restart: unless-stopped\n`,
+  markdown: `# Release notes\n\n## What's new\n\n- Faster **startup**\n- Fixed a bug in \`parse()\`\n\nSee the [docs](https://example.com/docs) for details.\n\n\`\`\`sh\ncargo build --release\n\`\`\`\n`,
+  diff: `diff --git a/src/main.rs b/src/main.rs\nindex 3b18e51..a1b2c3d 100644\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,4 +1,4 @@\n fn main() {\n-    println!("hello");\n+    println!("hello, world");\n }\n`,
+  php: `<?php\n\nfunction getUser(PDO $db, int $id): ?array {\n    $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");\n    $stmt->execute([$id]);\n    return $stmt->fetch() ?: null;\n}\n\necho json_encode(getUser($db, 1));\n`,
+  ruby: `class Greeter\n  attr_reader :name\n\n  def initialize(name)\n    @name = name\n  end\n\n  def greet\n    puts "Hello, #{name}!"\n  end\nend\n\nGreeter.new("Ada").greet\n`,
+  ini: `[server]\nhost = 0.0.0.0\nport = 8080\n\n[database]\nurl = postgres://localhost/app\npool_size = 10\n`,
+  kotlin: `data class User(val name: String, val age: Int)\n\nfun main() {\n    val users = listOf(User("Ada", 36), User("Alan", 41))\n    users.filter { it.age > 40 }.forEach { println(it.name) }\n}\n`,
+  // Things that should stay plain text.
+  "plain:prose": `Hi team,\n\nThe meeting moved to Thursday at 3pm. Please bring the quarterly numbers and\nany questions you have about the new process. Let me know if that doesn't work.\n\nThanks,\nSam\n`,
+  "plain:log": `2026-10-20 11:04:12 INFO  Starting server on port 8001\n2026-10-20 11:04:12 INFO  Loaded 52 pastes\n2026-10-20 11:05:40 WARN  Slow request: GET /paste/abc (812 ms)\n2026-10-20 11:06:01 ERROR Connection reset by peer\n`,
+  "plain:list": `milk\neggs\nbread\nbutter\napples\n`,
+  "plain:short": `hello world`,
+};

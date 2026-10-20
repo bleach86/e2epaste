@@ -52,7 +52,8 @@ pub static HUBS: [ToolHub; 2] = [
         intro: "Encode, decode, count and transform text.",
         page: PageMeta {
             title: "String Tools: Base64, Hex, Binary, Character Counter & More - e2ePaste.XYZ",
-            description: "Free text tools that run entirely in your browser: Base64, hex and binary \
+            description:
+                "Free text tools that run entirely in your browser: Base64, hex and binary \
                 converters, a character and word counter, reverse text, random case and more.",
             canonical: Some("/tools/strings"),
         },
@@ -191,7 +192,9 @@ pub fn find_tool(slug: &str) -> Option<&'static Tool> {
 }
 
 pub fn hub(group: ToolGroup) -> &'static ToolHub {
-    HUBS.iter().find(|h| h.group == group).expect("every group has a hub")
+    HUBS.iter()
+        .find(|h| h.group == group)
+        .expect("every group has a hub")
 }
 
 /// Paths of every hub and tool page, for sitemap.xml.

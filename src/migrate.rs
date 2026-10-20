@@ -12,8 +12,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use redb::{Database, ReadableDatabase, TableDefinition, WriteTransaction};
-#[cfg(test)]
-use redb::ReadableTableMetadata;
 
 use crate::paste_db::{DbError, Result, EXPIRY, PASTES, STATS, UPLOAD_TOKENS};
 
@@ -55,14 +53,21 @@ pub fn run(db: &Database, target: u64) -> Result<()> {
         )));
     }
 
-    for step in MIGRATIONS.iter().filter(|m| m.version > current && m.version <= target) {
+    for step in MIGRATIONS
+        .iter()
+        .filter(|m| m.version > current && m.version <= target)
+    {
         let txn = db.begin_write()?;
         (step.apply)(&txn)?;
-        txn.open_table(META)?.insert(SCHEMA_VERSION_KEY, step.version)?;
+        txn.open_table(META)?
+            .insert(SCHEMA_VERSION_KEY, step.version)?;
         txn.commit()?;
         // A new database runs every step; that's setup, not worth logging.
         if current > 0 {
-            println!("Database migrated to schema version {}: {}", step.version, step.description);
+            println!(
+                "Database migrated to schema version {}: {}",
+                step.version, step.description
+            );
         }
     }
     Ok(())
@@ -105,7 +110,9 @@ pub fn import_sled(sled_dir: &Path, db_path: &Path) -> Result<()> {
             .use_compression(true)
             .compression_factor(18)
             .open()
-            .map_err(|e| DbError::Setup(format!("can't open the old database in {sled_dir:?}: {e}")))?;
+            .map_err(|e| {
+                DbError::Setup(format!("can't open the old database in {sled_dir:?}: {e}"))
+            })?;
         let db = Database::create(&partial)?;
         run(&db, SLED_IMPORT_SCHEMA)?;
         let txn = db.begin_write()?;
@@ -128,7 +135,10 @@ pub fn import_sled(sled_dir: &Path, db_path: &Path) -> Result<()> {
         );
     }
     if report.skipped > 0 {
-        notes += &format!(" Skipped {} entries that weren't valid (logged above).", report.skipped);
+        notes += &format!(
+            " Skipped {} entries that weren't valid (logged above).",
+            report.skipped
+        );
     }
     println!(
         "Imported {} pastes, {} pending attachment uploads and the site stats.{notes} The old \
@@ -188,7 +198,12 @@ mod sled_import {
     /// copied: it could hold only one paste per expiry time, so it's rebuilt
     /// from the pastes instead.
     pub fn copy(sled_db: &sled::Db, txn: &WriteTransaction) -> Result<Report> {
-        let mut report = Report { pastes: 0, unloadable: 0, skipped: 0, upload_tokens: 0 };
+        let mut report = Report {
+            pastes: 0,
+            unloadable: 0,
+            skipped: 0,
+            upload_tokens: 0,
+        };
 
         let mut pastes = txn.open_table(PASTES)?;
         let mut expiry = txn.open_table(EXPIRY)?;
@@ -217,13 +232,18 @@ mod sled_import {
 
         // Token bytes followed by the size limit (8 bytes, big endian).
         let mut tokens = txn.open_table(UPLOAD_TOKENS)?;
-        for entry in sled_db.open_tree(b"upload_tokens").map_err(sled_error)?.iter() {
+        for entry in sled_db
+            .open_tree(b"upload_tokens")
+            .map_err(sled_error)?
+            .iter()
+        {
             let (key, record) = entry.map_err(sled_error)?;
             let Some(split) = record.len().checked_sub(8) else {
                 continue;
             };
             let (token, size) = record.split_at(split);
-            let (Ok(id), Ok(token)) = (std::str::from_utf8(&key), std::str::from_utf8(token)) else {
+            let (Ok(id), Ok(token)) = (std::str::from_utf8(&key), std::str::from_utf8(token))
+            else {
                 continue;
             };
             let max_bytes = u64::from_be_bytes(size.try_into().expect("8 bytes"));
@@ -256,7 +276,10 @@ mod tests {
 
         let raw = Database::create(dir.join("e2epaste.redb")).unwrap();
         let txn = raw.begin_write().unwrap();
-        txn.open_table(META).unwrap().insert(SCHEMA_VERSION_KEY, SCHEMA_VERSION + 1).unwrap();
+        txn.open_table(META)
+            .unwrap()
+            .insert(SCHEMA_VERSION_KEY, SCHEMA_VERSION + 1)
+            .unwrap();
         txn.commit().unwrap();
         drop(raw);
 
@@ -282,32 +305,55 @@ mod tests {
             )
         };
         // A v1 paste (no version field), and a v3 one with the same expiry time.
-        pastes.insert("v1Paste1", paste("v1Paste1", 4000000000000, "").as_bytes()).unwrap();
         pastes
-            .insert("v3Paste1", paste("v3Paste1", 4000000000000, r#","version":3,"has_password":true"#).as_bytes())
+            .insert("v1Paste1", paste("v1Paste1", 4000000000000, "").as_bytes())
+            .unwrap();
+        pastes
+            .insert(
+                "v3Paste1",
+                paste(
+                    "v3Paste1",
+                    4000000000000,
+                    r#","version":3,"has_password":true"#,
+                )
+                .as_bytes(),
+            )
             .unwrap();
         pastes.insert("broken11", &b"not json"[..]).unwrap();
         // From before titles existed: copied, though this version can't load it.
         pastes
-            .insert("noTitle1", &br#"{"content":"c","iv":[1],"expires":4000000000000,"timestamp":1600000000}"#[..])
+            .insert(
+                "noTitle1",
+                &br#"{"content":"c","iv":[1],"expires":4000000000000,"timestamp":1600000000}"#[..],
+            )
             .unwrap();
 
         // The old index kept one ID per expiry time.
         let index = sled_db.open_tree(b"expire_index").unwrap();
-        index.insert(4000000000000u64.to_be_bytes(), &b"v3Paste1"[..]).unwrap();
+        index
+            .insert(4000000000000u64.to_be_bytes(), &b"v3Paste1"[..])
+            .unwrap();
 
         let mut token = b"tok".to_vec();
         token.extend_from_slice(&777u64.to_be_bytes());
-        sled_db.open_tree(b"upload_tokens").unwrap().insert("v3Paste1", token).unwrap();
+        sled_db
+            .open_tree(b"upload_tokens")
+            .unwrap()
+            .insert("v3Paste1", token)
+            .unwrap();
 
         let stats = sled_db.open_tree(b"site_stats").unwrap();
-        stats.insert(b"site_stats", &br#"{"pastes":41,"views":99}"#[..]).unwrap();
+        stats
+            .insert(b"site_stats", &br#"{"pastes":41,"views":99}"#[..])
+            .unwrap();
         sled_db.flush().unwrap();
     }
 
     #[cfg(feature = "sled-import")]
     #[test]
     fn imports_the_sled_database() {
+        use redb::ReadableTableMetadata;
+
         let dir = temp_dir();
         write_old_database(&dir);
         // Left over from an interrupted import.
@@ -316,7 +362,10 @@ mod tests {
         let db = open(&dir).unwrap();
 
         let v1 = db.get_paste("v1Paste1").unwrap();
-        assert_eq!((v1.version, v1.views, v1.content.as_str()), (1, 3, "c-v1Paste1"));
+        assert_eq!(
+            (v1.version, v1.views, v1.content.as_str()),
+            (1, 3, "c-v1Paste1")
+        );
         let v3 = db.get_paste("v3Paste1").unwrap();
         assert!(v3.has_password && v3.version == 3);
         assert!(db.get_paste("broken11").is_none(), "not JSON, so skipped");
@@ -330,8 +379,20 @@ mod tests {
         // old index held.
         let txn = db.raw_database().begin_read().unwrap();
         assert_eq!(txn.open_table(EXPIRY).unwrap().len().unwrap(), 3);
-        assert!(txn.open_table(PASTES).unwrap().get("noTitle1").unwrap().is_some(), "...but is kept");
-        assert!(txn.open_table(PASTES).unwrap().get("broken11").unwrap().is_none());
+        assert!(
+            txn.open_table(PASTES)
+                .unwrap()
+                .get("noTitle1")
+                .unwrap()
+                .is_some(),
+            "...but is kept"
+        );
+        assert!(txn
+            .open_table(PASTES)
+            .unwrap()
+            .get("broken11")
+            .unwrap()
+            .is_none());
         drop(txn);
 
         assert!(!dir.join("paste_db").exists());
@@ -353,7 +414,13 @@ mod tests {
         open(&dir).unwrap();
         let backups = std::fs::read_dir(&*dir)
             .unwrap()
-            .filter(|e| e.as_ref().unwrap().file_name().to_string_lossy().starts_with("paste_db.sled-backup"))
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("paste_db.sled-backup")
+            })
             .count();
         assert_eq!(backups, 2);
     }

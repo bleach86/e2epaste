@@ -25,14 +25,24 @@ impl<'r> FromRequest<'r> for AcceptEncoding {
     type Error = Infallible;
 
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let mut accepts = AcceptEncoding { br: false, gzip: false };
+        let mut accepts = AcceptEncoding {
+            br: false,
+            gzip: false,
+        };
 
-        for item in req.headers().get("Accept-Encoding").flat_map(|v| v.split(',')) {
+        for item in req
+            .headers()
+            .get("Accept-Encoding")
+            .flat_map(|v| v.split(','))
+        {
             let mut parts = item.split(';');
             let name = parts.next().unwrap_or("").trim();
             // "q=0" means the client explicitly refuses that encoding.
             let refused = parts.any(|p| {
-                p.trim().strip_prefix("q=").and_then(|q| q.parse::<f32>().ok()) == Some(0.0)
+                p.trim()
+                    .strip_prefix("q=")
+                    .and_then(|q| q.parse::<f32>().ok())
+                    == Some(0.0)
             });
             match name {
                 "br" => accepts.br = !refused,
@@ -90,10 +100,18 @@ pub async fn dist_asset(
         let mut compressed = file_path.clone().into_os_string();
         compressed.push(suffix);
         if let Ok(file) = NamedFile::open(&compressed).await {
-            return Some(DistAsset { file, content_type, encoding: Some(encoding) });
+            return Some(DistAsset {
+                file,
+                content_type,
+                encoding: Some(encoding),
+            });
         }
     }
 
     let file = NamedFile::open(&file_path).await.ok()?;
-    Some(DistAsset { file, content_type, encoding: None })
+    Some(DistAsset {
+        file,
+        content_type,
+        encoding: None,
+    })
 }

@@ -79,7 +79,7 @@ pub enum Opened {
     WrongProof,
     /// The view was counted. `paste` is as it was stored, with the new count.
     Paste {
-        paste: PasteData<'static>,
+        paste: Box<PasteData<'static>>,
         total_views: u64,
         last_view: bool,
     },
@@ -192,7 +192,8 @@ impl PasteDB {
         }
         write_paste(&txn, paste)?;
         if let Some((token, max_bytes)) = upload {
-            txn.open_table(UPLOAD_TOKENS)?.insert(id.as_str(), (token, max_bytes))?;
+            txn.open_table(UPLOAD_TOKENS)?
+                .insert(id.as_str(), (token, max_bytes))?;
         }
         add_to_stat(&txn, STAT_PASTES, 1)?;
         txn.commit()?;
@@ -253,14 +254,21 @@ impl PasteDB {
         }
         let total_views = add_to_stat(&txn, STAT_VIEWS, 1)?;
         txn.commit()?;
-        Ok(Opened::Paste { paste, total_views, last_view })
+        Ok(Opened::Paste {
+            paste: Box::new(paste),
+            total_views,
+            last_view,
+        })
     }
 
     /// Deletes the paste, its expiry entry, its upload token and its
     /// attachment. Fine to call for a paste that's already gone.
     pub async fn delete_paste(&self, id: &str) -> Result<()> {
         let txn = self.db.begin_write()?;
-        let stored = txn.open_table(PASTES)?.remove(id)?.and_then(|json| stored_expiry(json.value()));
+        let stored = txn
+            .open_table(PASTES)?
+            .remove(id)?
+            .and_then(|json| stored_expiry(json.value()));
         if let Some(expires) = stored {
             txn.open_table(EXPIRY)?.remove((expires, id))?;
         }
@@ -340,7 +348,10 @@ impl PasteDB {
             return Ok(None);
         };
         let (stored_token, max_bytes) = record.value();
-        Ok(secrets::constant_time_eq(stored_token.as_bytes(), token.as_bytes()).then_some(max_bytes))
+        Ok(
+            secrets::constant_time_eq(stored_token.as_bytes(), token.as_bytes())
+                .then_some(max_bytes),
+        )
     }
 
     /// Uses up the upload token. Write transactions run one at a time, so of
@@ -350,7 +361,9 @@ impl PasteDB {
         let matches = {
             let table = txn.open_table(UPLOAD_TOKENS)?;
             let record = table.get(id)?;
-            record.is_some_and(|r| secrets::constant_time_eq(r.value().0.as_bytes(), token.as_bytes()))
+            record.is_some_and(|r| {
+                secrets::constant_time_eq(r.value().0.as_bytes(), token.as_bytes())
+            })
         };
         if !matches {
             return Ok(false);
@@ -437,7 +450,8 @@ fn read_paste(txn: &WriteTransaction, id: &str) -> Result<Option<PasteData<'stat
 pub(crate) fn write_paste(txn: &WriteTransaction, paste: &PasteData<'_>) -> Result<()> {
     let id = paste.id.to_string();
     let json = serde_json::to_vec(paste)?;
-    txn.open_table(PASTES)?.insert(id.as_str(), json.as_slice())?;
+    txn.open_table(PASTES)?
+        .insert(id.as_str(), json.as_slice())?;
     if let Some(expires) = paste.expires {
         txn.open_table(EXPIRY)?.insert((expires, id.as_str()), ())?;
     }
@@ -470,7 +484,6 @@ fn dir_size(dir: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -492,16 +505,25 @@ pub(crate) mod tests {
     }
 
     pub fn temp_dir() -> TempDir {
-        let dir = std::env::temp_dir().join(format!("e2epaste-test-{:016x}", rand::random::<u64>()));
+        let dir =
+            std::env::temp_dir().join(format!("e2epaste-test-{:016x}", rand::random::<u64>()));
         std::fs::create_dir_all(dir.join("file_store")).unwrap();
         TempDir(dir)
     }
 
     pub fn open(dir: &Path) -> Result<PasteDB> {
-        PasteDB::open(&dir.join("e2epaste.redb"), &dir.join("paste_db"), dir.join("file_store"))
+        PasteDB::open(
+            &dir.join("e2epaste.redb"),
+            &dir.join("paste_db"),
+            dir.join("file_store"),
+        )
     }
 
-    pub fn sample_paste(id: &str, expires: Option<u64>, max_views: Option<u64>) -> PasteData<'static> {
+    pub fn sample_paste(
+        id: &str,
+        expires: Option<u64>,
+        max_views: Option<u64>,
+    ) -> PasteData<'static> {
         PasteData {
             content: "ciphertext".into(),
             iv: vec![1, 2, 3],
@@ -547,7 +569,11 @@ pub(crate) mod tests {
         assert_eq!(stored.content, "ciphertext");
         assert_eq!(stored.expires, Some(123));
         assert!(db.get_paste("missing1").is_none());
-        assert_eq!(db.get_site_stats().pastes, 1, "the refused duplicate isn't counted");
+        assert_eq!(
+            db.get_site_stats().pastes,
+            1,
+            "the refused duplicate isn't counted"
+        );
         assert_eq!(expiry_entries(&db), vec![(123, "abcdEFGH".to_string())]);
 
         // Still there after reopening.
@@ -559,7 +585,11 @@ pub(crate) mod tests {
 
     fn opened(result: Opened) -> (PasteData<'static>, u64, bool) {
         match result {
-            Opened::Paste { paste, total_views, last_view } => (paste, total_views, last_view),
+            Opened::Paste {
+                paste,
+                total_views,
+                last_view,
+            } => (*paste, total_views, last_view),
             Opened::NotFound => panic!("not found"),
             Opened::WrongProof => panic!("wrong proof"),
         }
@@ -574,18 +604,33 @@ pub(crate) mod tests {
         db.create_paste(&paste, None).unwrap();
         let proof = "ab".repeat(32);
 
-        assert!(matches!(db.open_paste("guarded1", None).unwrap(), Opened::WrongProof));
-        assert!(matches!(db.open_paste("guarded1", Some(&"cd".repeat(32))).unwrap(), Opened::WrongProof));
-        assert_eq!(db.get_paste("guarded1").unwrap().views, 0, "failed attempts use no views");
+        assert!(matches!(
+            db.open_paste("guarded1", None).unwrap(),
+            Opened::WrongProof
+        ));
+        assert!(matches!(
+            db.open_paste("guarded1", Some(&"cd".repeat(32))).unwrap(),
+            Opened::WrongProof
+        ));
+        assert_eq!(
+            db.get_paste("guarded1").unwrap().views,
+            0,
+            "failed attempts use no views"
+        );
 
-        let (paste, total_views, last_view) = opened(db.open_paste("guarded1", Some(&proof)).unwrap());
+        let (paste, total_views, last_view) =
+            opened(db.open_paste("guarded1", Some(&proof)).unwrap());
         assert_eq!((paste.views, total_views, last_view), (1, 1, false));
         assert_eq!(paste.content, "ciphertext");
 
         // Pastes from before access proofs open without one.
-        db.create_paste(&sample_paste("legacy11", None, None), None).unwrap();
+        db.create_paste(&sample_paste("legacy11", None, None), None)
+            .unwrap();
         assert_eq!(opened(db.open_paste("legacy11", None).unwrap()).0.views, 1);
-        assert!(matches!(db.open_paste("missing1", None).unwrap(), Opened::NotFound));
+        assert!(matches!(
+            db.open_paste("missing1", None).unwrap(),
+            Opened::NotFound
+        ));
     }
 
     #[test]
@@ -593,7 +638,8 @@ pub(crate) mod tests {
         let dir = temp_dir();
         let db = open(&dir).unwrap();
         let expires = now_millis() + 1_000_000;
-        db.create_paste(&sample_paste("twoViews", Some(expires), Some(2)), None).unwrap();
+        db.create_paste(&sample_paste("twoViews", Some(expires), Some(2)), None)
+            .unwrap();
 
         assert!(!opened(db.open_paste("twoViews", None).unwrap()).2);
         let (paste, _, last_view) = opened(db.open_paste("twoViews", None).unwrap());
@@ -601,7 +647,10 @@ pub(crate) mod tests {
         assert_eq!(paste.content, "ciphertext", "the last viewer still gets it");
         assert!(db.get_paste("twoViews").is_none(), "and then it's gone");
         assert!(expiry_entries(&db).is_empty());
-        assert!(matches!(db.open_paste("twoViews", None).unwrap(), Opened::NotFound));
+        assert!(matches!(
+            db.open_paste("twoViews", None).unwrap(),
+            Opened::NotFound
+        ));
         assert_eq!(db.get_site_stats().views, 2);
     }
 
@@ -620,15 +669,25 @@ pub(crate) mod tests {
         let expires = kept.expires.unwrap();
         assert!(expires <= now_millis() + window && expires > now_millis() + window - 5_000);
         assert_eq!(expiry_entries(&db), vec![(expires, "burnFile".to_string())]);
-        assert!(matches!(db.open_paste("burnFile", None).unwrap(), Opened::NotFound), "no more views");
+        assert!(
+            matches!(db.open_paste("burnFile", None).unwrap(), Opened::NotFound),
+            "no more views"
+        );
     }
 
     #[test]
     fn expired_pastes_dont_open() {
         let dir = temp_dir();
         let db = open(&dir).unwrap();
-        db.create_paste(&sample_paste("expired1", Some(now_millis() - 1), None), None).unwrap();
-        assert!(matches!(db.open_paste("expired1", None).unwrap(), Opened::NotFound));
+        db.create_paste(
+            &sample_paste("expired1", Some(now_millis() - 1), None),
+            None,
+        )
+        .unwrap();
+        assert!(matches!(
+            db.open_paste("expired1", None).unwrap(),
+            Opened::NotFound
+        ));
     }
 
     #[rocket::async_test]
@@ -645,9 +704,14 @@ pub(crate) mod tests {
             db.create_paste(&paste, None).unwrap();
         }
         // Expired a moment ago, from a paste created just now.
-        db.create_paste(&sample_paste("youngEx1", Some(past), None), None).unwrap();
+        db.create_paste(&sample_paste("youngEx1", Some(past), None), None)
+            .unwrap();
         // Not expired.
-        db.create_paste(&sample_paste("current1", Some(now_millis() + 60_000), None), None).unwrap();
+        db.create_paste(
+            &sample_paste("current1", Some(now_millis() + 60_000), None),
+            None,
+        )
+        .unwrap();
 
         db.remove_expired_pastes().await.unwrap();
         assert!(db.get_paste("oldOne11").is_none());
@@ -664,13 +728,24 @@ pub(crate) mod tests {
         let past = now_millis() - 1000;
         let txn = db.db.begin_write().unwrap();
         let old = format!(r#"{{"content":"c","expires":{past},"timestamp":1600000000}}"#);
-        txn.open_table(PASTES).unwrap().insert("noTitle1", old.as_bytes()).unwrap();
-        txn.open_table(EXPIRY).unwrap().insert((past, "noTitle1"), ()).unwrap();
+        txn.open_table(PASTES)
+            .unwrap()
+            .insert("noTitle1", old.as_bytes())
+            .unwrap();
+        txn.open_table(EXPIRY)
+            .unwrap()
+            .insert((past, "noTitle1"), ())
+            .unwrap();
         txn.commit().unwrap();
 
         db.remove_expired_pastes().await.unwrap();
         let txn = db.db.begin_read().unwrap();
-        assert!(txn.open_table(PASTES).unwrap().get("noTitle1").unwrap().is_none());
+        assert!(txn
+            .open_table(PASTES)
+            .unwrap()
+            .get("noTitle1")
+            .unwrap()
+            .is_none());
         assert!(expiry_entries(&db).is_empty());
     }
 
@@ -698,13 +773,23 @@ pub(crate) mod tests {
     fn upload_tokens_work_once() {
         let dir = temp_dir();
         let db = open(&dir).unwrap();
-        db.create_paste(&sample_paste("upload11", None, None), Some(("secret", 4096))).unwrap();
+        db.create_paste(
+            &sample_paste("upload11", None, None),
+            Some(("secret", 4096)),
+        )
+        .unwrap();
 
-        assert_eq!(db.upload_allowance("upload11", "secret").unwrap(), Some(4096));
+        assert_eq!(
+            db.upload_allowance("upload11", "secret").unwrap(),
+            Some(4096)
+        );
         assert_eq!(db.upload_allowance("upload11", "wrong").unwrap(), None);
         assert!(!db.consume_upload_token("upload11", "wrong").unwrap());
         assert!(db.consume_upload_token("upload11", "secret").unwrap());
-        assert!(!db.consume_upload_token("upload11", "secret").unwrap(), "only once");
+        assert!(
+            !db.consume_upload_token("upload11", "secret").unwrap(),
+            "only once"
+        );
         assert_eq!(db.upload_allowance("upload11", "secret").unwrap(), None);
     }
 }

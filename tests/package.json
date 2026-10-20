@@ -1,0 +1,9 @@
+{
+  "name": "e2epaste-tests",
+  "private": true,
+  "description": "Browser test dependencies, kept apart so building the site doesn't install them. Run the tests from the repository root: npm test, npm run test:e2e.",
+  "type": "module",
+  "devDependencies": {
+    "puppeteer-core": "^25.15.0"
+  }
+}

@@ -10,3 +10,4 @@ static/js/dist
 .env
 Dockerfile
 docker-compose.yml
+tests

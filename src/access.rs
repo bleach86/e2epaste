@@ -98,7 +98,12 @@ pub fn open(
     unlocks.0.check(client.0).map_err(ApiError::RateLimited)?;
 
     match db.open_paste(&id, request.proof.as_deref()) {
-        Ok(Opened::Paste { paste, total_views, last_view }) => {
+        Ok(Opened::Paste {
+            paste,
+            total_views,
+            last_view,
+        }) => {
+            let paste = *paste;
             let download_ticket = paste.file_name.is_some().then(|| tickets.issue(&id));
             Ok(Json(OpenResponse {
                 content: paste.content,
@@ -134,7 +139,9 @@ pub async fn download_attachment(
     if !tickets.is_valid(&ticket.0, &id) {
         return Err(Status::Forbidden);
     }
-    let file = NamedFile::open(db.attachment_path(&id)).await.map_err(|_| Status::NotFound)?;
+    let file = NamedFile::open(db.attachment_path(&id))
+        .await
+        .map_err(|_| Status::NotFound)?;
 
     // A used-up paste was only kept for this download. The file is already
     // open, so it can still be sent after it's deleted.

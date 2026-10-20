@@ -32,9 +32,9 @@ use chrono::prelude::*;
 
 use api::{ApiError, ClientIp};
 use config::{AppConfig, MAX_ATTACHMENT_MIB, MIB};
-use rate_limit::{RateLimiter, UnlockLimiter};
 use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
+use rate_limit::{RateLimiter, UnlockLimiter};
 
 pub(crate) const TITLE: &str = "e2ePaste.XYZ";
 const ID_LENGTH: usize = 8;
@@ -51,14 +51,16 @@ pub struct PageMeta {
 
 const INDEX_PAGE: PageMeta = PageMeta {
     title: "e2ePaste.XYZ - End-to-End Encrypted Pastebin",
-    description: "Share text and files with end-to-end encryption. Pastes are encrypted in your browser \
+    description:
+        "Share text and files with end-to-end encryption. Pastes are encrypted in your browser \
         with AES-256-GCM, with optional passwords, expiry and view limits.",
     canonical: Some("/"),
 };
 
 const FAQ_PAGE: PageMeta = PageMeta {
     title: "FAQ - e2ePaste.XYZ",
-    description: "How e2ePaste.XYZ encrypts pastes in your browser so the server can't read them, what \
+    description:
+        "How e2ePaste.XYZ encrypts pastes in your browser so the server can't read them, what \
         the server can see, how passwords, expiry and view limits work, and size limits.",
     canonical: Some("/faq"),
 };
@@ -73,7 +75,8 @@ const CREDITS_PAGE: PageMeta = PageMeta {
 // links don't reveal anything about the paste.
 const PASTE_PAGE: PageMeta = PageMeta {
     title: "Encrypted Paste - e2ePaste.XYZ",
-    description: "An end-to-end encrypted paste. It can only be decrypted in your browser using the \
+    description:
+        "An end-to-end encrypted paste. It can only be decrypted in your browser using the \
         full link.",
     canonical: None,
 };
@@ -141,7 +144,11 @@ async fn upload(
     raw_paste: Json<IncomingPaste>,
 ) -> Result<Json<IncomingPasteRes>, ApiError> {
     let paste: IncomingPaste = raw_paste.clone().into_inner();
-    if paste.access_hash.as_deref().is_some_and(|hash| !secrets::is_sha256_hex(hash)) {
+    if paste
+        .access_hash
+        .as_deref()
+        .is_some_and(|hash| !secrets::is_sha256_hex(hash))
+    {
         return Err(Status::BadRequest.into());
     }
 
@@ -150,12 +157,16 @@ async fn upload(
     let max_attachment = MAX_ATTACHMENT_MIB * MIB;
     let attachment_bytes: u64 = match (&paste.file_name, paste.file_size) {
         (None, _) => 0,
-        (Some(_), Some(size)) if size > max_attachment => return Err(Status::PayloadTooLarge.into()),
+        (Some(_), Some(size)) if size > max_attachment => {
+            return Err(Status::PayloadTooLarge.into())
+        }
         (Some(_), Some(size)) => size,
         (Some(_), None) => max_attachment,
     };
     api::check_storage(db, config, attachment_bytes)?;
-    limiter.take(client.0, attachment_bytes).map_err(ApiError::RateLimited)?;
+    limiter
+        .take(client.0, attachment_bytes)
+        .map_err(ApiError::RateLimited)?;
 
     let now: DateTime<Utc> = Utc::now();
 
@@ -189,7 +200,9 @@ async fn upload(
     paste_data.delete_hash = secrets::hash_secret(&delete_token);
 
     let upload_token: Option<String> = paste_data.file_name.is_some().then(secrets::new_token);
-    let upload = upload_token.as_deref().map(|token| (token, attachment_bytes));
+    let upload = upload_token
+        .as_deref()
+        .map(|token| (token, attachment_bytes));
 
     // A new random ID until one isn't taken.
     loop {
@@ -198,7 +211,11 @@ async fn upload(
             Ok(false) => paste_data.id = PasteId::new(ID_LENGTH),
             Err(e) => {
                 eprintln!("Error saving paste: {e}");
-                return Ok(Json(IncomingPasteRes { id: None, upload_token: None, delete_token: None }));
+                return Ok(Json(IncomingPasteRes {
+                    id: None,
+                    upload_token: None,
+                    delete_token: None,
+                }));
             }
         }
     }
@@ -258,7 +275,10 @@ async fn upload_attachment(
     // the paste exists.
     // The size limit was set (and charged to the client's allowance) when the
     // paste was created.
-    let max_bytes = match db.upload_allowance(&id, &token.0).map_err(|e| internal(&e))? {
+    let max_bytes = match db
+        .upload_allowance(&id, &token.0)
+        .map_err(|e| internal(&e))?
+    {
         Some(max_bytes) => max_bytes,
         None => return Err(Status::Forbidden.into()),
     };
@@ -525,9 +545,16 @@ async fn rocket() -> _ {
     for dir in [config.data_dir.clone(), config.file_dir()] {
         config::ensure_dir(&dir).unwrap_or_else(|e| exit_with(&e));
     }
-    let db: Arc<PasteDB> = match PasteDB::open(&config.db_path(), &config.legacy_sled_dir(), config.file_dir()) {
+    let db: Arc<PasteDB> = match PasteDB::open(
+        &config.db_path(),
+        &config.legacy_sled_dir(),
+        config.file_dir(),
+    ) {
         Ok(db) => Arc::new(db),
-        Err(e) => exit_with(&format!("can't open the database {:?}: {e}", config.db_path())),
+        Err(e) => exit_with(&format!(
+            "can't open the database {:?}: {e}",
+            config.db_path()
+        )),
     };
     db.remove_partial_uploads();
     let db_clone = db.clone();
@@ -545,7 +572,13 @@ async fn rocket() -> _ {
         "Site URL {}, data in {:?}, static files from {:?}",
         config.site_url, config.data_dir, config.static_dir
     );
-    let limit = |n: u64, unit: &str| if n == 0 { "off".to_string() } else { format!("{n} {unit}") };
+    let limit = |n: u64, unit: &str| {
+        if n == 0 {
+            "off".to_string()
+        } else {
+            format!("{n} {unit}")
+        }
+    };
     println!(
         "Limits per IP: pastes {} / {}, attachments {}. Free disk to keep: {}. \
          Attachment storage cap: {}",
@@ -558,7 +591,11 @@ async fn rocket() -> _ {
     println!(
         "Failed unlock attempts per IP: {}. Admin API: {}",
         limit(config.unlock_attempts_per_hour, "an hour"),
-        if config.admin_token.is_some() { "on" } else { "off" },
+        if config.admin_token.is_some() {
+            "on"
+        } else {
+            "off"
+        },
     );
     let site_url = config.site_url.clone();
     let static_dir = config.static_dir.clone();

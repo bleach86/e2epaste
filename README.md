@@ -1,5 +1,7 @@
 # e2ePaste.XYZ
 
+[![CI](https://github.com/bleach86/e2epaste/actions/workflows/ci.yml/badge.svg)](https://github.com/bleach86/e2epaste/actions/workflows/ci.yml)
+
 An end-to-end encrypted pastebin for text and files. Everything is encrypted in your browser before it's
 uploaded, and the key never reaches the server, so the server only ever stores data it can't read.
 
@@ -354,6 +356,35 @@ that hasn't been imported.
 | `SKIP_NPM_BUILD=1` | Skip `npm ci` and webpack, for example when the bundles in `static/js/dist/` are already built |
 | `NODE_ENV=development` | Build unminified JavaScript bundles |
 
+## Tests
+
+| Command | What it runs |
+|---|---|
+| `cargo test` | Rust unit tests: storage, migrations and the sled import, rate limits, tokens |
+| `npm test` | JavaScript unit tests: paste formats v1 to v3 (old pastes made with the code that created them), access proofs, the text tools |
+| `npm run test:e2e` | Browser tests in headless Chrome, each against its own server |
+
+The browser tests need a built server and their own npm package, kept apart so building the site doesn't
+install it:
+
+```sh
+cargo build
+npm ci --prefix tests
+npm run test:e2e            # all suites
+npm run test:e2e security   # suites whose name contains "security"
+```
+
+They find Chrome in the usual places, or set `CHROME_PATH`. Each suite gets a fresh server on its own port,
+with an empty data directory and the settings it needs. The suites cover:
+- creating and viewing pastes, attachments, burn after reading, delete links and the admin API
+- the security headers and Content Security Policy, which every suite checks for violations
+- access proofs and the unlock rate limit
+- Markdown rendering against hostile pastes, and language detection
+- old paste formats, plain-HTTP warnings, the tools, and the mobile layout
+
+[GitHub Actions](.github/workflows/ci.yml) runs all of these on every push and pull request. It also runs
+`cargo fmt`, `clippy`, `cargo audit`, `npm audit` and a Docker build, and repeats the audits weekly.
+
 ## Project layout
 
 | Path | What's there |
@@ -364,6 +395,8 @@ that hasn't been imported.
 | `static/` | CSS, fonts, icons and vendored libraries |
 | `build.rs` | Runs npm and webpack during `cargo build` |
 | `Dockerfile`, `docker-compose.yml` | The Docker image and a Compose setup for it |
+| `tests/` | JavaScript unit tests, browser tests and their runner ([`tests/run-e2e.mjs`](tests/run-e2e.mjs)) |
+| `.github/workflows/` | CI |
 
 ## Credits
 

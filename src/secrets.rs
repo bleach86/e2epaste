@@ -20,12 +20,16 @@ pub fn hash_secret(secret_hex: &str) -> Option<String> {
 
 /// Whether `secret` (hex) hashes to `stored_hash`, compared in constant time.
 pub fn matches_hash(secret_hex: &str, stored_hash: &str) -> bool {
-    hash_secret(secret_hex).is_some_and(|hash| constant_time_eq(hash.as_bytes(), stored_hash.as_bytes()))
+    hash_secret(secret_hex)
+        .is_some_and(|hash| constant_time_eq(hash.as_bytes(), stored_hash.as_bytes()))
 }
 
 /// Whether `value` is a hex SHA-256 hash, as sent by the browser.
 pub fn is_sha256_hex(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
 pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -37,7 +41,7 @@ fn to_hex(bytes: &[u8]) -> String {
 }
 
 fn from_hex(hex: &str) -> Option<Vec<u8>> {
-    if hex.len() % 2 != 0 || hex.len() > 256 {
+    if !hex.len().is_multiple_of(2) || hex.len() > 256 {
         return None;
     }
     (0..hex.len())

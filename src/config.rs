@@ -92,8 +92,15 @@ impl AppConfig {
         let mut config: AppConfig = figment.extract().map_err(|e| e.to_string())?;
         config.site_url = normalize_site_url(&config.site_url)?;
 
-        config.admin_token = config.admin_token.take().filter(|token| !token.trim().is_empty());
-        if config.admin_token.as_ref().is_some_and(|token| token.len() < MIN_ADMIN_TOKEN_LEN) {
+        config.admin_token = config
+            .admin_token
+            .take()
+            .filter(|token| !token.trim().is_empty());
+        if config
+            .admin_token
+            .as_ref()
+            .is_some_and(|token| token.len() < MIN_ADMIN_TOKEN_LEN)
+        {
             return Err(format!(
                 "admin_token must be at least {MIN_ADMIN_TOKEN_LEN} characters. Generate one with \
                  `openssl rand -hex 32`."
@@ -174,7 +181,7 @@ fn normalize_site_url(raw: &str) -> Result<String, String> {
     if !matches!(parsed.scheme(), "http" | "https") {
         return invalid("must start with https:// or http://");
     }
-    if parsed.authority().map_or(true, |a| a.host().is_empty()) {
+    if parsed.authority().is_none_or(|a| a.host().is_empty()) {
         return invalid("has no host name");
     }
     // Pages link to /public/... and /s/..., so the site must be at the root.
