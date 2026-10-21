@@ -18,7 +18,7 @@
             <div class="panel-bar">
                 <label for="paste-title" class="visually-hidden">Title</label>
                 <input id="paste-title" class="title-input" type="text" maxlength="64" placeholder="Title (optional)"
-                    autocomplete="off">
+                    autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other">
                 <label for="syntax" class="visually-hidden">Syntax highlighting</label>
                 <select id="syntax" class="form-select form-select-sm w-auto">
                     {# Guessed in the browser; the server only stores "auto". #}
@@ -110,8 +110,8 @@
                 <label for="paste-password" class="field-label">Password <span
                         class="fw-normal text-secondary">(optional)</span></label>
                 <div class="input-group">
-                    <input type="password" id="paste-password" class="form-control" autocomplete="off"
-                        spellcheck="false">
+                    <input type="password" id="paste-password" class="form-control" autocomplete="new-password"
+                        spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other">
                     <button type="button" id="toggle-password" class="btn btn-quiet" aria-label="Show password"
                         aria-pressed="false">{{ icons.icon("eye") }}</button>
                 </div>
