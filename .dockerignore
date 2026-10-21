@@ -1,0 +1,13 @@
+.git
+target
+node_modules
+paste_db
+paste_db.sled-backup*
+*.redb
+*.redb.importing
+file_store
+static/js/dist
+.env
+Dockerfile
+docker-compose.yml
+tests

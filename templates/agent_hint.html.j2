@@ -1,0 +1,22 @@
+{# For agents and scripts that fetch a paste link: the page holds no paste,
+   and needs JavaScript to decrypt one. In the head (meta and link) and as a
+   <noscript> notice, which visitors with JavaScript never see. #}
+{% macro head() %}
+<meta name="e2epaste:agent-hint"
+    content="This is an end-to-end encrypted paste. The page holds no content; the key is in the link after the #, and the paste is decrypted by JavaScript in the browser. To read it without a browser, use the e2ep command-line client: e2ep get 'FULL_LINK'. See /llms.txt.">
+<link rel="help" type="text/plain" href="/llms.txt">
+{% endmacro %}
+
+{% macro notice() %}
+<noscript>
+    <div class="page page-narrow">
+        <div class="panel panel-pad">
+            <h1 class="h4 fw-bold">This paste needs JavaScript</h1>
+            <p>It's end-to-end encrypted: the key is in the link, after the <code>#</code>, and your browser
+                decrypts the paste with JavaScript. The server can't read it, so it can't show it here.</p>
+            <p class="mb-0">Scripts and AI agents can read it with the <code>e2ep</code> command-line client:
+                <code>e2ep get '&lt;the full link&gt;'</code>. See <a href="/llms.txt">/llms.txt</a>.</p>
+        </div>
+    </div>
+</noscript>
+{% endmacro %}

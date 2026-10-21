@@ -1,0 +1,170 @@
+{% extends "layout" %}
+
+{# One row: project name (linked), what it's used for, licence, copyright. #}
+{% macro row(name, url, use, licence, copyright) %}
+<tr>
+    <td><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ name }}</a></td>
+    <td>{{ use }}</td>
+    <td class="text-nowrap">{{ licence }}</td>
+    <td class="text-secondary small">{{ copyright }}</td>
+</tr>
+{% endmacro %}
+
+{% block page %}
+<div class="page page-narrow credits">
+    <h1 class="page-title">Open source credits</h1>
+    <p class="page-lede">{{ site_name }} is built on open source software. Thank you to everyone who makes and
+        maintains these projects.</p>
+    <p class="text-secondary">The code behind this site is open source too, under the MIT licence:
+        <a href="{{ source_url }}" target="_blank" rel="noopener noreferrer">source code</a>.</p>
+
+    <section class="mt-5" aria-labelledby="credits-browser">
+        <h2 class="h4" id="credits-browser">In your browser</h2>
+        <p class="text-secondary">Sent to your browser as part of the site.</p>
+        <div class="table-responsive panel">
+            <table class="table credits-table mb-0">
+                <thead>
+                    <tr><th scope="col">Project</th><th scope="col">Used for</th><th scope="col">Licence</th><th scope="col">Copyright</th></tr>
+                </thead>
+                <tbody>
+                    {{ row("Bootstrap 5.3", "https://getbootstrap.com/", "Layout and components", "MIT",
+                        "© 2011–2024 The Bootstrap Authors") }}
+                    {{ row("Popper", "https://popper.js.org/", "Positioning menus and popovers (included in Bootstrap's bundle)", "MIT",
+                        "© 2019 Federico Zivolo") }}
+                    {{ row("highlight.js 11.10", "https://highlightjs.org/", "Syntax highlighting, including the Atom One Dark theme", "BSD-3-Clause",
+                        "© 2006–2024 Josh Goebel and other contributors") }}
+                    {{ row("marked 18", "https://marked.js.org/", "Rendering Markdown pastes", "MIT",
+                        "© 2018+ MarkedJS; © 2011–2018 Christopher Jeffrey") }}
+                    {{ row("DOMPurify 3", "https://github.com/cure53/DOMPurify", "Making rendered Markdown safe to show", "Apache-2.0 (or MPL-2.0)",
+                        "© Cure53 and other contributors") }}
+                    {{ row("pako 3.0", "https://github.com/nodeca/pako", "Compressing pastes before encryption", "MIT and Zlib",
+                        "© 2014–2017 Vitaly Puzrin and Andrei Tuputcyn; zlib © Jean-loup Gailly and Mark Adler") }}
+                    {{ row("zxcvbn-ts", "https://github.com/zxcvbn-ts/zxcvbn", "Password strength checker and its word lists", "MIT",
+                        "© 2012–2016 Dan Wheeler and Dropbox, Inc.; © 2021 @zxcvbn-ts") }}
+                    {{ row("QR Code Generator", "https://github.com/kazuhikoarase/qrcode-generator", "QR codes for paste links", "MIT",
+                        "© 2009 Kazuhiko Arase") }}
+                    {{ row("Metropolis", "https://github.com/chrismsimpson/Metropolis", "Interface font", "Public domain (Unlicense)",
+                        "Chris Simpson") }}
+                    {{ row("JetBrains Mono", "https://www.jetbrains.com/lp/mono/", "Code font", "SIL OFL 1.1",
+                        "© 2020 The JetBrains Mono Project Authors") }}
+                </tbody>
+            </table>
+        </div>
+        <p class="small text-secondary mt-2">"QR Code" is a registered trademark of DENSO WAVE INCORPORATED.</p>
+    </section>
+
+    <section class="mt-5" aria-labelledby="credits-server">
+        <h2 class="h4" id="credits-server">On the server</h2>
+        <div class="table-responsive panel">
+            <table class="table credits-table mb-0">
+                <thead>
+                    <tr><th scope="col">Project</th><th scope="col">Used for</th><th scope="col">Licence</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><a href="https://rocket.rs/" target="_blank" rel="noopener noreferrer">Rocket</a> and rocket_dyn_templates</td><td>Web server and routing</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                    <tr><td><a href="https://github.com/mitsuhiko/minijinja" target="_blank" rel="noopener noreferrer">MiniJinja</a></td><td>Page templates</td><td class="text-nowrap">Apache-2.0</td></tr>
+                    <tr><td><a href="https://www.redb.org/" target="_blank" rel="noopener noreferrer">redb</a></td><td>Paste database</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                    <tr><td><a href="https://github.com/spacejam/sled" target="_blank" rel="noopener noreferrer">sled</a></td><td>Importing the database used by older versions</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                    <tr><td><a href="https://github.com/RustCrypto/hashes" target="_blank" rel="noopener noreferrer">sha2</a></td><td>Checking access proofs and delete links</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                    <tr><td><a href="https://github.com/al8n/fs4-rs" target="_blank" rel="noopener noreferrer">fs4</a></td><td>Checking free disk space</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                    <tr><td><a href="https://serde.rs/" target="_blank" rel="noopener noreferrer">serde</a> and serde_json</td><td>Reading and writing data</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                    <tr><td><a href="https://github.com/chronotope/chrono" target="_blank" rel="noopener noreferrer">chrono</a></td><td>Dates and expiry times</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                    <tr><td><a href="https://github.com/rust-random/rand" target="_blank" rel="noopener noreferrer">rand</a></td><td>Paste IDs</td><td class="text-nowrap">MIT or Apache-2.0</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="small text-secondary mt-2">Plus the Rust crates these depend on, listed in the project's
+            <code>Cargo.lock</code>.</p>
+    </section>
+
+    <section class="mt-5" aria-labelledby="credits-build">
+        <h2 class="h4" id="credits-build">Building the site</h2>
+        <p class="text-secondary mb-0">The browser code is bundled with
+            <a href="https://webpack.js.org/" target="_blank" rel="noopener noreferrer">webpack</a>, webpack-cli and
+            compression-webpack-plugin (MIT).</p>
+    </section>
+
+    <section class="mt-5" aria-labelledby="credits-licences">
+        <h2 class="h4" id="credits-licences">Licence texts</h2>
+        <p class="text-secondary">The copyright holders for each project are listed above.</p>
+
+        <details class="licence">
+            <summary>MIT License</summary>
+            <pre>Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre>
+        </details>
+
+        <details class="licence">
+            <summary>BSD 3-Clause License (highlight.js)</summary>
+            <pre>Copyright (c) 2006-2024 Josh Goebel and other contributors.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+        </details>
+
+        <details class="licence">
+            <summary>zlib License (pako's port of zlib)</summary>
+            <pre>This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.</pre>
+        </details>
+
+        <ul class="mt-3">
+            <li>JetBrains Mono: <a href="/public/fonts/LICENSE-JetBrainsMono.txt">SIL Open Font License 1.1</a></li>
+            <li>Metropolis: <a href="/public/fonts/LICENSE-Metropolis.txt">The Unlicense</a></li>
+            <li>DOMPurify, MiniJinja and the Apache-2.0 option of the Rust crates:
+                <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">Apache License 2.0</a></li>
+        </ul>
+    </section>
+</div>
+{% endblock %}

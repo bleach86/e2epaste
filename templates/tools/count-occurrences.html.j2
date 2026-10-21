@@ -1,0 +1,41 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" aria-labelledby="occ-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <h2 class="h5 fw-semibold mb-0" id="occ-heading">Find and count</h2>
+        <button type="button" class="btn btn-quiet btn-sm" data-clear="occ-term occ-text">{{ icons.icon("eraser") }} Clear</button>
+    </div>
+    <label class="field-label mt-3" for="occ-term">Word, phrase or character to find</label>
+    <input type="text" id="occ-term" class="form-control mb-3" spellcheck="false" placeholder="e.g. the">
+    <label class="field-label" for="occ-text">Text to search</label>
+    <textarea id="occ-text" class="form-control tool-area" rows="8" placeholder="Type or paste text here..."></textarea>
+    <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
+        <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" id="occ-case">
+            <label class="form-check-label small" for="occ-case">Case sensitive</label>
+        </div>
+        <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" id="occ-whole">
+            <label class="form-check-label small" for="occ-whole">Whole words only</label>
+        </div>
+        <span class="ms-auto">Matches: <span id="occ-count" class="count-badge">0</span></span>
+    </div>
+    <div id="occ-preview" class="form-control tool-preview mt-3" aria-label="Text with matches highlighted"></div>
+</section>
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">How matches are counted</h2>
+<p>Matches are counted from left to right without overlapping: searching for <code>aa</code> in
+    <code>aaaa</code> finds 2. The search ignores upper and lower case unless you tick
+    <strong>Case sensitive</strong>.</p>
+<p>Tick <strong>Whole words only</strong> to count a word on its own but not inside longer words: searching
+    for <code>cat</code> then matches "cat" but not "category". Every match is highlighted in the preview
+    below the text.</p>
+
+<h2 class="h4">Uses</h2>
+<p>Checking how often a keyword appears in an article, counting a name or term in a transcript, finding
+    repeated words in your writing, or counting a character such as commas or tabs in a line of data.</p>
+{% endblock %}

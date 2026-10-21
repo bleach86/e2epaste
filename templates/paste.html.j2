@@ -1,594 +1,142 @@
 {% extends "layout" %}
+{% import "icons" as icons %}
+{% import "agent_hint" as agent_hint %}
 
+{% block head %}{{ agent_hint.head() }}{% endblock %}
 
 {% block page %}
-<div class="spacer-50"></div>
-<div class="container justify-content-center bg-dark-subtle w-100 body-height rounded-2 mb-5">
-    <div class="row">
-        <div class="col-md-12 rounded-2">
+{{ agent_hint.notice() }}
+<div class="page">
+    <div id="decrypted-notice" class="notice mb-3" hidden>
+        {{ icons.icon("shield-check") }}
+        <span>Decrypted in your browser. The server only ever had the encrypted version.</span>
+    </div>
+    <div id="decrypt-error" class="notice notice-danger mb-3" role="alert" hidden>
+        {{ icons.icon("alert") }}
+        <span>This paste couldn't be decrypted. Check that you have the complete link, including everything after
+            the <code>#</code>.</span>
+    </div>
+    <div id="open-error" class="notice notice-danger mb-3" role="alert" hidden>
+        {{ icons.icon("alert") }}
+        <span id="open-error-text"></span>
+    </div>
+    {# For the paste's creator (this browser has its delete token), when
+       opening it would use up a limited view or start its timer. #}
+    <section id="owner-prompt" class="panel panel-pad mb-3" aria-labelledby="owner-prompt-title" hidden>
+        <h2 class="h5 fw-bold mb-1" id="owner-prompt-title">You created this paste</h2>
+        <p class="text-secondary mb-3" id="owner-prompt-text"></p>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" id="owner-open-btn" class="btn btn-accent d-inline-flex align-items-center gap-2">
+                {{ icons.icon("eye") }} Open it</button>
+            <a id="owner-delete-link" class="btn btn-quiet btn-quiet-danger">{{ icons.icon("eraser") }} Delete it</a>
+        </div>
+    </section>
 
-            <div class="d-flex flex-column">
-                <h2 class="text-center mt-3">{{ title }}</h2>
-
+    <div class="paste-head">
+        <div class="min-w-0">
+            {# v3 titles are encrypted; js/pages/paste.mjs fills them in after decrypting. #}
+            <h1 class="page-title paste-title" id="paste-title">{% if paste.version < 3 %}{{ paste.title }}{% else %}Encrypted paste{% endif %}</h1>
+            <ul class="chips mt-2" aria-label="Paste details">
+                <li class="chip" id="language-chip">{{ icons.icon("code") }} <span id="language-name">{{ formatted_lang }}</span></li>
+                <li class="chip">Created <span id="paste-date"></span></li>
+                <li class="chip">{{ icons.icon("clock") }} <span id="expire-date"></span></li>
+                <li class="chip">{{ icons.icon("eye") }} <span id="views"></span></li>
+                <li class="chip chip-warn" id="timer-chip" hidden>{{ icons.icon("clock") }} <span id="timer-text"></span></li>
+                <li class="chip chip-warn" id="final-view" hidden>{{ icons.icon("flame") }} Final view: it can't be opened again</li>
+            </ul>
+        </div>
+        <div class="paste-actions">
+            {# Markdown pastes only. #}
+            <div class="seg-toggle" id="markdown-toggle" role="group" aria-label="Show Markdown as" hidden>
+                <button type="button" class="btn btn-quiet" data-view="rendered" aria-pressed="false">Rendered</button>
+                <button type="button" class="btn btn-quiet" data-view="source" aria-pressed="true">Source</button>
             </div>
-
-            <h4 class="text-center mt-3 paste-info">{{ paste.title }}</h4>
-
-            <div class="d-flex justify-content-center align-items-center mb-2 paste-info">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-calendar-heart me-2"></i>
-                    <span>Paste Date: <span id="paste-date"></span></span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <i class="bi bi-eye me-2"></i>
-                    <span id="views">Views: {{ paste.views }}</span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <i class="bi bi-eye-fill me-2"></i>
-                    <span>Max Views: <span id="max-views"></span></span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <i class="bi bi-clock me-2"></i>
-                    <span>Expires: <span id="expire-date"></span></span>
-                </div>
-                <div class="d-flex align-items-center ms-3">
-                    <button class="btn" data-bs-toggle="popover" data-bs-trigger="focus"
-                        data-bs-custom-class="bg-success" data-bs-content="Copied!" onclick="copyToClipboard()">
-                        <i class="bi bi-clipboard"></i>
-                        <span>Copy</span>
-                </div>
-            </div>
-            <section id="view-section" class="h-100">
-                <pre
-                    class="theme-atom-one-dark"><span class="badge text-bg-info text-dark lang-info position-relative float-end me-3 opacity-50" style="top:3em;">{{ formatted_lang }}</span><code id="view-area" class="form-control mt-4 pt-4 paste-area focus-ring view-area language-{{ paste.syntax }}"></code></pre>
-            </section>
+            <button type="button" id="copy-paste-btn" class="btn btn-quiet" disabled>
+                <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }} Copy</span>
+                <span class="copy-done d-none align-items-center gap-2">{{ icons.icon("check") }} Copied</span>
+            </button>
+            <button type="button" id="download-paste-btn" class="btn btn-quiet" disabled>{{ icons.icon("download") }} Download</button>
+            <button type="button" id="wrap-btn" class="btn btn-quiet" aria-pressed="false" aria-label="Wrap long lines"
+                title="Wrap long lines">{{ icons.icon("wrap") }}</button>
+            {# Only in the browser that created the paste (js/delete_tokens.mjs). #}
+            <a id="delete-paste-btn" class="btn btn-quiet btn-quiet-danger" hidden>{{ icons.icon("eraser") }} Delete</a>
         </div>
     </div>
 
-    <div id="attachment-section" class="d-flex py-2 d-none">
-        <label for="download-link" class="mt-2">Attachment:</label>
-        <a id="download-link" class="btn btn-link">{{ paste.file_name }}</a>
-        <span id="download-spinner" class="d-none btn" role="status">
-            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-            <span id="download-status">Downloading encrypted file from server...</span>
-        </span>
+    {# Hidden for a paste that's just an attachment. #}
+    <section class="panel mt-3" id="content-panel" aria-label="Paste content">
+        <div class="code-view" id="code-view">
+            <pre class="code-gutter" id="code-gutter" aria-hidden="true"></pre>
+            <pre class="code-body"><code id="view-area"></code></pre>
+        </div>
+        {# Sanitized HTML from js/markdown.mjs. #}
+        <div class="markdown-body" id="markdown-view" hidden></div>
+    </section>
 
-    </div>
-
+    <section id="attachment-section" class="panel attachment-panel mt-3" aria-label="Attachment" hidden>
+        <span class="attachment-icon">{{ icons.icon("file") }}</span>
+        <div class="min-w-0 flex-grow-1">
+            <div id="attachment-name" class="fw-semibold text-truncate"></div>
+            <div id="download-status" class="small text-secondary">Encrypted attachment</div>
+        </div>
+        <button type="button" id="download-link" class="btn btn-quiet btn-outline-accent">
+            <span class="dl-idle d-inline-flex align-items-center gap-2">{{ icons.icon("download") }} Decrypt &amp; download</span>
+            <span class="dl-busy d-none align-items-center gap-2"><span class="spinner-border spinner-border-sm"
+                    aria-hidden="true"></span> Working...</span>
+        </button>
+    </section>
 </div>
-<button type="button" class="btn btn-secondary btn-floating btn-lg" id="btn-back-to-top">
-    <i class="bi bi-arrow-up"></i>
+
+<button type="button" class="btn btn-quiet" id="btn-back-to-top" aria-label="Back to top">
+    {{ icons.icon("arrow-up") }}
 </button>
 
 <div class="modal fade" id="password-modal" data-bs-backdrop="static" tabindex="-1"
-    aria-labelledby="password-modal-Label" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    aria-labelledby="password-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered link-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-info">
-                <h1 class="modal-title fs-5 text-dark" id="password-modal-Label">Password Protected Paste</h1>
-            </div>
-            <div class="modal-body">
-                <p>Please enter the password in order to view the paste content:</p>
-                <div class="input-group mb-3">
-                    <button class="btn btn-outline-secondary" type="button" id="show-pass-button"><i id="show-pass-icon"
-                            class="bi bi-eye"></i></button>
-                    <input onkeydown="if(event.key === 'Enter') { decryptWithPassword(); }" type="password"
-                        class="form-control" id="password-input" placeholder="Password">
+            <div class="d-flex align-items-start gap-3">
+                <span class="dialog-badge">{{ icons.icon("lock") }}</span>
+                <div>
+                    <h2 id="password-modal-title" class="h5 fw-bold mb-0">This paste is password protected</h2>
+                    <p class="mb-0 small text-secondary">Enter the password to decrypt it. The password itself
+                        never leaves your browser.</p>
                 </div>
-
-                <div id="password-error" class="text-danger mt-2 bg-danger text-dark p-2 rounded-1"
-                    style="display: none;">Incorrect password. Please try again.</div>
             </div>
-            <div class="modal-footer d-flex justify-content-between">
-                <a class="link-secondary" style="font-size:small;" href="/">Take me Home</a>
-                <button id="submit-password-btn" type="button" class="btn btn-outline-light"
-                    onclick="decryptWithPassword();">Submit</button>
+
+            <div>
+                <label for="password-input" class="field-label">Password</label>
+                <div class="input-group">
+                    <input type="password" class="form-control" id="password-input" autocomplete="off"
+                        spellcheck="false" aria-describedby="password-error">
+                    <button class="btn btn-quiet" type="button" id="show-pass-button" aria-label="Show password"
+                        aria-pressed="false">
+                        <span class="pw-show d-inline-flex">{{ icons.icon("eye") }}</span>
+                        <span class="pw-hide d-none">{{ icons.icon("eye-off") }}</span>
+                    </button>
+                </div>
+                <div id="password-error" class="field-hint text-danger" role="alert" hidden>That password didn't work.
+                    Check it and try again.</div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center gap-3">
+                <div class="d-flex flex-wrap gap-3">
+                    <a class="small" href="/">Go to the home page</a>
+                    <a class="small text-danger" id="password-delete-link" hidden>Delete this paste</a>
+                </div>
+                <button id="submit-password-btn" type="button" class="btn btn-accent">
+                    <span class="unlock-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Unlock</span>
+                    <span class="unlock-busy d-none align-items-center gap-2"><span
+                            class="spinner-border spinner-border-sm" aria-hidden="true"></span> Checking...</span>
+                </button>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
+<script type="application/json" id="page-data">{{ {"paste": paste} | tojson }}</script>
 <script src="/public/js/highlight.min.js"></script>
-
-<script>
-    var cipher_text = "{{ paste.content }}";
-    var iv = {{ paste.iv }};
-    var keyFragment = window.location.hash.substr(1);
-    var serverKey = "{{ paste.key_fragment }}";
-    var pw_hash = "{{ paste.password_hash }}";
-    var title = "{{ paste.title }}";
-
-    var fileName = "{{ paste.file_name }}";
-
-    var password = "";
-
-    const view_area = document.getElementById('view-area');
-
-    var passwordModal;
-
-    function openPasswordModal() {
-        let modal = new bootstrap.Modal(document.getElementById('password-modal'));
-        passwordModal = modal;
-        const password_input = document.getElementById('password-input');
-        passwordModal.show();
-
-        setTimeout(() => {
-            password_input.focus();
-            let show_pass_button = document.getElementById('show-pass-button');
-            show_pass_button.addEventListener('click', showPassword);
-        }, 500);
-    }
-
-    function closePasswordModal() {
-        passwordModal.hide();
-    }
-
-    function copyToClipboard() {
-        navigator.clipboard.writeText(view_area.textContent);
-    }
-
-    async function decryptWithPassword() {
-        const password_input = document.getElementById('password-input').value.trim();
-        const isValid = await checkPassword(password_input);
-
-        if (isValid) {
-            closePasswordModal();
-            password = password_input;
-            decrypt();
-            setTimeout(async () => {
-                hljs.highlightAll();
-                await markAsViewed();
-            }, 50);
-
-
-        } else {
-            let passError = document.getElementById('password-error');
-
-            passError.style.display = 'block';
-
-            setTimeout(() => {
-                passError.style.display = 'none';
-            }, 3000);
-
-        }
-    }
-
-    async function decrypt() {
-        const key = reconstructKey(serverKey, keyFragment);
-        const salt = new Uint8Array(iv);
-
-        let iv_array = await generateIv(password, salt).then((iv) => {
-            return iv.iv;
-        });
-
-        const importedKey = await importCryptoKey(key);
-        const encryptedArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(cipher_text));
-        const decrypted = await decryptText(encryptedArrayBuffer, importedKey, iv_array);
-
-        view_area.textContent = decrypted;
-        view_area.style.height = "100%";
-
-        if (fileName && fileName.toLowerCase() !== "none" && fileName !== "null") {
-            const attachmentSection = document.getElementById('attachment-section');
-            attachmentSection.classList.remove('d-none');
-
-            const downloadLink = document.getElementById('download-link');
-            const fileNameArrayBuffer = base64ToArrayBuffer(decodeHtmlEntity(fileName));
-            const decryptedFileName = await decryptText(fileNameArrayBuffer, importedKey, iv_array);
-
-            downloadLink.textContent = decryptedFileName;
-            fileName = decryptedFileName;
-        }
-
-    }
-
-
-    const downloadLink = document.getElementById('download-link');
-
-    downloadLink.addEventListener('click', async (event) => {
-        event.preventDefault();
-
-        const downloadSpinner = document.getElementById('download-spinner');
-        downloadSpinner.classList.remove('d-none');
-
-        const downloadLink = document.getElementById('download-link');
-        downloadLink.classList.add('d-none');
-
-        // fetch raw binary
-        const res = await fetch(`/api/download-attachment/{{ paste.id }}`);
-        if (!res.ok) {
-            alert("Download failed");
-            return;
-        }
-
-        const buffer = await res.arrayBuffer();
-        const fileBytes = new Uint8Array(buffer);
-
-        await decryptFile(fileBytes); // pass Uint8Array directly
-    });
-
-
-
-    async function decryptFile(file) {
-        if (!file) {
-            return;
-        }
-
-        const downloadStatus = document.getElementById('download-status');
-
-        downloadStatus.textContent = "Decrypting file...";
-
-        const key = reconstructKey(serverKey, keyFragment);
-        const salt = new Uint8Array(iv);
-
-        let iv_array = await generateIv(password, salt).then((iv) => iv.iv);
-
-        const importedKey = await importCryptoKey(key);
-        const encryptedArrayBuffer = new Uint8Array(file).buffer;
-        const decrypted = await crypto.subtle.decrypt(
-            {
-                name: "AES-GCM",
-                iv: iv_array, // Initialization vector
-            },
-            importedKey,
-            encryptedArrayBuffer
-        );
-
-        if (decrypted) {
-            const blob = new Blob([decrypted], { type: 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
-
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-
-            const downloadSpinner = document.getElementById('download-spinner');
-            downloadSpinner.classList.add('d-none');
-
-            const downloadLink = document.getElementById('download-link');
-            downloadLink.classList.remove('d-none');
-            downloadStatus.textContent = "Downloading encrypted file from server...";
-
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
-    }
-
-
-    let back_to_top = document.getElementById("btn-back-to-top");
-
-    function backToTop() {
-        document.body.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-    }
-
-    function select_all_handler() {
-        const selection = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(view_area);
-        selection.removeAllRanges();
-        selection.addRange(range);
-    }
-
-    function decodeHtmlEntity(str) {
-        // Create a temporary DOM element to decode the entities
-        const txt = document.createElement("textarea");
-        txt.innerHTML = str;
-        return txt.value;
-    }
-
-    function showPassword() {
-        let password_input = document.getElementById('password-input');
-        let show_pass_icon = document.getElementById('show-pass-icon');
-
-        if (password_input.type === "password") {
-            password_input.type = "text";
-            show_pass_icon.classList.remove("bi-eye");
-            show_pass_icon.classList.add("bi-eye-slash");
-        } else {
-            password_input.type = "password";
-            show_pass_icon.classList.remove("bi-eye-slash");
-            show_pass_icon.classList.add("bi-eye");
-        }
-    }
-
-    async function importCryptoKey(urlSafeBase64Key) {
-        const base64 = urlSafeBase64Key.replace(/-/g, "+").replace(/_/g, "/");
-        const kValue = atob(base64);
-        const jwk = {
-            kty: "oct",
-            k: kValue,
-            alg: "A256GCM",
-            ext: true,
-            key_ops: ["encrypt", "decrypt"],
-        };
-        return crypto.subtle.importKey(
-            "jwk",
-            jwk,
-            {
-                name: "AES-GCM",
-            },
-            true, // extractable
-            ["encrypt", "decrypt"]
-        );
-    }
-
-    function base64ToArrayBuffer(base64) {
-        const binary = atob(base64);
-        const len = binary.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binary.charCodeAt(i);
-        }
-        return bytes.buffer;
-    }
-
-    async function decryptText(encrypted, key, iv) {
-        const decrypted = await crypto.subtle.decrypt(
-            {
-                name: "AES-GCM",
-                iv: iv, // Initialization vector
-            },
-            key,
-            encrypted
-        );
-        const decoder = new TextDecoder();
-        return decoder.decode(decrypted);
-    }
-
-    function set_expire_date() {
-        let expire_el = document.getElementById("expire-date");
-        let timestamp = "{{ paste.expires }}";
-
-        if (timestamp === "none") {
-            expire_el.innerText = " Never";
-            return;
-        }
-
-        expire_el.innerText = time_until(timestamp);
-    }
-
-    function time_until(timestamp) {
-        const now = new Date();
-        const difference = timestamp - now;
-
-        if (difference <= 0) {
-            return "Never";
-        }
-
-        const seconds = Math.floor(difference / 1000);
-
-        // Define the intervals in seconds
-        const intervals = [
-            { unit: "year", seconds: 31536000 },
-            { unit: "month", seconds: 2592000 },
-            { unit: "day", seconds: 86400 },
-            { unit: "hour", seconds: 3600 },
-            { unit: "minute", seconds: 60 },
-            { unit: "second", seconds: 1 },
-        ];
-
-        for (let i = 0; i < intervals.length; i++) {
-            const interval = intervals[i];
-            const count = Math.floor(seconds / interval.seconds);
-            const remainder = seconds % interval.seconds;
-
-            if (count >= 1) {
-                if (i < intervals.length - 1) {
-                    // Check if we need to round up to the next interval
-                    const nextInterval = intervals[i + 1];
-                    if (remainder >= nextInterval.seconds / 2) {
-                        return (count + 1) + " " + interval.unit + ((count + 1) > 1 ? "s" : "");
-                    }
-                }
-                return count + " " + interval.unit + (count > 1 ? "s" : "");
-            }
-        }
-
-        // Fallback in case everything else fails
-        return Math.ceil(seconds) + " seconds";
-    }
-
-
-    function time_until(timestamp) {
-        const now = new Date();
-        const difference = timestamp - now;
-
-        if (difference <= 0) {
-            return " Never";
-        }
-
-        const seconds = Math.floor(difference / 1000);
-
-        let interval = Math.floor(seconds / 31536000);
-        if (interval > 1) {
-            return interval + " years";
-        }
-        interval = Math.floor(seconds / 2592000);
-        if (interval > 1) {
-            return interval + " months";
-        }
-        interval = Math.floor(seconds / 86400);
-        if (interval > 1) {
-            return interval + " days";
-        }
-        interval = Math.floor(seconds / 3600);
-        if (interval > 1) {
-            return interval + " hours";
-        }
-        interval = Math.floor(seconds / 60);
-        if (interval > 1) {
-            return interval + " minutes";
-        }
-        return Math.floor(seconds) + " seconds";
-
-    }
-
-    function reconstructKey(serverKey, hashFragment) {
-        const totalLength = 58;
-        const keyArray = Array(totalLength).fill('');
-
-        // Parse the hashFragment into fragments
-        const fragments = [];
-
-        for (let i = 0; i < hashFragment.length; i += 2) {
-            fragments.push(hashFragment.slice(i, i + 2));
-        }
-
-        if (!fragments) {
-            throw new Error('Invalid hashFragment format');
-        }
-
-        // Place the fragments in their respective positions
-        fragments.forEach(fragment => {
-            const position = fromUrlSafeBase64Char(fragment[0]);
-            const byte = fragment[1];
-
-            if (position >= 0 && position < totalLength) {
-                keyArray[position] = byte;
-            } else {
-                throw new Error('Position out of bounds');
-            }
-        });
-
-        // Fill the remaining empty positions with characters from the server key
-        let serverKeyIndex = 0;
-        for (let i = 0; i < totalLength; i++) {
-            if (keyArray[i] === '') {
-                if (serverKeyIndex < serverKey.length) {
-                    keyArray[i] = serverKey[serverKeyIndex++];
-                } else {
-                    throw new Error('Server key is too short to fill the array');
-                }
-            } else {
-                serverKeyIndex++;
-            }
-        }
-
-        // Join the array to form the reconstructed key
-        const reconstructedKey = keyArray.join('');
-
-        return reconstructedKey;
-    }
-
-    function fromUrlSafeBase64Char(char) {
-        const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        // Find the index of the character in the Base64 character set
-        const pos = base64Chars.indexOf(char);
-
-        // Ensure the character is valid
-        if (pos === -1) {
-            throw new Error('Invalid Base64 character');
-        }
-
-        return pos;
-    }
-
-    function set_paste_date() {
-        let date_el = document.getElementById("paste-date");
-        let timestamp = "{{ paste.timestamp }}";
-        let date = new Date(timestamp * 1000);
-        let options = { year: 'numeric', month: 'long', day: 'numeric' };
-        date_el.innerText = date.toLocaleDateString('en-US', options);
-    }
-
-    function set_max_views() {
-        let max_views_el = document.getElementById("max-views");
-        let max_views = "{{ paste.max_views }}";
-        if (max_views === "0" || max_views === "none") {
-            max_views_el.innerText = "∞";
-            return;
-        }
-        max_views_el.innerText = max_views;
-    }
-
-    async function generateIv(text, salt) {
-        // Convert text to ArrayBuffer
-        const encoder = new TextEncoder();
-        const textBuffer = encoder.encode(text);
-
-        // Concatenate text and salt buffers
-        const combinedBuffer = new Uint8Array(textBuffer.length + salt.length);
-        combinedBuffer.set(textBuffer);
-        combinedBuffer.set(salt, textBuffer.length);
-
-        // Hash the concatenated buffer using SHA-256
-        const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBuffer);
-
-        // Convert hash buffer to hex string
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHexString = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
-
-        // Return the first 12 bytes of the hash as the IV and the hash as hex string
-        return { iv: new Uint8Array(hashBuffer).slice(0, 12), hashHexString };
-    }
-
-
-    async function checkPassword(password) {
-        const encoder = new TextEncoder();
-        const passwordBuffer = encoder.encode(password);
-        const salt = new Uint8Array(iv);
-        const { _, hashHexString } = await generateIv(password, salt);
-        return hashHexString === pw_hash;
-    }
-
-    async function markAsViewed() {
-        const response = await fetch('/api/advance-views/{{ paste.id }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-            })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            let paste_views = document.getElementById('views');
-            let total_views = document.getElementById('total-views');
-
-            paste_views.innerText = "Views: " + data.views;
-            total_views.innerText = data.total_views;
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', async function () {
-        set_expire_date();
-        set_paste_date();
-        set_max_views();
-        if (pw_hash !== "none") {
-            openPasswordModal();
-        } else {
-            decrypt();
-            setTimeout(async () => {
-                hljs.highlightAll();
-                await markAsViewed();
-            }, 50);
-
-
-
-        }
-
-
-        document.addEventListener('keydown', function (event) {
-            if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
-                event.preventDefault();
-                select_all_handler();
-            }
-        });
-
-        // Add event listener for contextmenu
-        view_area.addEventListener('onselectstart', function (event) {
-            event.preventDefault();
-            select_all_handler();
-        });
-
-        // When the user clicks on the button, scroll to the top of the document
-        back_to_top.addEventListener("click", backToTop);
-    })
-
-</script>
-
+<script src="/public/js/dist/paste.js?v={{ asset_version }}"></script>
 {% endblock %}

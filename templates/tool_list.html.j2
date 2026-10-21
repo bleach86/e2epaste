@@ -1,0 +1,8 @@
+{# Cards linking to every tool, the current hub's group first. Skips the tool
+   being viewed, if any. #}
+{% for listing in listings if listing.hub.group == hub.group %}
+{% include "tool_list_group" %}
+{% endfor %}
+{% for listing in listings if listing.hub.group != hub.group %}
+{% include "tool_list_group" %}
+{% endfor %}

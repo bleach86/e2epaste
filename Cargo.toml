@@ -1,3 +1,8 @@
+# The server (this package), the e2ep command-line client and the paste
+# format's sizes they share.
+[workspace]
+members = [".", "cli", "crates/e2epaste-format"]
+
 [package]
 name = "e2epaste"
 version = "0.1.0"
@@ -5,11 +10,44 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["sled-import"]
+# Imports the sled database (paste_db/) that releases before redb used, on the
+# first start. Builds without it refuse to start if one is found.
+sled-import = ["dep:sled"]
+
 [dependencies]
-rocket = { version = "0.5.1", features = ["json"] }
+e2epaste-format = { path = "crates/e2epaste-format" }
+# No "http2" (a default feature): Rocket only uses HTTP/2 with its own TLS, and
+# the reverse proxy handles TLS here. Leaving it out drops h2 0.3, which has
+# an unfixed advisory (RUSTSEC-2026-0258) on Rocket 0.5's hyper 0.14.
+rocket = { version = "0.5.1", default-features = false, features = ["json"] }
 rocket_dyn_templates = { version = "0.2.0", features = ["minijinja"] }
-sled = { version = "0.34.7", features = ["compression"] }
-rand = "0.8.5"
-serde = { version = "1.0.166", features = ["derive"] }
-serde_json = "1.0.100"
-chrono = "0.4.38"
+# Only for importing data from releases before redb (see src/migrate.rs).
+sled = { version = "0.34.7", features = ["compression"], optional = true }
+rand = "0.10"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+chrono = "0.4.45"
+fs4 = "1.1.0"
+redb = "4.4.0"
+sha2 = "0.11.1"
+
+# e2ep stretches passwords with 600,000 rounds of PBKDF2, which takes seconds
+# unoptimized: optimize the crypto and compression crates in debug builds too.
+[profile.dev.package.sha2]
+opt-level = 3
+[profile.dev.package.hmac]
+opt-level = 3
+[profile.dev.package.pbkdf2]
+opt-level = 3
+[profile.dev.package.aes]
+opt-level = 3
+[profile.dev.package.aes-gcm]
+opt-level = 3
+[profile.dev.package.ghash]
+opt-level = 3
+[profile.dev.package.polyval]
+opt-level = 3
+[profile.dev.package.zlib-rs]
+opt-level = 3

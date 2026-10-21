@@ -1,0 +1,20 @@
+{% extends "tool_layout" %}
+{% import "tool_macros" as m %}
+
+{% block tool %}
+{{ m.panel("reverse", "Reverse text", "The reversed text updates as you type.",
+    "Enter text to reverse...", "Reversed text") }}
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">How it works</h2>
+<p>The order of the characters is flipped, so <code>Hello, world!</code> becomes <code>!dlrow ,olleH</code>.
+    Line breaks are reversed too, so the last line comes first.</p>
+<p>Characters are reversed the way you see them. Emoji with skin tones, family emoji, flags and letters with
+    separate accent marks stay intact instead of being split into broken pieces, which happens with simpler
+    reverse-text tools.</p>
+
+<h2 class="h4">What people use it for</h2>
+<p>Checking palindromes, writing puzzles and mirror text for games, quick tests of how software handles
+    unusual input, and simple text effects for social media.</p>
+{% endblock %}

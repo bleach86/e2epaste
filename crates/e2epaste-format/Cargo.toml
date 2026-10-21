@@ -1,0 +1,9 @@
+[package]
+name = "e2epaste-format"
+version = "0.1.0"
+edition = "2021"
+description = "The e2ePaste paste format's padded sizes, shared by the server and the e2ep client"
+license = "MIT"
+publish = false
+
+[dependencies]

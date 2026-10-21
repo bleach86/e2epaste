@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
-use rand::Rng;
+use rand::RngExt;
 use rocket::request::FromParam;
 
 /// A _probably_ unique paste ID.
@@ -17,9 +17,9 @@ impl PasteId<'_> {
         const BASE62: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
         let mut id = String::with_capacity(size);
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..size {
-            id.push(BASE62[rng.gen::<usize>() % 62] as char);
+            id.push(BASE62[rng.random_range(0..BASE62.len())] as char);
         }
 
         PasteId(Cow::Owned(id))
@@ -40,8 +40,8 @@ impl<'a> FromParam<'a> for PasteId<'a> {
     }
 }
 
-impl<'a> ToString for PasteId<'a> {
-    fn to_string(&self) -> String {
-        self.0.to_string()
+impl std::fmt::Display for PasteId<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }

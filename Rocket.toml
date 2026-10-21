@@ -1,7 +1,65 @@
+# Settings for every profile. Any key can be overridden with an environment
+# variable: ROCKET_<KEY>, e.g. ROCKET_SITE_URL=https://paste.example.com
 [default]
-address = "0.0.0.0"
+# Only reachable from this machine, by the reverse proxy. Use 0.0.0.0 if the
+# proxy runs on another machine (the Docker image sets that itself).
+address = "127.0.0.1"
 port = 8001
 
+# The site's public address. Used for canonical links, the sitemap and link
+# previews. Set it to your own domain, with https:// and no trailing path.
+site_url = "http://localhost:8001"
 
-[default.limits]
-json = "100 MiB"
+# The site's name, in page titles, the header and link previews. Defaults to
+# site_url's host name, e.g. "paste.example.com".
+# site_name = ""
+
+# Where the "source code" links point. Change it if you run a modified copy.
+# source_url = "https://github.com/bleach86/e2epaste"
+
+# Where the paste database (paste_db/) and attachments (file_store/) are kept.
+data_dir = "."
+
+# Front-end files served at /public, and the page templates.
+static_dir = "static"
+template_dir = "templates"
+
+# What one paste can hold. The create page, the FAQ and the server's request
+# size limit follow these.
+# Largest paste text, in KiB (1024 = 1 MB). At most 65536.
+max_paste_kib = 1024
+# Whether pastes can have an attachment.
+allow_files = true
+# Largest attachment, in MiB. At most 4096. Attachments are encrypted and
+# uploaded in 1 MiB chunks, but downloads are put back together in the
+# browser, so very large files can fail to download on phones.
+max_file_mib = 25
+
+# Header holding the visitor's IP, set by the reverse proxy. The rate limits
+# below are per IP, so the proxy must set (overwrite) it on every request.
+ip_header = "X-Real-IP"
+
+# Limits per visitor IP (IPv6: per /64). 0 turns a limit off.
+pastes_per_minute = 10
+pastes_per_hour = 60
+# Attachment data. At least one attachment's worth: max_file_mib plus a
+# little for padding (the server says if it's too low).
+upload_mib_per_hour = 250
+
+# Failed attempts to open or delete a paste (wrong link, password or delete
+# link) allowed per IP per hour. Correct attempts are never limited.
+unlock_attempts_per_hour = 30
+
+# Enables the admin API (POST /api/admin/delete/<id>) for taking pastes down.
+# Leave unset to disable it. Generate one with `openssl rand -hex 32`, and set
+# it with ROCKET_ADMIN_TOKEN rather than in this file.
+# admin_token = ""
+
+# Storage limits. 0 turns a limit off.
+# Stop taking new pastes when the disk has less than this free.
+min_free_disk_mib = 1024
+# Cap on the total size of all attachments.
+max_attachment_storage_mib = 0
+
+# The request size limit for new pastes (limits.json) is set automatically
+# from max_paste_kib. Attachments are uploaded separately.

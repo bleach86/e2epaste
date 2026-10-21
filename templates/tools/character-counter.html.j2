@@ -1,0 +1,55 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" aria-labelledby="counter-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <h2 class="h5 fw-semibold mb-0" id="counter-heading">Count your text</h2>
+        <button type="button" class="btn btn-quiet btn-sm" data-clear="counter-in">{{ icons.icon("eraser") }} Clear</button>
+    </div>
+    <div class="row g-3 mt-1">
+        <div class="col-md-7">
+            <label class="visually-hidden" for="counter-in">Text to count</label>
+            <textarea id="counter-in" class="form-control tool-area" rows="12"
+                placeholder="Type or paste text here..."></textarea>
+        </div>
+        <div class="col-md-5">
+            <ul class="list-group stat-list">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Characters <span id="stat-length" class="badge text-bg-info rounded-pill">0</span></li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Characters (no spaces) <span id="stat-nospace" class="badge text-bg-info rounded-pill">0</span></li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Bytes (UTF-8) <span id="stat-bytes" class="badge text-bg-info rounded-pill">0</span></li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Words <span id="stat-words" class="badge text-bg-info rounded-pill">0</span></li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Lines <span id="stat-lines" class="badge text-bg-info rounded-pill">0</span></li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Unique words <span id="stat-uwords" class="badge text-bg-info rounded-pill">0</span></li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Unique characters <span id="stat-uchars" class="badge text-bg-info rounded-pill">0</span></li>
+            </ul>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What gets counted</h2>
+<ul>
+    <li><strong>Characters</strong> are counted the way you see them: an emoji like 👍🏽 or a flag like 🇨🇦
+        counts as one character, even though it's stored as several code points. Many counters get this
+        wrong.</li>
+    <li><strong>Bytes</strong> is the size of the text in UTF-8, the encoding used by the web, databases and
+        most files. It's what matters for byte limits in forms, APIs and databases. English letters take one
+        byte; other characters take two to four.</li>
+    <li><strong>Words</strong> are runs of characters separated by spaces, tabs or line breaks.</li>
+    <li><strong>Unique words</strong> ignores upper and lower case, so "The" and "the" count once.</li>
+</ul>
+
+<h2 class="h4">Common length limits</h2>
+<p>Handy when writing to a limit: a page title should stay under about 60 characters to show in full in
+    search results, a meta description under about 155, an SMS is 160 characters (70 if it contains emoji
+    or non-Latin letters), and a post on X is 280.</p>
+{% endblock %}

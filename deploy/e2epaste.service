@@ -1,0 +1,62 @@
+# e2epaste as a systemd service. deploy/install.sh installs it as
+# /etc/systemd/system/e2epaste.service; see README.md ("As a systemd
+# service").
+#
+# The program and its files are in /opt/e2epaste (read-only to the service),
+# the database and attachments in /var/lib/e2epaste (created by systemd,
+# owned by the service's user), and settings in /etc/e2epaste/e2epaste.env.
+
+[Unit]
+Description=e2ePaste, an end-to-end encrypted pastebin
+Documentation=https://github.com/bleach86/e2epaste
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=e2epaste
+Group=e2epaste
+WorkingDirectory=/opt/e2epaste
+ExecStart=/opt/e2epaste/e2epaste
+# The defaults; e2epaste.env can override them (EnvironmentFile wins).
+Environment=ROCKET_DATA_DIR=/var/lib/e2epaste
+Environment=ROCKET_ADDRESS=127.0.0.1
+Environment=ROCKET_PORT=8001
+EnvironmentFile=/etc/e2epaste/e2epaste.env
+StateDirectory=e2epaste
+StateDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+# Rocket finishes the requests in flight on SIGTERM.
+TimeoutStopSec=30
+
+# Hardening: the server only needs its data directory and the network.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHostname=yes
+ProtectClock=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

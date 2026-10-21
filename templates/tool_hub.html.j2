@@ -1,0 +1,22 @@
+{% extends "layout" %}
+{% import "icons" as icons %}
+
+{% block page %}
+<div class="page">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb small mb-3">
+            <li class="breadcrumb-item"><a href="/" class="link-secondary">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ hub.name }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="page-title">{{ hub.name }}</h1>
+    <p class="page-lede">{{ hub.intro }}</p>
+    <p class="small text-secondary d-flex align-items-center gap-2 mt-2">
+        <span class="text-accent d-inline-flex">{{ icons.icon("shield") }}</span>
+        Every tool runs entirely in your browser. Nothing you enter is sent to the server.
+    </p>
+
+    {% include "tool_list" %}
+</div>
+{% endblock %}
