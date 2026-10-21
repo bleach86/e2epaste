@@ -2,8 +2,8 @@
 {% import "icons" as icons %}
 
 {% set expiries = [["10min", "10 min"], ["1hour", "1 hour"], ["1day", "1 day"], ["3days", "3 days"],
-    ["1week", "1 week"], ["2weeks", "2 weeks"], ["1month", "1 month"], ["6months", "6 months"],
-    ["1year", "1 year"]] %}
+["1week", "1 week"], ["2weeks", "2 weeks"], ["1month", "1 month"], ["6months", "6 months"],
+["1year", "1 year"]] %}
 
 {% block page %}
 <div class="page create-page">
@@ -32,7 +32,8 @@
                 </select>
                 {% if limits.max_file_bytes %}
                 <input type="file" id="fileInput" class="visually-hidden file-input">
-                <label for="fileInput" class="btn btn-quiet btn-sm file-pick">{{ icons.icon("paperclip") }} Attach file</label>
+                <label for="fileInput" class="btn btn-quiet btn-sm file-pick">{{ icons.icon("paperclip") }} Attach
+                    file</label>
                 {% endif %}
             </div>
             {% if limits.max_file_bytes %}
@@ -48,8 +49,9 @@
             <div id="paste-editor" class="paste-editor">
                 <pre class="paste-highlight" aria-hidden="true"><code id="paste-highlight" class="hljs"></code></pre>
                 <label for="paste-area" class="visually-hidden">Paste content</label>
-                <textarea id="paste-area" placeholder="{% if limits.max_file_bytes %}Paste or type here, or just attach a file...{% else %}Paste or type here...{% endif %}" spellcheck="false"
-                    aria-describedby="paste-area-keys"></textarea>
+                <textarea id="paste-area"
+                    placeholder="{% if limits.max_file_bytes %}Paste or type here, or just attach a file...{% else %}Paste or type here...{% endif %}"
+                    spellcheck="false" aria-describedby="paste-area-keys"></textarea>
                 {# js/editor_keys.mjs #}
                 <span id="paste-area-keys" class="visually-hidden">Tab inserts a tab. To move on, press Escape, then
                     Tab.</span>
@@ -66,8 +68,8 @@
                 <legend class="field-label">Expires after</legend>
                 <div class="seg">
                     {% for value, label in expiries %}
-                    <input type="radio" class="btn-check" name="expire" id="expire-{{ value }}" value="{{ value }}"
-                        {% if value == "3days" %}checked{% endif %}>
+                    <input type="radio" class="btn-check" name="expire" id="expire-{{ value }}" value="{{ value }}" {%
+                        if value=="3days" %}checked{% endif %}>
                     <label class="seg-btn" for="expire-{{ value }}">{{ label }}</label>
                     {% endfor %}
                 </div>
@@ -89,8 +91,8 @@
 
             <div>
                 <label for="max-views" class="field-label">Or limit views</label>
-                <input type="number" id="max-views" class="form-control" min="1" max="999999999999"
-                    inputmode="numeric" placeholder="Unlimited">
+                <input type="number" id="max-views" class="form-control" min="0" max="999999999999" inputmode="numeric"
+                    placeholder="Unlimited">
             </div>
 
             <div>
@@ -111,7 +113,8 @@
                         class="fw-normal text-secondary">(optional)</span></label>
                 <div class="input-group">
                     <input type="password" id="paste-password" class="form-control" autocomplete="new-password"
-                        spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other">
+                        spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true"
+                        data-form-type="other">
                     <button type="button" id="toggle-password" class="btn btn-quiet" aria-label="Show password"
                         aria-pressed="false">{{ icons.icon("eye") }}</button>
                 </div>
@@ -133,7 +136,8 @@
             </div>
 
             <button type="button" id="submit-paste" class="btn btn-accent btn-lg w-100">
-                <span class="submit-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Encrypt &amp; get link</span>
+                <span class="submit-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Encrypt &amp;
+                    get link</span>
                 <span class="submit-busy d-none align-items-center gap-2"><span class="spinner-border spinner-border-sm"
                         aria-hidden="true"></span> <span id="submit-status">Encrypting...</span></span>
             </button>
@@ -142,11 +146,14 @@
 
     <ul class="trust-list">
         <li>{{ icons.icon("shield") }}<div><strong>Encrypted in your browser</strong><span>AES-256-GCM via the Web
-                    Crypto API.</span></div></li>
+                    Crypto API.</span></div>
+        </li>
         <li>{{ icons.icon("link") }}<div><strong>The key stays in the link</strong><span>After the #, which browsers
-                    never send to the server.</span></div></li>
-        <li>{{ icons.icon("code") }}<div><strong>Open source</strong><span>Check <a href="{{ source_url }}" target="_blank"
-                        rel="noopener noreferrer">the code</a> yourself.</span></div></li>
+                    never send to the server.</span></div>
+        </li>
+        <li>{{ icons.icon("code") }}<div><strong>Open source</strong><span>Check <a href="{{ source_url }}"
+                        target="_blank" rel="noopener noreferrer">the code</a> yourself.</span></div>
+        </li>
     </ul>
 </div>
 
@@ -168,7 +175,8 @@
                 <div class="input-group">
                     <input id="paste-url" class="form-control font-monospace small" type="text" readonly>
                     <button id="copy-url-btn" type="button" class="btn btn-accent">
-                        <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }} Copy</span>
+                        <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }}
+                            Copy</span>
                         <span class="copy-done d-none align-items-center gap-2">{{ icons.icon("check") }} Copied</span>
                     </button>
                 </div>
@@ -196,7 +204,8 @@
                     <input id="delete-url" class="form-control font-monospace small" type="text" readonly
                         aria-label="Delete link">
                     <button id="copy-delete-btn" type="button" class="btn btn-quiet">
-                        <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }} Copy</span>
+                        <span class="copy-idle d-inline-flex align-items-center gap-2">{{ icons.icon("copy") }}
+                            Copy</span>
                         <span class="copy-done d-none align-items-center gap-2">{{ icons.icon("check") }} Copied</span>
                     </button>
                 </div>

@@ -49,6 +49,15 @@ check("create: attachment row shows file", (await txt(c, "#attachment-name")) ==
 await c.click('label[for="burn"]');
 check("create: burn switch sets views to 1 and locks the field", await c.$eval("#max-views", (e) => e.disabled && e.value === "1"));
 await c.click('label[for="burn"]');
+// Stepping: up from Unlimited is 1, down from 1 is Unlimited again, never a
+// 0 (the field keeps focus, so no "change" event tidies it up).
+await c.focus("#max-views");
+const stepped = [];
+for (const key of ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowDown"]) {
+  await c.keyboard.press(key);
+  stepped.push(await c.$eval("#max-views", (e) => e.value));
+}
+check("create: view limit steps back down to Unlimited", JSON.stringify(stepped) === JSON.stringify(["1", "2", "1", "", ""]), JSON.stringify(stepped));
 await c.type("#max-views", "5");
 await c.type("#paste-password", "hunter2");
 await c.click("#toggle-password");

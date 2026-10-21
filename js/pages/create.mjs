@@ -12,7 +12,11 @@ import {
   encryptPart,
   generateLinkSecret,
 } from "../crypto.mjs";
-import { rememberDeleteToken, rememberingEnabled, setRemembering } from "../delete_tokens.mjs";
+import {
+  rememberDeleteToken,
+  rememberingEnabled,
+  setRemembering,
+} from "../delete_tokens.mjs";
 import { enableEditorKeys } from "../editor_keys.mjs";
 import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
@@ -98,14 +102,18 @@ function selectedLanguage() {
   if (language === AUTO) {
     return detectedLanguage;
   }
-  return language !== "plaintext" && hljs.getLanguage(language) ? language : null;
+  return language !== "plaintext" && hljs.getLanguage(language)
+    ? language
+    : null;
 }
 
 // Guesses the language again and shows it in the picker, e.g.
 // "Auto-detect (Rust)".
 function redetect() {
   detectedLanguage = detectLanguage(pasteArea.value);
-  autoOption.textContent = detectedLanguage ? `Auto-detect (${languageName(detectedLanguage)})` : "Auto-detect";
+  autoOption.textContent = detectedLanguage
+    ? `Auto-detect (${languageName(detectedLanguage)})`
+    : "Auto-detect";
   updateHighlight();
 }
 
@@ -185,21 +193,49 @@ fileInput?.addEventListener("change", (event) => {
   attachedFile = file;
   fileName = file.name;
   document.getElementById("attachment-name").textContent = file.name;
-  document.getElementById("attachment-size").textContent = formatBytes(file.size);
+  document.getElementById("attachment-size").textContent = formatBytes(
+    file.size,
+  );
   attachmentRow.hidden = false;
 });
 
-document.getElementById("attachment-remove")?.addEventListener("click", clearAttachment);
+document
+  .getElementById("attachment-remove")
+  ?.addEventListener("click", clearAttachment);
 
 // --- Options --------------------------------------------------------------
 
 function selectedExpiry() {
-  return document.querySelector('input[name="expire"]:checked')?.value ?? DEFAULT_EXPIRY;
+  return (
+    document.querySelector('input[name="expire"]:checked')?.value ??
+    DEFAULT_EXPIRY
+  );
 }
 
 function expiryLabel(value) {
-  return document.querySelector(`label[for="expire-${value}"]`)?.textContent.trim() ?? value;
+  return (
+    document
+      .querySelector(`label[for="expire-${value}"]`)
+      ?.textContent.trim() ?? value
+  );
 }
+
+// The field's minimum is 0 so stepping down from 1 is possible; 0 becomes
+// "Unlimited" at once, before it's drawn, however it was stepped to (arrow
+// keys and the wheel only fire "change" when the field loses focus).
+maxViewsInput.addEventListener("input", () => {
+  if (maxViewsInput.value === "0") {
+    maxViewsInput.value = "";
+  }
+});
+
+// Anything else out of range, once it's typed.
+maxViewsInput.addEventListener("change", () => {
+  const n = parseInt(maxViewsInput.value, 10);
+  if (!Number.isFinite(n) || n < 1 || n > MAX_VIEWS) {
+    maxViewsInput.value = "";
+  }
+});
 
 // Burn after reading is a view limit of 1.
 burnSwitch.addEventListener("change", () => {
@@ -218,10 +254,15 @@ function maxViews() {
 function setPasswordVisible(visible) {
   passwordInput.type = visible ? "text" : "password";
   passwordToggle.setAttribute("aria-pressed", String(visible));
-  passwordToggle.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+  passwordToggle.setAttribute(
+    "aria-label",
+    visible ? "Hide password" : "Show password",
+  );
 }
 
-passwordToggle.addEventListener("click", () => setPasswordVisible(passwordInput.type === "password"));
+passwordToggle.addEventListener("click", () =>
+  setPasswordVisible(passwordInput.type === "password"),
+);
 
 // --- Submit ---------------------------------------------------------------
 
@@ -231,7 +272,9 @@ function setBusy(busy) {
   submitButton.disabled = busy;
   submitButton.querySelector(".submit-idle").classList.toggle("d-none", busy);
   submitButton.querySelector(".submit-busy").classList.toggle("d-none", !busy);
-  submitButton.querySelector(".submit-busy").classList.toggle("d-inline-flex", busy);
+  submitButton
+    .querySelector(".submit-busy")
+    .classList.toggle("d-inline-flex", busy);
 }
 
 // An error with a message for the user, from a refused API request.
@@ -264,7 +307,8 @@ async function refusal(response, what) {
   const body = await response.json().catch(() => ({}));
   switch (response.status) {
     case 429: {
-      const retryAfter = Number(body.retry_after ?? response.headers.get("Retry-After")) || 60;
+      const retryAfter =
+        Number(body.retry_after ?? response.headers.get("Retry-After")) || 60;
       const message = LIMIT_MESSAGES[body.limit];
       return new RefusedError(
         message
@@ -286,11 +330,15 @@ async function refusal(response, what) {
       );
     case 400:
       if (body.reason) {
-        return new RefusedError(`The server didn't accept the ${what}: ${body.reason}.`);
+        return new RefusedError(
+          `The server didn't accept the ${what}: ${body.reason}.`,
+        );
       }
       return new Error(`The server didn't accept the ${what} (400)`);
     default:
-      return new Error(`The server didn't accept the ${what} (${response.status})`);
+      return new Error(
+        `The server didn't accept the ${what} (${response.status})`,
+      );
   }
 }
 
@@ -311,11 +359,17 @@ async function uploadFile(file, key, iv, id, token) {
     for (let attempt = 1; ; attempt++) {
       let response;
       try {
-        response = await fetch(`/api/upload-attachment/${id}/${index}?last=${last}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/octet-stream", "X-Upload-Token": token },
-          body: chunk,
-        });
+        response = await fetch(
+          `/api/upload-attachment/${id}/${index}?last=${last}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "X-Upload-Token": token,
+            },
+            body: chunk,
+          },
+        );
       } catch (e) {
         if (attempt >= UPLOAD_TRIES) {
           throw e;
@@ -346,7 +400,9 @@ async function createPaste() {
   }
 
   if (new TextEncoder().encode(text).byteLength > limits.max_paste_bytes) {
-    alert(`Paste is too large. Please keep it under ${limits.max_paste_label}.`);
+    alert(
+      `Paste is too large. Please keep it under ${limits.max_paste_label}.`,
+    );
     return;
   }
 
@@ -361,7 +417,11 @@ async function createPaste() {
   // send to the server. With a password, the key also depends on it, and the
   // link (not the server) says there is one.
   const linkSecret = generateLinkSecret({ password: password !== "" });
-  const { key, accessProof } = await deriveV3Secrets(linkSecret, iv, password === "" ? null : password);
+  const { key, accessProof } = await deriveV3Secrets(
+    linkSecret,
+    iv,
+    password === "" ? null : password,
+  );
 
   // Every part is padded to a rounded size before encryption, so the server
   // can't tell much from sizes (see PART_PADDING in crypto.mjs).
@@ -371,14 +431,21 @@ async function createPaste() {
   // created (uploadFile).
   const file = attachedFile ?? null;
   const encryptedFileName = file
-    ? arrayBufferToBase64(await encryptPart(key, iv, "file-name", encode(fileName)))
+    ? arrayBufferToBase64(
+        await encryptPart(key, iv, "file-name", encode(fileName)),
+      )
     : null;
 
   // The title and the language are encrypted together; an empty title is
   // shown as "Untitled". Cut by code point so the 64-character limit can't
   // split an emoji.
   const titleText = Array.from(titleInput.value).slice(0, 64).join("");
-  const title = await encryptPart(key, iv, "title", encodeDetails(titleText, syntaxSelect.value));
+  const title = await encryptPart(
+    key,
+    iv,
+    "title",
+    encodeDetails(titleText, syntaxSelect.value),
+  );
 
   const paste = {
     content: arrayBufferToBase64(encrypted),
@@ -431,14 +498,20 @@ async function createPaste() {
   // page (robots.txt blocks /paste/) and it forwards browsers on. The origin
   // is the address this page was loaded from, so links work whatever
   // site_url is set to.
-  showLink(`${location.origin}/s/${data.id}#${linkSecret}`, `${location.origin}/delete/${data.id}#${data.delete_token}`, {
-    expiry: expiryLabel(expire),
-    views,
-    deleteAfterOpen: deleteAfterOpen && deleteAfterOpenSelect.selectedOptions[0].dataset.chip,
-    password: password !== "",
-    attachment: Boolean(file),
-    remembered,
-  });
+  showLink(
+    `${location.origin}/s/${data.id}#${linkSecret}`,
+    `${location.origin}/delete/${data.id}#${data.delete_token}`,
+    {
+      expiry: expiryLabel(expire),
+      views,
+      deleteAfterOpen:
+        deleteAfterOpen &&
+        deleteAfterOpenSelect.selectedOptions[0].dataset.chip,
+      password: password !== "",
+      attachment: Boolean(file),
+      remembered,
+    },
+  );
 }
 
 // Without Web Crypto (a plain-HTTP page) nothing can be encrypted; the
@@ -456,7 +529,11 @@ submitButton.addEventListener("click", async () => {
     await createPaste();
   } catch (e) {
     console.error(e);
-    alert(e instanceof RefusedError ? e.message : "Failed to create paste. Please try again.");
+    alert(
+      e instanceof RefusedError
+        ? e.message
+        : "Failed to create paste. Please try again.",
+    );
   } finally {
     setBusy(false);
   }
@@ -487,7 +564,9 @@ function showLink(url, deleteUrl, settings) {
   if (settings.views === 1) {
     chips.push(chip("flame", "Burns after 1 view", true));
   } else if (settings.views) {
-    chips.push(chip("eye", `Limited to ${settings.views.toLocaleString()} views`));
+    chips.push(
+      chip("eye", `Limited to ${settings.views.toLocaleString()} views`),
+    );
   }
   if (settings.deleteAfterOpen) {
     chips.push(chip("clock", settings.deleteAfterOpen, true));
@@ -507,7 +586,11 @@ function showLink(url, deleteUrl, settings) {
   const qr = qrcode(0, "M");
   qr.addData(url);
   qr.make();
-  document.getElementById("qrcode-container").innerHTML = qr.createImgTag(4, 2, "QR code of the link");
+  document.getElementById("qrcode-container").innerHTML = qr.createImgTag(
+    4,
+    2,
+    "QR code of the link",
+  );
   urlModalEl.querySelector(".qr-details").open = false;
 
   setCopied(copyUrlButton, false);
@@ -530,7 +613,9 @@ for (const [button, field] of [
     setCopied(button, true);
     setTimeout(() => setCopied(button, false), 2000);
   });
-  document.getElementById(field).addEventListener("focus", (e) => e.target.select());
+  document
+    .getElementById(field)
+    .addEventListener("focus", (e) => e.target.select());
 }
 
 // However the dialog closes, start a fresh paste.
@@ -542,7 +627,9 @@ urlModalEl.addEventListener("hidden.bs.modal", () => {
 
 // Kept across visits, not reset with the form.
 rememberSwitch.checked = rememberingEnabled();
-rememberSwitch.addEventListener("change", () => setRemembering(rememberSwitch.checked));
+rememberSwitch.addEventListener("change", () =>
+  setRemembering(rememberSwitch.checked),
+);
 
 // --- Reset ----------------------------------------------------------------
 
