@@ -3,7 +3,6 @@
 
 use std::convert::Infallible;
 use std::net::IpAddr;
-use std::time::Duration;
 
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
@@ -12,20 +11,34 @@ use rocket::serde::json::Json;
 
 use crate::config::{AppConfig, MIB};
 use crate::paste_db::PasteDB;
+use crate::rate_limit::{Limit, Limited};
 
-/// Errors the create page tells the user about. Bodies are JSON:
-/// `{"error": "rate_limited", "retry_after": <seconds>}`,
-/// `{"error": "storage_full"}` or `{"error": "invalid", "reason": "..."}`.
+/// Errors the pages tell the user about. Bodies are JSON:
+/// - `{"error": "rate_limited", "limit": "pastes_per_minute" |
+///   "pastes_per_hour" | "upload_mib_per_hour" | "failed_attempts_per_hour",
+///   "allowed": <the setting>, "retry_after": <seconds>}`
+/// - `{"error": "storage_full", "reason": "disk" | "attachments"}`
+/// - `{"error": "invalid", "reason": "..."}`
+///
 /// Other failures are a bare status.
 #[derive(Debug)]
 pub enum ApiError {
     /// 429, with a Retry-After header.
-    RateLimited(Duration),
-    /// 507: the disk is nearly full or the attachment storage cap is reached.
-    StorageFull,
+    RateLimited(Limited),
+    /// 507: the disk is nearly full, or the attachment storage cap is reached.
+    StorageFull(Storage),
     /// 400: the request isn't valid, and why.
     Invalid(&'static str),
     Status(Status),
+}
+
+/// Which storage limit was reached.
+#[derive(Debug, Clone, Copy)]
+pub enum Storage {
+    /// min_free_disk_mib: nothing new can be stored.
+    Disk,
+    /// max_attachment_storage_mib: pastes without an attachment still can.
+    Attachments,
 }
 
 impl From<Status> for ApiError {
@@ -37,17 +50,31 @@ impl From<Status> for ApiError {
 impl<'r> Responder<'r, 'static> for ApiError {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
         match self {
-            ApiError::RateLimited(wait) => {
+            ApiError::RateLimited(Limited { limit, wait }) => {
                 let seconds = (wait.as_secs_f64().ceil() as u64).max(1);
-                let body =
-                    Json(serde_json::json!({"error": "rate_limited", "retry_after": seconds}));
+                let (name, allowed) = match limit {
+                    Limit::PastesPerMinute(n) => ("pastes_per_minute", n),
+                    Limit::PastesPerHour(n) => ("pastes_per_hour", n),
+                    Limit::UploadBytesPerHour(bytes) => ("upload_mib_per_hour", bytes / MIB),
+                    Limit::FailedAttemptsPerHour(n) => ("failed_attempts_per_hour", n),
+                };
+                let body = Json(serde_json::json!({
+                    "error": "rate_limited",
+                    "limit": name,
+                    "allowed": allowed,
+                    "retry_after": seconds,
+                }));
                 Response::build_from(body.respond_to(req)?)
                     .status(Status::TooManyRequests)
                     .raw_header("Retry-After", seconds.to_string())
                     .ok()
             }
-            ApiError::StorageFull => {
-                let body = Json(serde_json::json!({"error": "storage_full"}));
+            ApiError::StorageFull(storage) => {
+                let reason = match storage {
+                    Storage::Disk => "disk",
+                    Storage::Attachments => "attachments",
+                };
+                let body = Json(serde_json::json!({"error": "storage_full", "reason": reason}));
                 Response::build_from(body.respond_to(req)?)
                     .status(Status::InsufficientStorage)
                     .ok()
@@ -87,7 +114,7 @@ pub fn check_storage(
         match db.available_disk_space() {
             Ok(free) if free < config.min_free_disk_mib * MIB + attachment_bytes => {
                 eprintln!("Refusing new data: only {} MiB free on disk", free / MIB);
-                return Err(ApiError::StorageFull);
+                return Err(ApiError::StorageFull(Storage::Disk));
             }
             Ok(_) => {}
             // Better to keep working than to refuse everything.
@@ -99,7 +126,7 @@ pub fn check_storage(
         && db.attachment_storage_used() + attachment_bytes > config.max_attachment_storage_mib * MIB
     {
         eprintln!("Refusing attachment: max_attachment_storage_mib reached");
-        return Err(ApiError::StorageFull);
+        return Err(ApiError::StorageFull(Storage::Attachments));
     }
     Ok(())
 }

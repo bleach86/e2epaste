@@ -71,7 +71,7 @@ check("v2 password: one view used, not two", (await page.$eval("#views", (e) => 
 // A v3 paste created before access proofs: no access hash, so it opens
 // without a proof (and the view is still counted by the server).
 {
-  const body = { content: "x", iv: Array(12).fill(1), expires_in: 3600, max_views: null, key_fragment: "", version: 3,
+  const body = { content: "eA==", iv: Array(12).fill(1), expires_in: 3600, max_views: null, key_fragment: "", version: 3,
     title: "t", syntax: "plaintext", file_name: null };
   const { id } = await (await fetch(BASE + "/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
   const res = await fetch(`${BASE}/api/open/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proof: null }) });

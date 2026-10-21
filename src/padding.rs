@@ -15,7 +15,6 @@ pub enum Padding {
 }
 
 pub const TEXT: Padding = Padding::Min(4096);
-pub const FILE: Padding = Padding::Min(4096);
 pub const FILE_NAME: Padding = Padding::Min(1024);
 pub const TITLE: Padding = Padding::Fixed(512);
 
@@ -29,6 +28,60 @@ pub fn padme(length: u64) -> u64 {
     let exponent_bits = 64 - u64::from(exponent.leading_zeros());
     let step = 1u64 << (exponent - exponent_bits);
     length.div_ceil(step) * step
+}
+
+/// The length prefix in front of each part's data.
+const LENGTH_BYTES: u64 = 4;
+
+/// The most `len` bytes can grow when deflated: zlib's deflateBound (data
+/// that won't compress is stored in blocks with a few bytes of framing),
+/// with some room to spare.
+fn deflate_bound(len: u64) -> u64 {
+    len + (len >> 12) + (len >> 14) + (len >> 25) + 64
+}
+
+/// The largest encrypted size a part holding up to `len` bytes can have:
+/// compressed (at worst growing slightly), length-prefixed, padded and
+/// encrypted.
+pub fn max_encrypted_len(len: u64, padding: Padding) -> u64 {
+    let padded = match padding {
+        Padding::Fixed(size) => size,
+        Padding::Min(min) => padme(min.max(LENGTH_BYTES + deflate_bound(len))),
+    };
+    padded + TAG_BYTES
+}
+
+// --- Attachments ---------------------------------------------------------------
+//
+// Encrypted in chunks (js/crypto.mjs encryptFile): the stream [8-byte
+// size][file][zeros] is padded to a Padmé size of at least 4 KiB, then cut
+// into 1 MiB chunks, each stored with its own tag.
+
+/// One chunk of an attachment, before encryption.
+pub const FILE_CHUNK_BYTES: u64 = 1 << 20;
+/// One chunk as uploaded and stored.
+pub const ENCRYPTED_CHUNK_BYTES: u64 = FILE_CHUNK_BYTES + TAG_BYTES;
+const FILE_SIZE_BYTES: u64 = 8;
+const FILE_MIN_PADDED: u64 = 4096;
+
+fn encrypted_file_len_from_padded(padded: u64) -> u64 {
+    padded + TAG_BYTES * padded.div_ceil(FILE_CHUNK_BYTES)
+}
+
+/// What a file of `size` bytes is stored as, encrypted.
+pub fn encrypted_file_len(size: u64) -> u64 {
+    encrypted_file_len_from_padded(padme(FILE_MIN_PADDED.max(FILE_SIZE_BYTES + size)))
+}
+
+/// Whether `len` is the encrypted size of some padded file.
+pub fn is_encrypted_file_len(len: u64) -> bool {
+    let chunks = len.div_ceil(ENCRYPTED_CHUNK_BYTES);
+    let Some(padded) = len.checked_sub(TAG_BYTES * chunks) else {
+        return false;
+    };
+    padded >= FILE_MIN_PADDED
+        && padme(padded) == padded
+        && encrypted_file_len_from_padded(padded) == len
 }
 
 /// Whether an encrypted part of `encrypted_len` bytes is padded as `padding`
@@ -104,8 +157,46 @@ mod tests {
         assert!(!is_padded(1024 + 16, TEXT), "under the minimum");
         assert!(!is_padded(10, TEXT));
         assert!(is_padded(512 + 16, TITLE));
+        assert!(!is_padded(4096 + 16, TITLE));
         assert!(!is_padded(1024 + 16, TITLE));
         assert!(is_padded(1024 + 16, FILE_NAME));
+    }
+
+    #[test]
+    fn attachment_sizes() {
+        // Matching js/crypto.mjs encryptedFileLength (tests/unit/
+        // attachments.test.mjs checks real uploads against it).
+        assert_eq!(encrypted_file_len(0), 4096 + 16);
+        assert_eq!(encrypted_file_len(6000), 6144 + 16);
+        assert_eq!(encrypted_file_len(1 << 20), 1_081_344 + 2 * 16);
+        assert_eq!(encrypted_file_len(25 << 20), 26_738_688 + 26 * 16);
+        for size in (0..3_000_000)
+            .step_by(997)
+            .chain([1 << 20, (1 << 20) - 8, 100 << 20])
+        {
+            let len = encrypted_file_len(size);
+            assert!(is_encrypted_file_len(len), "{size} -> {len}");
+            assert!(!is_encrypted_file_len(len + 1), "{size} -> {len} + 1");
+        }
+        assert!(!is_encrypted_file_len(0));
+        assert!(!is_encrypted_file_len(5000 + 16), "not a Padmé size");
+        assert!(!is_encrypted_file_len(2048 + 16), "under the minimum");
+        // A whole chunk's padded size with the wrong number of tags.
+        assert!(!is_encrypted_file_len(1_081_344 + 16));
+    }
+
+    #[test]
+    fn worst_case_sizes() {
+        // The default: 1 MiB of text.
+        assert_eq!(max_encrypted_len(1 << 20, TEXT), 1_081_344 + 16);
+        assert_eq!(max_encrypted_len(10, TEXT), 4096 + 16);
+        assert_eq!(max_encrypted_len(10, TITLE), 512 + 16);
+        // Never less than what the data can actually take.
+        for len in [0, 1, 4000, 65_535, 65_536, 1 << 20, 100 << 20] {
+            let stored = max_encrypted_len(len, TEXT) - TAG_BYTES;
+            assert!(stored >= len + LENGTH_BYTES + 11, "{len}");
+            assert!(is_padded(stored + TAG_BYTES, TEXT), "{len} -> {stored}");
+        }
     }
 
     #[test]

@@ -33,7 +33,7 @@ use std::time::Duration;
 use chrono::prelude::*;
 
 use api::{ApiError, ClientIp};
-use config::{AppConfig, MAX_ATTACHMENT_MIB, MIB};
+use config::{AppConfig, MIB};
 use incoming::{IncomingPaste, IncomingPasteRes};
 use paste_db::{PasteDB, PasteData};
 use paste_id::PasteId;
@@ -108,13 +108,15 @@ async fn upload(
 ) -> Result<Json<IncomingPasteRes>, ApiError> {
     let paste: IncomingPaste = raw_paste.clone().into_inner();
     let now: DateTime<Utc> = Utc::now();
+    let limits = config.paste_limits();
     let expires = paste
-        .check(now.timestamp_millis() as u64)
+        .check(now.timestamp_millis() as u64, &limits)
         .map_err(ApiError::Invalid)?;
 
     // The attachment's size is checked and charged now, so a paste is never
-    // created whose attachment would then be refused.
-    let max_attachment = MAX_ATTACHMENT_MIB * MIB;
+    // created whose attachment would then be refused. (check() has refused
+    // attachments if the site doesn't take them.)
+    let max_attachment = limits.max_stored_file.unwrap_or(0);
     let attachment_bytes: u64 = match (&paste.file_name, paste.file_size) {
         (None, _) => 0,
         (Some(_), Some(size)) if size > max_attachment => {
@@ -206,81 +208,111 @@ async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     )
 }
 
-#[post("/api/upload-attachment/<id>", data = "<data>")]
+/// One chunk of an attachment (see padding.rs), uploaded in order from 0.
+/// `last` marks the final chunk, which completes the upload. A chunk can be
+/// sent again, for example after a network error: it replaces that chunk and
+/// anything after it.
+#[post("/api/upload-attachment/<id>/<index>?<last>", data = "<data>")]
 async fn upload_attachment(
     db: &State<Arc<PasteDB>>,
     config: &State<AppConfig>,
     data: Data<'_>,
     id: PasteId<'_>,
+    index: u64,
+    last: bool,
     token: UploadToken,
 ) -> Result<&'static str, ApiError> {
+    use rocket::tokio::io::{AsyncSeekExt, AsyncWriteExt};
+
     let id = id.to_string();
     let internal = |e: &dyn std::fmt::Debug| {
         eprintln!("Error saving attachment for {id}: {e:?}");
         ApiError::Status(Status::InternalServerError)
     };
 
-    // Only the paste's creator has the token, and only until an upload
-    // succeeds. It's removed when the paste is deleted, so this also checks
-    // the paste exists.
-    // The size limit was set (and charged to the client's allowance) when the
-    // paste was created.
-    let max_bytes = match db
+    // Only the paste's creator has the token, and only until the upload is
+    // complete. It's removed when the paste is deleted, so this also checks
+    // the paste exists. The size was declared (and charged to the client's
+    // allowance) when the paste was created.
+    let declared = match db
         .upload_allowance(&id, &token.0)
         .map_err(|e| internal(&e))?
     {
-        Some(max_bytes) => max_bytes,
+        Some(declared) => declared,
         None => return Err(Status::Forbidden.into()),
     };
     // Only the free-space check: the attachment already counts towards the
     // storage cap from when the paste was created.
     api::check_storage(db, config, 0)?;
 
-    // Written to a temporary file, so a failed upload can be retried and never
-    // leaves a partial attachment.
-    let partial = db.partial_upload_path(&id);
-    // One byte over the limit is read so a body of exactly `max_bytes` ends
-    // inside it: Rocket logs "Data limit reached" whenever a read uses up the
-    // limit, even when the body ends there.
-    let written = match data.open((max_bytes + 1).bytes()).into_file(&partial).await {
-        Ok(written) => written,
-        Err(e) => {
-            let _ = tokio::fs::remove_file(&partial).await;
-            return Err(internal(&e));
-        }
+    // One byte over a chunk is read, so a full chunk ends inside the limit:
+    // Rocket logs "Data limit reached" whenever a read uses up the limit.
+    let chunk_limit = padding::ENCRYPTED_CHUNK_BYTES;
+    let chunk = data
+        .open((chunk_limit + 1).bytes())
+        .into_bytes()
+        .await
+        .map_err(|e| internal(&e))?;
+    let len = chunk.len() as u64;
+    let size_ok = if last {
+        len > 16 && len <= chunk_limit
+    } else {
+        len == chunk_limit
     };
-    if !written.is_complete() || written.n.written > max_bytes {
-        let _ = tokio::fs::remove_file(&partial).await;
+    if !chunk.is_complete() || !size_ok {
+        return Err(ApiError::Invalid("a chunk is the wrong size"));
+    }
+    let offset = index
+        .checked_mul(chunk_limit)
+        .ok_or(ApiError::Invalid("a chunk is out of range"))?;
+    let end = offset + len;
+    if end > declared {
         return Err(Status::PayloadTooLarge.into());
     }
-    // v4 attachments are exactly the padded size declared with the paste
-    // (checked then), so a client can't upload one unpadded.
-    let declared_exactly = db.get_paste(&id).is_some_and(|paste| paste.version >= 4);
-    if declared_exactly && written.n.written != max_bytes {
-        let _ = tokio::fs::remove_file(&partial).await;
+    if last && end != declared {
         return Err(ApiError::Invalid(
             "the attachment isn't the size declared with the paste",
         ));
     }
 
+    // Written to a temporary file until the last chunk, so the attachment is
+    // never there half-uploaded.
+    let partial = db.partial_upload_path(&id);
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&partial)
+        .await
+        .map_err(|e| internal(&e))?;
+    let written = file.metadata().await.map_err(|e| internal(&e))?.len();
+    if offset > written {
+        return Err(ApiError::Invalid("chunks must be uploaded in order"));
+    }
+    let write = async {
+        file.set_len(offset).await?;
+        file.seek(std::io::SeekFrom::Start(offset)).await?;
+        file.write_all(&chunk).await?;
+        file.flush().await
+    };
+    write.await.map_err(|e| internal(&e))?;
+    drop(file);
+    if !last {
+        return Ok("Chunk received");
+    }
+
     // Of concurrent uploads with the right token, only one gets past here.
     match db.consume_upload_token(&id, &token.0) {
         Ok(true) => {}
-        Ok(false) => {
-            let _ = tokio::fs::remove_file(&partial).await;
-            return Err(Status::Forbidden.into());
-        }
-        Err(e) => {
-            let _ = tokio::fs::remove_file(&partial).await;
-            return Err(internal(&e));
-        }
+        Ok(false) => return Err(Status::Forbidden.into()),
+        Err(e) => return Err(internal(&e)),
     }
     let path = db.attachment_path(&id);
     if let Err(e) = tokio::fs::rename(&partial, &path).await {
         let _ = tokio::fs::remove_file(&partial).await;
         return Err(internal(&e));
     }
-    db.add_attachment_bytes(written.n.written);
+    db.add_attachment_bytes(declared);
 
     // The paste may have expired while the file was uploading. Deleting it
     // again also takes the file off the storage total.
@@ -290,6 +322,7 @@ async fn upload_attachment(
     }
     Ok("Upload successful")
 }
+
 #[get("/paste/<id>")]
 async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
@@ -519,6 +552,13 @@ async fn rocket() -> _ {
     for warning in config.warnings() {
         eprintln!("Warning: {warning}");
     }
+    // New pastes are one JSON request; size its limit to max_paste_kib.
+    let paste_limits = config.paste_limits();
+    let figment = rocket
+        .figment()
+        .clone()
+        .merge(("limits.json", paste_limits.max_request_bytes()));
+    let rocket = rocket.configure(figment);
     for dir in [config.data_dir.clone(), config.file_dir()] {
         config::ensure_dir(&dir).unwrap_or_else(|e| exit_with(&e));
     }
@@ -541,7 +581,8 @@ async fn rocket() -> _ {
         config.upload_mib_per_hour * MIB,
     ));
     let limiter_clone = limiter.clone();
-    let unlocks = UnlockLimiter::new(config.unlock_attempts_per_hour);
+    let unlocks = Arc::new(UnlockLimiter::new(config.unlock_attempts_per_hour));
+    let unlocks_clone = unlocks.clone();
     let tickets = Arc::new(tickets::DownloadTickets::default());
     let tickets_clone = tickets.clone();
     let hsts = config.site_url.starts_with("https://");
@@ -564,6 +605,14 @@ async fn rocket() -> _ {
         limit(config.upload_mib_per_hour, "MiB an hour"),
         limit(config.min_free_disk_mib, "MiB"),
         limit(config.max_attachment_storage_mib, "MiB"),
+    );
+    println!(
+        "Pastes: text up to {}, attachments {}",
+        paste_limits.max_paste_label,
+        paste_limits
+            .max_file_label
+            .as_deref()
+            .map_or("off".to_string(), |label| format!("up to {label}")),
     );
     println!(
         "Failed unlock attempts per IP: {}. Admin API: {}",
@@ -617,6 +666,11 @@ async fn rocket() -> _ {
                 .minijinja
                 .add_global("asset_version", env!("ASSET_VERSION"));
             engines.minijinja.add_global("site_url", site_url.clone());
+            // What one paste can hold, for the create page and the FAQ.
+            engines.minijinja.add_global(
+                "limits",
+                rocket_dyn_templates::minijinja::Value::from_serialize(&paste_limits),
+            );
             engines.minijinja.add_global("site_name", site_name.clone());
             // The header shows a domain-style name's last part, e.g. ".XYZ",
             // in a lighter colour.
@@ -650,6 +704,7 @@ async fn rocket() -> _ {
                 }
             }
             limiter_clone.prune();
+            unlocks_clone.prune();
             tickets_clone.prune();
             // Expired pastes can't be opened anyway; this removes them from
             // disk promptly.

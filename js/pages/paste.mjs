@@ -9,6 +9,7 @@
 import {
   base64ToArrayBuffer,
   decodeDetails,
+  decryptFile,
   decryptPart,
   getPasteSecrets,
   linkHasPassword,
@@ -218,6 +219,13 @@ async function decrypt(password) {
   document.getElementById("decrypted-notice").hidden = false;
   copyButton.disabled = false;
   downloadButton.disabled = false;
+
+  // Just an attachment: nothing to show, copy or wrap.
+  if (text === "" && opened.file_name) {
+    for (const id of ["content-panel", "language-chip", "copy-paste-btn", "download-paste-btn", "wrap-btn"]) {
+      document.getElementById(id).hidden = true;
+    }
+  }
 }
 
 // For errors other than a wrong link or password.
@@ -343,9 +351,21 @@ attachmentButton.addEventListener("click", async () => {
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
-    setAttachmentBusy(true, "Decrypting...");
-    const decrypted = await decryptPart(pasteSecrets, "file", await res.arrayBuffer());
-    saveBlob(new Blob([decrypted], { type: "application/octet-stream" }), fileName);
+    let file;
+    if (paste.version >= 4) {
+      // Decrypted chunk by chunk as it arrives.
+      const total = Number(res.headers.get("Content-Length")) || 0;
+      file = await decryptFile(res.body, pasteSecrets.key, pasteSecrets.iv, (received) => {
+        if (total) {
+          downloadStatus.textContent = `Downloading and decrypting... ${Math.floor((received / total) * 100)}%`;
+        }
+      });
+    } else {
+      setAttachmentBusy(true, "Decrypting...");
+      const decrypted = await decryptPart(pasteSecrets, "file", await res.arrayBuffer());
+      file = new Blob([decrypted], { type: "application/octet-stream" });
+    }
+    saveBlob(file, fileName);
     setAttachmentBusy(false, "Encrypted attachment");
   } catch (e) {
     console.error(e);

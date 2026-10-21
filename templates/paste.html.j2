@@ -22,7 +22,7 @@
             {# v3 titles are encrypted; js/pages/paste.mjs fills them in after decrypting. #}
             <h1 class="page-title paste-title" id="paste-title">{% if paste.version < 3 %}{{ paste.title }}{% else %}Encrypted paste{% endif %}</h1>
             <ul class="chips mt-2" aria-label="Paste details">
-                <li class="chip">{{ icons.icon("code") }} <span id="language-name">{{ formatted_lang }}</span></li>
+                <li class="chip" id="language-chip">{{ icons.icon("code") }} <span id="language-name">{{ formatted_lang }}</span></li>
                 <li class="chip">Created <span id="paste-date"></span></li>
                 <li class="chip">{{ icons.icon("clock") }} <span id="expire-date"></span></li>
                 <li class="chip">{{ icons.icon("eye") }} <span id="views"></span></li>
@@ -47,7 +47,8 @@
         </div>
     </div>
 
-    <section class="panel mt-3" aria-label="Paste content">
+    {# Hidden for a paste that's just an attachment. #}
+    <section class="panel mt-3" id="content-panel" aria-label="Paste content">
         <div class="code-view" id="code-view">
             <pre class="code-gutter" id="code-gutter" aria-hidden="true"></pre>
             <pre class="code-body"><code id="view-area"></code></pre>

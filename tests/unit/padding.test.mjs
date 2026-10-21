@@ -33,8 +33,8 @@ ok("a length past the end is refused", threw);
 const b64 = (bytes) => Math.ceil(bytes / 3) * 4;
 const text = b64(C.paddedLength(1048576 + 400, C.PART_PADDING.text) + 16);
 ok("1 MiB of incompressible text fits MAX_CONTENT_CHARS", text <= 1450000, text);
-const file = C.paddedLength(26214400 + 8100, C.PART_PADDING.file) + 16;
-ok("a 25 MiB incompressible file fits MAX_ATTACHMENT_MIB", file <= 26 * 1048576, file);
+const file = C.encryptedFileLength(26214400);
+ok("a 25 MiB file stores in under 26 MiB", file <= 26 * 1048576, file);
 // 64 code points that all need JSON escapes, the longest language name.
 const details = C.encodeDetails("\u0001".repeat(64), "php-template");
 ok("the longest title and language fit the title part", C.paddedLength(details.length + 11, C.PART_PADDING.title) === 512, details.length);
@@ -67,10 +67,9 @@ const parts = {
   text: await C.encryptPart(pw.key, salt, "text", enc.encode("v4 text ✓")),
   title: await C.encryptPart(pw.key, salt, "title", C.encodeDetails("My title", "rust")),
   "file-name": await C.encryptPart(pw.key, salt, "file-name", enc.encode("a.bin")),
-  file: await C.encryptPart(pw.key, salt, "file", crypto.getRandomValues(new Uint8Array(3000))),
 };
 ok("encrypted sizes are padded sizes plus the tag",
-  parts.text.length === 4096 + 16 && parts.title.length === 512 + 16 && parts["file-name"].length === 1024 + 16 && parts.file.length === 4096 + 16,
+  parts.text.length === 4096 + 16 && parts.title.length === 512 + 16 && parts["file-name"].length === 1024 + 16,
   Object.values(parts).map((p) => p.length));
 const viewer = await C.getPasteSecrets({ version: 4, iv: Array.from(salt) }, flagged[0], C.linkHasPassword(flagged[0]), "hunter2");
 const dec = new TextDecoder();

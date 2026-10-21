@@ -24,6 +24,17 @@ data_dir = "."
 static_dir = "static"
 template_dir = "templates"
 
+# What one paste can hold. The create page, the FAQ and the server's request
+# size limit follow these.
+# Largest paste text, in KiB (1024 = 1 MB). At most 65536.
+max_paste_kib = 1024
+# Whether pastes can have an attachment.
+allow_files = true
+# Largest attachment, in MiB. At most 4096. Attachments are encrypted and
+# uploaded in 1 MiB chunks, but downloads are put back together in the
+# browser, so very large files can fail to download on phones.
+max_file_mib = 25
+
 # Header holding the visitor's IP, set by the reverse proxy. The rate limits
 # below are per IP, so the proxy must set (overwrite) it on every request.
 ip_header = "X-Real-IP"
@@ -31,7 +42,8 @@ ip_header = "X-Real-IP"
 # Limits per visitor IP (IPv6: per /64). 0 turns a limit off.
 pastes_per_minute = 10
 pastes_per_hour = 60
-# Attachment data. At least 26, the largest attachment.
+# Attachment data. At least one attachment's worth: max_file_mib plus a
+# little for padding (the server says if it's too low).
 upload_mib_per_hour = 250
 
 # Failed attempts to open or delete a paste (wrong link, password or delete
@@ -49,7 +61,5 @@ min_free_disk_mib = 1024
 # Cap on the total size of all attachments.
 max_attachment_storage_mib = 0
 
-[default.limits]
-# Encrypted pastes are at most about 1.4 MiB (1 MB of text). Attachments are
-# uploaded separately and capped at 26 MiB.
-json = "4 MiB"
+# The request size limit for new pastes (limits.json) is set automatically
+# from max_paste_kib. Attachments are uploaded separately.

@@ -56,8 +56,9 @@
             <ol>
                 <li>generates a random 128-bit secret,</li>
                 <li>derives an AES-256 key from it (with HKDF-SHA256),</li>
-                <li>compresses the text, the title, the file and the file's name, pads each to a rounded size, and
-                    encrypts them with AES-256-GCM, using your browser's built-in Web Crypto API, and</li>
+                <li>compresses the text, the title and the file's name, pads each to a rounded size, and encrypts
+                    them with AES-256-GCM, using your browser's built-in Web Crypto API. An attachment is padded and
+                    encrypted in 1 MB chunks as it uploads, and</li>
                 <li>uploads only the encrypted result.</li>
             </ol>
             <p class="mb-0">The secret goes into the link after the <code>#</code>, like
@@ -124,7 +125,9 @@
         <h2 class="h4 mb-3" id="faq-using">Using {{ site_name }}</h2>
         <div class="accordion">
             {% call faq("limits", "How large can a paste be?") %}
-            <p class="mb-0">Text can be up to 1 MB, and you can attach one file of up to 25 MB.</p>
+            <p class="mb-0">Text can be up to {{ limits.max_paste_label }}{% if limits.max_file_label %}, and you can
+                attach one file of up to {{ limits.max_file_label }}{% else %}. This site doesn't accept
+                attachments{% endif %}.</p>
             {% endcall %}
 
             {% call faq("expiry", "How do expiry and view limits work?") %}

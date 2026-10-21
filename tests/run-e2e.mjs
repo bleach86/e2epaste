@@ -19,6 +19,19 @@ const REPO = path.resolve(TESTS, "..");
 const BIN = process.env.E2EPASTE_BIN ?? path.join(REPO, "target/debug/e2epaste");
 const ADMIN_TOKEN = "e2e-admin-token-0123456789abcdef0123456789";
 
+// The default limits, whatever Rocket.toml says locally, so the suites test
+// the same thing everywhere. A suite's own settings go on top.
+const DEFAULTS = {
+  ROCKET_MAX_PASTE_KIB: "1024",
+  ROCKET_ALLOW_FILES: "true",
+  ROCKET_MAX_FILE_MIB: "25",
+  ROCKET_PASTES_PER_MINUTE: "10",
+  ROCKET_PASTES_PER_HOUR: "60",
+  ROCKET_UPLOAD_MIB_PER_HOUR: "250",
+  ROCKET_UNLOCK_ATTEMPTS_PER_HOUR: "30",
+  ROCKET_MAX_ATTACHMENT_STORAGE_MIB: "0",
+};
+
 // Most suites create a lot of pastes quickly, so the paste limits are off;
 // rate_limit.mjs runs with the defaults to test them.
 const NO_PASTE_LIMITS = { ROCKET_PASTES_PER_MINUTE: "0", ROCKET_PASTES_PER_HOUR: "0" };
@@ -41,6 +54,8 @@ const SUITES = [
     file: "branding.mjs",
     env: { ROCKET_SITE_URL: "https://paste.example.com", ROCKET_SOURCE_URL: "https://git.example.com/someone/e2epaste-fork" },
   },
+  { file: "limits.mjs", env: { ...NO_PASTE_LIMITS, ROCKET_MAX_PASTE_KIB: "8", ROCKET_MAX_FILE_MIB: "1", ROCKET_MAX_ATTACHMENT_STORAGE_MIB: "1" } },
+  { file: "no_files.mjs", env: { ...NO_PASTE_LIMITS, ROCKET_ALLOW_FILES: "false" } },
   { file: "rate_limit.mjs", env: {} },
 ];
 
@@ -83,6 +98,7 @@ async function runSuite(suite, port) {
       ROCKET_ADDRESS: "127.0.0.1",
       ROCKET_PORT: String(port),
       ROCKET_DATA_DIR: dataDir,
+      ...DEFAULTS,
       ...suite.env,
     },
     stdio: ["ignore", fs.openSync(log, "w"), fs.openSync(log, "a")],

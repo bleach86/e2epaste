@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::PasteLimits;
 use crate::padding::{self, Padding};
 use crate::secrets;
 
@@ -21,10 +22,9 @@ const CURRENT_VERSION: u32 = 4;
 /// AES-GCM base IV, which v3 also uses as the key derivation salt.
 const IV_BYTES: usize = 12;
 
-// Size limits, in characters, each above what the create page sends: 1 MB
-// of text compressed, padded, encrypted and base64 encoded (at most about
-// 1,442,000); the padded title; a file name, padded.
-const MAX_CONTENT_CHARS: usize = 1_450_000;
+// Size limits, in characters, each above what the create page sends: the
+// padded title and file name, encrypted and base64 encoded. The text's limit
+// is a setting (PasteLimits).
 const MAX_TITLE_CHARS: usize = 1024;
 const MAX_FILE_NAME_CHARS: usize = 2048;
 
@@ -74,9 +74,9 @@ pub struct IncomingPasteRes {
 }
 
 impl IncomingPaste {
-    /// Checks the paste and returns when it expires (ms since the epoch), or
-    /// what's wrong with it.
-    pub fn check(&self, now_ms: u64) -> Result<u64, &'static str> {
+    /// Checks the paste against the site's limits, and returns when it
+    /// expires (ms since the epoch) or what's wrong with it.
+    pub fn check(&self, now_ms: u64, limits: &PasteLimits) -> Result<u64, &'static str> {
         if !test_legacy_pastes() {
             if self.version != CURRENT_VERSION {
                 return Err("only the current paste format (version 3) can be created");
@@ -100,8 +100,15 @@ impl IncomingPaste {
         if self.iv.len() != IV_BYTES {
             return Err("iv must be 12 bytes");
         }
-        if self.content.is_empty() || self.content.len() > MAX_CONTENT_CHARS {
-            return Err("content is empty or too large");
+        match padding::base64_len(&self.content) {
+            Some(0) | None => return Err("content is empty or isn't base64"),
+            Some(len) if len > limits.max_stored_paste => {
+                return Err("content is larger than this site allows")
+            }
+            Some(_) => {}
+        }
+        if self.file_name.is_some() && limits.max_file_bytes.is_none() {
+            return Err("this site doesn't accept attachments");
         }
         if self.title.len() > MAX_TITLE_CHARS {
             return Err("title is too long");
@@ -159,7 +166,7 @@ impl IncomingPaste {
             (None, _) => Ok(()),
             (Some(_), None) => Err("file_size is required with an attachment"),
             (Some(name), Some(size))
-                if padded(name, padding::FILE_NAME) && padding::is_padded(size, padding::FILE) =>
+                if padded(name, padding::FILE_NAME) && padding::is_encrypted_file_len(size) =>
             {
                 Ok(())
             }
@@ -187,6 +194,10 @@ mod tests {
 
     const NOW: u64 = 1_800_000_000_000;
     const DAY_MS: u64 = 24 * 60 * 60 * 1000;
+
+    fn limits() -> PasteLimits {
+        PasteLimits::new(1024 * 1024, Some(25 * 1024 * 1024))
+    }
 
     /// Base64 text that decodes to `bytes` bytes.
     fn base64_of(bytes: usize) -> String {
@@ -216,7 +227,7 @@ mod tests {
 
     #[test]
     fn accepts_what_the_create_page_sends() {
-        assert_eq!(paste().check(NOW), Ok(NOW + 3 * DAY_MS));
+        assert_eq!(paste().check(NOW, &limits()), Ok(NOW + 3 * DAY_MS));
     }
 
     #[test]
@@ -224,24 +235,32 @@ mod tests {
         let max = NOW + MAX_LIFETIME.as_millis() as u64;
         let mut p = paste();
         p.expires_in = Some(u64::MAX);
-        assert_eq!(p.check(NOW), Ok(max));
+        assert_eq!(p.check(NOW, &limits()), Ok(max));
         p.expires_in = None;
         p.expires = Some(u64::MAX);
-        assert_eq!(p.check(NOW), Ok(max), "older clients' absolute time too");
+        assert_eq!(
+            p.check(NOW, &limits()),
+            Ok(max),
+            "older clients' absolute time too"
+        );
         p.expires = None;
-        assert_eq!(p.check(NOW), Ok(max), "no expiry means the longest");
+        assert_eq!(
+            p.check(NOW, &limits()),
+            Ok(max),
+            "no expiry means the longest"
+        );
         p.expires = Some(NOW + DAY_MS);
-        assert_eq!(p.check(NOW), Ok(NOW + DAY_MS));
+        assert_eq!(p.check(NOW, &limits()), Ok(NOW + DAY_MS));
     }
 
     #[test]
     fn refuses_expiry_in_the_past() {
         let mut p = paste();
         p.expires_in = Some(0);
-        assert!(p.check(NOW).is_err());
+        assert!(p.check(NOW, &limits()).is_err());
         p.expires_in = None;
         p.expires = Some(NOW - 1);
-        assert!(p.check(NOW).is_err());
+        assert!(p.check(NOW, &limits()).is_err());
     }
 
     #[test]
@@ -249,19 +268,19 @@ mod tests {
         for version in [1, 2, 3, 5] {
             let mut p = paste();
             p.version = version;
-            assert!(p.check(NOW).is_err(), "version {version}");
+            assert!(p.check(NOW, &limits()).is_err(), "version {version}");
         }
         let mut p = paste();
         p.access_hash = None;
-        assert!(p.check(NOW).is_err());
+        assert!(p.check(NOW, &limits()).is_err());
         p.access_hash = Some("not a hash".into());
-        assert!(p.check(NOW).is_err());
+        assert!(p.check(NOW, &limits()).is_err());
         let mut p = paste();
         p.key_fragment = "key".into();
-        assert!(p.check(NOW).is_err());
+        assert!(p.check(NOW, &limits()).is_err());
         let mut p = paste();
         p.password_hash = Some("hash".into());
-        assert!(p.check(NOW).is_err());
+        assert!(p.check(NOW, &limits()).is_err());
     }
 
     /// Makes a valid paste invalid in one way.
@@ -273,7 +292,7 @@ mod tests {
             ("short iv", |p| p.iv = vec![1; 8]),
             ("empty content", |p| p.content.clear()),
             ("huge content", |p| {
-                p.content = "a".repeat(MAX_CONTENT_CHARS + 1)
+                p.content = base64_of(1_081_344 + 16 + 1)
             }),
             ("huge title", |p| p.title = "a".repeat(MAX_TITLE_CHARS + 1)),
             ("huge file name", |p| {
@@ -285,11 +304,11 @@ mod tests {
         for (label, spoil) in cases {
             let mut p = paste();
             spoil(&mut p);
-            assert!(p.check(NOW).is_err(), "{label}");
+            assert!(p.check(NOW, &limits()).is_err(), "{label}");
         }
         let mut p = paste();
         p.max_views = Some(1);
-        assert!(p.check(NOW).is_ok());
+        assert!(p.check(NOW, &limits()).is_ok());
     }
 
     #[test]
@@ -313,12 +332,33 @@ mod tests {
         for (label, spoil) in cases {
             let mut p = paste();
             spoil(&mut p);
-            assert!(p.check(NOW).is_err(), "{label}");
+            assert!(p.check(NOW, &limits()).is_err(), "{label}");
         }
         let mut p = paste();
         p.file_name = Some(base64_of(1024 + 16));
         p.file_size = Some(5120 + 16);
         p.content = base64_of(303_104 + 16);
-        assert!(p.check(NOW).is_ok(), "padded parts of other sizes");
+        assert!(
+            p.check(NOW, &limits()).is_ok(),
+            "padded parts of other sizes"
+        );
+    }
+
+    #[test]
+    fn follows_the_sites_limits() {
+        let small = PasteLimits::new(8 * 1024, None);
+        assert!(paste().check(NOW, &small).is_ok());
+        let mut p = paste();
+        p.content = base64_of(16_384 + 16);
+        assert!(p.check(NOW, &small).is_err(), "over max_paste_kib");
+        assert!(p.check(NOW, &limits()).is_ok());
+        let mut p = paste();
+        p.file_name = Some(base64_of(1024 + 16));
+        p.file_size = Some(4096 + 16);
+        assert!(p.check(NOW, &limits()).is_ok());
+        assert_eq!(
+            p.check(NOW, &small),
+            Err("this site doesn't accept attachments")
+        );
     }
 }

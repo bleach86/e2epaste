@@ -119,6 +119,32 @@ const att = await v.evaluate(() => window.__dl[1]);
 check("view: attachment decrypts byte for byte", att.name === "upload.bin" && Buffer.compare(Buffer.from(att.bytes), fileBytes) === 0);
 check("view: Ctrl+A still works in inputs", true);
 
+// ------------------------------------------------------------- just a file
+{
+  const f = await newPage();
+  await f.goto(BASE + "/", { waitUntil: "networkidle0" });
+  check("file only: the editor says a file alone is fine", (await f.$eval("#paste-area", (e) => e.placeholder)).includes("just attach a file"));
+  await f.click("#submit-paste");
+  check("file only: nothing at all isn't sent", !(await f.$eval("#url-modal", (e) => e.classList.contains("show"))));
+  await (await f.$("#fileInput")).uploadFile(uploadPath);
+  await f.waitForFunction(() => !document.getElementById("attachment").hidden);
+  await f.click("#submit-paste");
+  await f.waitForSelector("#url-modal.show", { timeout: 20000 });
+  const url = await f.$eval("#paste-url", (e) => e.value);
+  await f.goto(local(url), { waitUntil: "networkidle0" });
+  await f.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  const hidden = await f.evaluate(() => ["content-panel", "language-chip", "copy-paste-btn", "download-paste-btn", "wrap-btn"]
+    .filter((id) => !document.getElementById(id).hidden));
+  check("file only: no empty text panel or text buttons", hidden.length === 0, hidden.join(", "));
+  check("file only: the attachment is shown", !(await f.$eval("#attachment-section", (e) => e.hidden)) && (await txt(f, "#attachment-name")) === "upload.bin");
+  await hookDownloads(f);
+  await f.$eval("#download-link", (b) => b.click());
+  await f.waitForFunction(() => window.__dl.length === 1, { timeout: 10000 });
+  const file = await f.evaluate(() => window.__dl[0]);
+  check("file only: the attachment downloads", file.name === "upload.bin" && Buffer.compare(Buffer.from(file.bytes), fileBytes) === 0);
+  await f.close();
+}
+
 // ------------------------------------------------------------------ burn
 const b = await newPage();
 await b.goto(BASE + "/", { waitUntil: "networkidle0" });

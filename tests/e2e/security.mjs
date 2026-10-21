@@ -82,7 +82,10 @@ async function view(url, password = null) {
   const decoded = (base64) => (base64.length / 4) * 3 - (base64.match(/=*$/)[0].length);
   const isPadme = (n) => { const e = n.toString(2).length - 1; const step = 2 ** (e - e.toString(2).length); return n % step === 0; };
   const attachment = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "e2epaste-")), "v4.bin");
-  const attachmentBytes = Buffer.from(crypto.getRandomValues(new Uint8Array(6000)));
+  // Over 2 MiB: uploaded and downloaded in 3 chunks. With its 8-byte size in
+  // front it's exactly 2.5 MiB, a padded size, so nothing is added.
+  const attachmentBytes = Buffer.alloc(2.5 * 1048576 - 8);
+  for (let i = 0; i < attachmentBytes.length; i += 65536) crypto.getRandomValues(attachmentBytes.subarray(i, i + 65536));
   fs.writeFileSync(attachment, attachmentBytes);
   const secret = await createPaste({ text: "fn main() {}\n".repeat(30), password: "pw-1", syntax: "rust", title: "Private title", file: attachment });
   const page = JSON.parse((await (await api(`/paste/${secret.id}`)).text()).match(/id="page-data">(.*?)<\/script>/s)[1]).paste;
@@ -114,7 +117,7 @@ async function view(url, password = null) {
     p.$eval("#download-link", (b) => b.click()),
   ]);
   const fileSize = (await download.buffer()).length;
-  check("v4: the attachment is stored padded", isPadme(fileSize - 16) && fileSize - 16 >= 4096 && fileSize - 16 !== 6000, fileSize);
+  check("v4: the attachment is stored padded, in chunks", fileSize === 2621440 + 3 * 16, fileSize);
   await p.waitForFunction(() => window.__dl.length === 1, { timeout: 20000 });
   check("v4: the attachment decrypts to the original", Buffer.compare(Buffer.from(await p.evaluate(() => window.__dl[0])), attachmentBytes) === 0);
   await p.close();
@@ -384,13 +387,26 @@ const plain = await createPaste({ text: "the quick brown fox" });
     check(`create: refuses ${label}`, res.status === 400 && reason.length > 0, `${res.status} ${reason}`);
   }
 
-  // The attachment must be exactly the padded size declared with the paste.
-  const withFile = await (await submit({ ...valid(), file_name: b64(1024 + 16), file_size: 4096 + 16 })).json();
-  const upload = (bytes) => api(`/api/upload-attachment/${withFile.id}`, { method: "POST",
-    headers: { "Content-Type": "application/octet-stream", "X-Upload-Token": withFile.upload_token }, body: new Uint8Array(bytes) });
-  const short = await upload(3000);
-  check("upload: refuses a file smaller than declared", short.status === 400, short.status);
-  check("upload: the right size is accepted", (await upload(4096 + 16)).status === 200);
+  // Attachments are uploaded in 1 MiB chunks (plus a 16-byte tag each), in
+  // order, and must add up to exactly the size declared with the paste.
+  const CHUNK = 1048576 + 16;
+  // A file whose padded stream is 2.5 MiB (2,621,440 bytes, a Padmé size):
+  // 3 chunks.
+  const declared = 2621440 + 3 * 16;
+  const withFile = await (await submit({ ...valid(), file_name: b64(1024 + 16), file_size: declared })).json();
+  const upload = (index, last, bytes, token = withFile.upload_token) => api(`/api/upload-attachment/${withFile.id}/${index}?last=${last}`, {
+    method: "POST", headers: { "Content-Type": "application/octet-stream", "X-Upload-Token": token }, body: new Uint8Array(bytes) });
+  check("upload: a declared size that isn't padded is refused", (await submit({ ...valid(), file_name: b64(1024 + 16), file_size: declared + 1 })).status === 400);
+  check("upload: needs the upload token", (await upload(0, false, CHUNK, "nope")).status === 403);
+  check("upload: a chunk ahead of the others is refused", (await upload(1, false, CHUNK)).status === 400);
+  check("upload: a short chunk that isn't the last is refused", (await upload(0, false, 1000)).status === 400);
+  check("upload: the first chunk", (await upload(0, false, CHUNK)).status === 200);
+  check("upload: a chunk can be sent again", (await upload(0, false, CHUNK)).status === 200 && (await upload(1, false, CHUNK)).status === 200);
+  check("upload: going past the declared size is refused (413)", (await upload(2, false, CHUNK)).status === 413);
+  const wrongEnd = await upload(2, true, 1000);
+  check("upload: a total other than declared is refused", wrongEnd.status === 400, wrongEnd.status);
+  check("upload: the right last chunk completes it", (await upload(2, true, declared - 2 * CHUNK)).status === 200);
+  check("upload: nothing more after it's complete", (await upload(2, true, declared - 2 * CHUNK)).status === 403);
 }
 
 // --------------------------------------------------------- service worker

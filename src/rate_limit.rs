@@ -51,13 +51,54 @@ impl Bucket {
     }
 }
 
+/// Which limit a client hit, and the allowance it has: for the message the
+/// client is shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Limit {
+    PastesPerMinute(u64),
+    PastesPerHour(u64),
+    /// In bytes.
+    UploadBytesPerHour(u64),
+    FailedAttemptsPerHour(u64),
+}
+
+/// A refused request: which limit, and how long until it would be allowed.
+#[derive(Clone, Copy, Debug)]
+pub struct Limited {
+    pub limit: Limit,
+    pub wait: Duration,
+}
+
 /// Limits failed attempts to open or delete a paste (wrong link, password or
 /// token) per IP. Correct attempts aren't counted.
-pub struct UnlockLimiter(pub RateLimiter);
+pub struct UnlockLimiter {
+    limiter: RateLimiter,
+    attempts_per_hour: u64,
+}
 
 impl UnlockLimiter {
     pub fn new(attempts_per_hour: u64) -> Self {
-        UnlockLimiter(RateLimiter::new(0, attempts_per_hour, 0))
+        UnlockLimiter {
+            limiter: RateLimiter::new(0, attempts_per_hour, 0),
+            attempts_per_hour,
+        }
+    }
+
+    /// Whether the client may try again, taking nothing.
+    pub fn check(&self, ip: Option<IpAddr>) -> Result<(), Limited> {
+        self.limiter.check(ip).map_err(|limited| Limited {
+            limit: Limit::FailedAttemptsPerHour(self.attempts_per_hour),
+            ..limited
+        })
+    }
+
+    /// Counts a failed attempt.
+    pub fn take(&self, ip: Option<IpAddr>) {
+        let _ = self.limiter.take(ip, 0);
+    }
+
+    pub fn prune(&self) {
+        self.limiter.prune();
     }
 }
 
@@ -68,6 +109,8 @@ const UPLOAD_BYTES_PER_HOUR: usize = 2;
 
 pub struct RateLimiter {
     rules: [Option<Rule>; 3],
+    /// The settings the rules came from, for `Limit`.
+    amounts: [u64; 3],
     clients: Mutex<HashMap<IpAddr, [Bucket; 3]>>,
 }
 
@@ -81,19 +124,20 @@ impl RateLimiter {
                 Rule::new(pastes_per_hour, hour),
                 Rule::new(upload_bytes_per_hour, hour),
             ],
+            amounts: [pastes_per_minute, pastes_per_hour, upload_bytes_per_hour],
             clients: Mutex::new(HashMap::new()),
         }
     }
 
     /// Takes one paste and `upload_bytes` of attachment allowance from the
     /// client, or, if any limit would be exceeded, takes nothing and returns
-    /// how long to wait.
-    pub fn take(&self, ip: Option<IpAddr>, upload_bytes: u64) -> Result<(), Duration> {
+    /// the limit that's furthest off and how long to wait for it.
+    pub fn take(&self, ip: Option<IpAddr>, upload_bytes: u64) -> Result<(), Limited> {
         self.take_or_check(ip, upload_bytes, true)
     }
 
     /// Like `take(ip, 0)`, but takes nothing either way.
-    pub fn check(&self, ip: Option<IpAddr>) -> Result<(), Duration> {
+    pub fn check(&self, ip: Option<IpAddr>) -> Result<(), Limited> {
         self.take_or_check(ip, 0, false)
     }
 
@@ -102,7 +146,7 @@ impl RateLimiter {
         ip: Option<IpAddr>,
         upload_bytes: u64,
         take: bool,
-    ) -> Result<(), Duration> {
+    ) -> Result<(), Limited> {
         let mut costs = [0.0; 3];
         costs[PASTES_PER_MINUTE] = 1.0;
         costs[PASTES_PER_HOUR] = 1.0;
@@ -114,15 +158,24 @@ impl RateLimiter {
             .entry(client_key(ip))
             .or_insert_with(|| self.full_buckets(now));
 
-        let mut wait = Duration::ZERO;
+        let mut longest: Option<(usize, Duration)> = None;
         for (i, rule) in self.rules.iter().enumerate() {
             if let Some(rule) = rule {
                 buckets[i].refill(rule, now);
-                wait = wait.max(buckets[i].wait_for(rule, costs[i]));
+                let wait = buckets[i].wait_for(rule, costs[i]);
+                if wait > longest.map_or(Duration::ZERO, |(_, w)| w) {
+                    longest = Some((i, wait));
+                }
             }
         }
-        if wait > Duration::ZERO {
-            return Err(wait);
+        if let Some((i, wait)) = longest {
+            let amount = self.amounts[i];
+            let limit = match i {
+                PASTES_PER_MINUTE => Limit::PastesPerMinute(amount),
+                PASTES_PER_HOUR => Limit::PastesPerHour(amount),
+                _ => Limit::UploadBytesPerHour(amount),
+            };
+            return Err(Limited { limit, wait });
         }
         if !take {
             return Ok(());
@@ -188,8 +241,10 @@ mod tests {
         for _ in 0..3 {
             assert!(limiter.take(A, 0).is_ok());
         }
-        let wait = limiter.take(A, 0).unwrap_err();
+        let limited = limiter.take(A, 0).unwrap_err();
+        assert_eq!(limited.limit, Limit::PastesPerMinute(3));
         // One paste refills every 20 seconds.
+        let wait = limited.wait;
         assert!(wait > Duration::from_secs(19) && wait <= Duration::from_secs(20));
         assert!(limiter.take(B, 0).is_ok(), "other clients aren't affected");
     }
@@ -202,6 +257,27 @@ mod tests {
         assert!(
             limiter.take(A, 20).is_ok(),
             "the refused 30 bytes weren't taken"
+        );
+    }
+
+    #[test]
+    fn says_which_limit() {
+        let limiter = RateLimiter::new(10, 2, 1000);
+        assert!(limiter.take(A, 0).is_ok());
+        assert_eq!(
+            limiter.take(A, 5000).unwrap_err().limit,
+            Limit::UploadBytesPerHour(1000)
+        );
+        assert!(limiter.take(A, 0).is_ok());
+        assert_eq!(
+            limiter.take(A, 0).unwrap_err().limit,
+            Limit::PastesPerHour(2)
+        );
+        let unlocks = UnlockLimiter::new(1);
+        unlocks.take(A);
+        assert_eq!(
+            unlocks.check(A).unwrap_err().limit,
+            Limit::FailedAttemptsPerHour(1)
         );
     }
 

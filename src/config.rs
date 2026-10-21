@@ -5,11 +5,9 @@ use std::path::{Path, PathBuf};
 
 use rocket::figment::Figment;
 use rocket::http::uri::Absolute;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-/// Largest attachment upload. The browser allows 25 MiB; this leaves room for
-/// the encryption and compression overhead.
-pub const MAX_ATTACHMENT_MIB: u64 = 26;
+use crate::padding;
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
@@ -30,6 +28,17 @@ pub struct AppConfig {
     /// Served at /public. Must contain the webpack bundles in `js/dist/`.
     #[serde(default = "default_static_dir")]
     pub static_dir: PathBuf,
+
+    // What one paste can hold (see PasteLimits).
+    /// Largest paste text, in KiB of UTF-8.
+    #[serde(default = "default_max_paste_kib")]
+    pub max_paste_kib: u64,
+    /// Whether pastes can have an attachment.
+    #[serde(default = "default_allow_files")]
+    pub allow_files: bool,
+    /// Largest attachment, in MiB.
+    #[serde(default = "default_max_file_mib")]
+    pub max_file_mib: u64,
 
     // Per-client limits (see rate_limit.rs). 0 turns a limit off.
     #[serde(default = "default_pastes_per_minute")]
@@ -75,6 +84,27 @@ fn default_data_dir() -> PathBuf {
 fn default_static_dir() -> PathBuf {
     PathBuf::from("static")
 }
+
+fn default_max_paste_kib() -> u64 {
+    1024
+}
+
+fn default_allow_files() -> bool {
+    true
+}
+
+fn default_max_file_mib() -> u64 {
+    25
+}
+
+/// The most max_paste_kib can be: a paste is sent as one JSON request and
+/// held in memory.
+const MAX_PASTE_KIB_LIMIT: u64 = 64 * 1024;
+/// The most max_file_mib can be. Attachments are encrypted and uploaded in
+/// chunks, but a download is put back together in the browser.
+const MAX_FILE_MIB_LIMIT: u64 = 4096;
+/// Above this, warn that downloads this large can fail on phones.
+const LARGE_FILE_MIB: u64 = 1024;
 
 fn default_pastes_per_minute() -> u64 {
     10
@@ -130,12 +160,31 @@ impl AppConfig {
             ));
         }
 
-        if config.upload_mib_per_hour != 0 && config.upload_mib_per_hour < MAX_ATTACHMENT_MIB {
+        if !(1..=MAX_PASTE_KIB_LIMIT).contains(&config.max_paste_kib) {
             return Err(format!(
-                "upload_mib_per_hour is {}, but one attachment can be up to {MAX_ATTACHMENT_MIB} \
-                 MiB. Set it to at least {MAX_ATTACHMENT_MIB}, or 0 for no limit.",
-                config.upload_mib_per_hour
+                "max_paste_kib is {}; it must be from 1 to {MAX_PASTE_KIB_LIMIT}",
+                config.max_paste_kib
             ));
+        }
+        if config.allow_files && !(1..=MAX_FILE_MIB_LIMIT).contains(&config.max_file_mib) {
+            return Err(format!(
+                "max_file_mib is {}; it must be from 1 to {MAX_FILE_MIB_LIMIT}. To turn \
+                 attachments off, set allow_files = false.",
+                config.max_file_mib
+            ));
+        }
+        // One attachment, encrypted and padded, must fit in an hour's
+        // allowance, or it could never be uploaded.
+        if let Some(stored) = config.paste_limits().max_stored_file {
+            let needed = stored.div_ceil(MIB);
+            if config.upload_mib_per_hour != 0 && config.upload_mib_per_hour < needed {
+                return Err(format!(
+                    "upload_mib_per_hour is {}, but one attachment can take up to {needed} MiB \
+                     (max_file_mib, encrypted and padded). Set it to at least {needed}, or 0 for \
+                     no limit.",
+                    config.upload_mib_per_hour
+                ));
+            }
         }
 
         if !config.static_dir.join("js/dist").is_dir() {
@@ -165,6 +214,13 @@ impl AppConfig {
         self.static_dir.join("js/dist")
     }
 
+    pub fn paste_limits(&self) -> PasteLimits {
+        PasteLimits::new(
+            self.max_paste_kib * 1024,
+            self.allow_files.then_some(self.max_file_mib * MIB),
+        )
+    }
+
     /// Problems worth logging that don't stop the server.
     pub fn warnings(&self) -> Vec<String> {
         let mut warnings = Vec::new();
@@ -183,7 +239,63 @@ impl AppConfig {
                 self.site_url
             ));
         }
+        if self.allow_files && self.max_file_mib > LARGE_FILE_MIB {
+            warnings.push(format!(
+                "max_file_mib is {}. Downloads are put back together in the browser, so \
+                 attachments this large may fail to download on phones.",
+                self.max_file_mib
+            ));
+        }
         warnings
+    }
+}
+
+/// What one paste can hold, from max_paste_kib, max_file_mib and
+/// allow_files. The browser limits apply before encryption; the server
+/// checks the encrypted sizes, which allow for compression and padding.
+#[derive(Clone, Debug, Serialize)]
+pub struct PasteLimits {
+    /// Paste text, in bytes of UTF-8.
+    pub max_paste_bytes: u64,
+    /// An attachment, in bytes. `None` when attachments are off.
+    pub max_file_bytes: Option<u64>,
+    /// The paste text's largest encrypted size.
+    pub max_stored_paste: u64,
+    /// An attachment's largest encrypted size.
+    pub max_stored_file: Option<u64>,
+    /// For people: "1 MB", "512 KB".
+    pub max_paste_label: String,
+    pub max_file_label: Option<String>,
+}
+
+impl PasteLimits {
+    pub fn new(max_paste_bytes: u64, max_file_bytes: Option<u64>) -> Self {
+        PasteLimits {
+            max_paste_bytes,
+            max_file_bytes,
+            max_stored_paste: padding::max_encrypted_len(max_paste_bytes, padding::TEXT),
+            max_stored_file: max_file_bytes.map(padding::encrypted_file_len),
+            max_paste_label: size_label(max_paste_bytes),
+            max_file_label: max_file_bytes.map(size_label),
+        }
+    }
+
+    /// The largest JSON request a new paste can need: its text base64
+    /// encoded, plus the title, file name and the rest.
+    pub fn max_request_bytes(&self) -> u64 {
+        self.max_stored_paste.div_ceil(3) * 4 + 64 * 1024
+    }
+}
+
+/// "25 MB", "1 MB", "512 KB". Sizes here are in powers of 1024 but shown as
+/// MB and KB, like most file managers.
+fn size_label(bytes: u64) -> String {
+    if bytes >= MIB && bytes.is_multiple_of(MIB) {
+        format!("{} MB", bytes / MIB)
+    } else if bytes >= MIB {
+        format!("{:.1} MB", bytes as f64 / MIB as f64)
+    } else {
+        format!("{} KB", bytes.div_ceil(1024))
     }
 }
 
@@ -268,6 +380,26 @@ mod tests {
             site_name(" My Paste ", "https://x.example").unwrap(),
             "My Paste"
         );
+    }
+
+    #[test]
+    fn size_labels() {
+        assert_eq!(size_label(MIB), "1 MB");
+        assert_eq!(size_label(25 * MIB), "25 MB");
+        assert_eq!(size_label(512 * 1024), "512 KB");
+        assert_eq!(size_label(1536 * 1024), "1.5 MB");
+    }
+
+    #[test]
+    fn default_limits() {
+        let limits = PasteLimits::new(1024 * 1024, Some(25 * MIB));
+        assert_eq!(limits.max_paste_label, "1 MB");
+        assert_eq!(limits.max_file_label.as_deref(), Some("25 MB"));
+        // Room for the worst case of 1 MiB of text that won't compress.
+        assert!(limits.max_stored_paste > 1024 * 1024);
+        assert!(limits.max_request_bytes() < 2 * MIB);
+        let no_files = PasteLimits::new(8 * 1024, None);
+        assert!(no_files.max_stored_file.is_none() && no_files.max_file_label.is_none());
     }
 
     #[test]

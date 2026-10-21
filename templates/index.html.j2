@@ -30,9 +30,12 @@
                         {% endfor %}
                     </optgroup>
                 </select>
+                {% if limits.max_file_bytes %}
                 <input type="file" id="fileInput" class="visually-hidden file-input">
                 <label for="fileInput" class="btn btn-quiet btn-sm file-pick">{{ icons.icon("paperclip") }} Attach file</label>
+                {% endif %}
             </div>
+            {% if limits.max_file_bytes %}
             <div id="attachment" class="attachment-row" hidden>
                 {{ icons.icon("file") }}
                 <span id="attachment-name" class="text-truncate"></span>
@@ -40,11 +43,12 @@
                 <button type="button" id="attachment-remove" class="btn btn-link btn-sm ms-auto p-0 text-secondary"
                     aria-label="Remove attachment">{{ icons.icon("x") }}</button>
             </div>
+            {% endif %}
 
             <div id="paste-editor" class="paste-editor">
                 <pre class="paste-highlight" aria-hidden="true"><code id="paste-highlight" class="hljs"></code></pre>
                 <label for="paste-area" class="visually-hidden">Paste content</label>
-                <textarea id="paste-area" placeholder="Paste or type here..." spellcheck="false"
+                <textarea id="paste-area" placeholder="{% if limits.max_file_bytes %}Paste or type here, or just attach a file...{% else %}Paste or type here...{% endif %}" spellcheck="false"
                     aria-describedby="paste-area-keys"></textarea>
                 {# js/editor_keys.mjs #}
                 <span id="paste-area-keys" class="visually-hidden">Tab inserts a tab. To move on, press Escape, then
@@ -52,7 +56,8 @@
             </div>
             <div class="panel-foot">
                 <span id="paste-stats">0 lines · 0 bytes</span>
-                <span>Up to 1 MB of text · one file up to 25 MB</span>
+                <span>Up to {{ limits.max_paste_label }} of text{% if limits.max_file_label %} · one file up to
+                    {{ limits.max_file_label }}{% endif %}</span>
             </div>
         </section>
 
@@ -119,7 +124,7 @@
             <button type="button" id="submit-paste" class="btn btn-accent btn-lg w-100">
                 <span class="submit-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Encrypt &amp; get link</span>
                 <span class="submit-busy d-none align-items-center gap-2"><span class="spinner-border spinner-border-sm"
-                        aria-hidden="true"></span> Encrypting...</span>
+                        aria-hidden="true"></span> <span id="submit-status">Encrypting...</span></span>
             </button>
         </aside>
     </div>
@@ -208,6 +213,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="application/json" id="page-data">{{ {"limits": limits} | tojson }}</script>
 <script src="/public/js/qrcode.js"></script>
 <script src="/public/js/highlight.min.js"></script>
 <script src="/public/js/dist/create.js?v={{ asset_version }}"></script>

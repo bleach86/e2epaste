@@ -7,16 +7,19 @@ import {
   arrayBufferToBase64,
   deriveV3Secrets,
   encodeDetails,
+  encryptFile,
+  encryptedFileLength,
   encryptPart,
   generateLinkSecret,
 } from "../crypto.mjs";
 import { rememberDeleteToken, rememberingEnabled, setRemembering } from "../delete_tokens.mjs";
 import { enableEditorKeys } from "../editor_keys.mjs";
 import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
-import { cryptoAvailable } from "../ui.mjs";
+import { cryptoAvailable, readPageData } from "../ui.mjs";
 
-const MAX_PASTE_BYTES = 1048576;
-const MAX_FILE_BYTES = 26214400;
+// The site's limits (max_paste_kib, max_file_mib, allow_files), before
+// encryption. max_file_bytes is null when the site takes no attachments.
+const { limits } = readPageData();
 const MAX_VIEWS = 999999999999;
 const DEFAULT_EXPIRY = "3days";
 // Above this many characters, re-highlight once typing pauses instead of on
@@ -51,11 +54,13 @@ const maxViewsInput = document.getElementById("max-views");
 const passwordInput = document.getElementById("paste-password");
 const passwordToggle = document.getElementById("toggle-password");
 const submitButton = document.getElementById("submit-paste");
+const submitStatus = document.getElementById("submit-status");
 const urlModalEl = document.getElementById("url-modal");
 const copyUrlButton = document.getElementById("copy-url-btn");
 const copyDeleteButton = document.getElementById("copy-delete-btn");
 
-let fileData;
+// The File picked for the attachment; read a chunk at a time on upload.
+let attachedFile;
 let fileName;
 let highlightTimer;
 let submitting = false;
@@ -78,7 +83,7 @@ function updateStats() {
   const lines = text === "" ? 0 : text.split("\n").length;
   const bytes = new TextEncoder().encode(text).byteLength;
   pasteStats.textContent = `${lines.toLocaleString()} ${lines === 1 ? "line" : "lines"} · ${formatBytes(bytes)}`;
-  pasteStats.classList.toggle("text-danger", bytes > MAX_PASTE_BYTES);
+  pasteStats.classList.toggle("text-danger", bytes > limits.max_paste_bytes);
 }
 
 // "Auto-detect"'s current guess, or null for plain text.
@@ -154,36 +159,36 @@ enableEditorKeys(pasteArea);
 // --- Attachment -----------------------------------------------------------
 
 function clearAttachment() {
-  fileInput.value = "";
-  fileData = undefined;
+  attachedFile = undefined;
   fileName = undefined;
-  attachmentRow.hidden = true;
+  // Neither is on the page when the site takes no attachments.
+  if (fileInput) {
+    fileInput.value = "";
+    attachmentRow.hidden = true;
+  }
 }
 
-fileInput.addEventListener("change", (event) => {
+fileInput?.addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (!file) {
     clearAttachment();
     return;
   }
-  if (file.size > MAX_FILE_BYTES) {
-    alert("File is too large. Please keep it under 25 MB.");
+  if (file.size > limits.max_file_bytes) {
+    alert(`File is too large. Please keep it under ${limits.max_file_label}.`);
     clearAttachment();
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    fileData = e.target.result;
-    fileName = file.name;
-    document.getElementById("attachment-name").textContent = file.name;
-    document.getElementById("attachment-size").textContent = formatBytes(file.size);
-    attachmentRow.hidden = false;
-  };
-  reader.readAsArrayBuffer(file);
+  // Read a chunk at a time when it's uploaded, not now.
+  attachedFile = file;
+  fileName = file.name;
+  document.getElementById("attachment-name").textContent = file.name;
+  document.getElementById("attachment-size").textContent = formatBytes(file.size);
+  attachmentRow.hidden = false;
 });
 
-document.getElementById("attachment-remove").addEventListener("click", clearAttachment);
+document.getElementById("attachment-remove")?.addEventListener("click", clearAttachment);
 
 // --- Options --------------------------------------------------------------
 
@@ -221,6 +226,7 @@ passwordToggle.addEventListener("click", () => setPasswordVisible(passwordInput.
 
 function setBusy(busy) {
   submitting = busy;
+  submitStatus.textContent = "Encrypting...";
   submitButton.disabled = busy;
   submitButton.querySelector(".submit-idle").classList.toggle("d-none", busy);
   submitButton.querySelector(".submit-busy").classList.toggle("d-none", !busy);
@@ -241,47 +247,105 @@ function waitText(seconds) {
   return `${count} ${unit}${count === 1 ? "" : "s"}`;
 }
 
+// What the server says when a limit is reached (src/api.rs ApiError), for
+// people. `wait` is e.g. "4 minutes".
+const LIMIT_MESSAGES = {
+  pastes_per_minute: (n, wait) =>
+    `You've created ${n} ${n === 1 ? "paste" : "pastes"} in the last minute, this site's limit. Please try again in ${wait}.`,
+  pastes_per_hour: (n, wait) =>
+    `You've created ${n} ${n === 1 ? "paste" : "pastes"} in the last hour, this site's limit. Please try again in ${wait}.`,
+  upload_mib_per_hour: (n, wait) =>
+    `This attachment would go over this site's limit of ${n} MB of attachments an hour. Please try again in ${wait}, or use a smaller file.`,
+};
+
 // Turns a refused request into a RefusedError explaining why.
 async function refusal(response, what) {
   const body = await response.json().catch(() => ({}));
   switch (response.status) {
     case 429: {
       const retryAfter = Number(body.retry_after ?? response.headers.get("Retry-After")) || 60;
+      const message = LIMIT_MESSAGES[body.limit];
       return new RefusedError(
-        `You've created a lot of pastes in a short time. Please try again in ${waitText(retryAfter)}.`,
+        message
+          ? message(body.allowed, waitText(retryAfter))
+          : `You've reached one of this site's limits. Please try again in ${waitText(retryAfter)}.`,
       );
     }
     case 507:
-      return new RefusedError("The server is out of storage space right now, so it can't take new pastes.");
+      return new RefusedError(
+        body.reason === "attachments"
+          ? "This site has reached its storage limit for attachments. You can still create a paste without one."
+          : "The server is out of storage space right now, so it can't take new pastes.",
+      );
     case 413:
-      return new RefusedError("The attachment is too large. Please keep it under 25 MB.");
+      return new RefusedError(
+        what === "attachment" || attachedFile
+          ? `The attachment is too large. Please keep it under ${limits.max_file_label}.`
+          : `The paste is too large. Please keep it under ${limits.max_paste_label}.`,
+      );
+    case 400:
+      if (body.reason) {
+        return new RefusedError(`The server didn't accept the ${what}: ${body.reason}.`);
+      }
+      return new Error(`The server didn't accept the ${what} (400)`);
     default:
       return new Error(`The server didn't accept the ${what} (${response.status})`);
   }
 }
 
-// `token` is the one-time upload token the server returned with the paste ID.
-async function uploadEncryptedFile(file, id, token) {
-  const response = await fetch(`/api/upload-attachment/${id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/octet-stream", "X-Upload-Token": token },
-    body: file,
+const UPLOAD_TRIES = 4;
+
+// Encrypts the attachment and uploads it one chunk at a time, so it's never
+// in memory whole. `token` is the one-time upload token the server returned
+// with the paste ID. A chunk that fails on the network (or the server) is
+// sent again; the server replaces it.
+async function uploadFile(file, key, iv, id, token) {
+  const total = encryptedFileLength(file.size);
+  let sent = 0;
+  const showProgress = () => {
+    submitStatus.textContent = `Encrypting and uploading... ${Math.floor((sent / total) * 100)}%`;
+  };
+  showProgress();
+  await encryptFile(file, key, iv, async (index, last, chunk) => {
+    for (let attempt = 1; ; attempt++) {
+      let response;
+      try {
+        response = await fetch(`/api/upload-attachment/${id}/${index}?last=${last}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream", "X-Upload-Token": token },
+          body: chunk,
+        });
+      } catch (e) {
+        if (attempt >= UPLOAD_TRIES) {
+          throw e;
+        }
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+      if (response.ok) {
+        break;
+      }
+      if (response.status < 500 || attempt >= UPLOAD_TRIES) {
+        throw await refusal(response, "attachment");
+      }
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+    }
+    sent += chunk.length;
+    showProgress();
   });
-  if (!response.ok) {
-    throw await refusal(response, "attachment");
-  }
 }
 
 async function createPaste() {
   const text = pasteArea.value;
 
-  if (text === "") {
+  // A paste can be just an attachment.
+  if (text === "" && !attachedFile) {
     pasteArea.focus();
     return;
   }
 
-  if (new TextEncoder().encode(text).byteLength > MAX_PASTE_BYTES) {
-    alert("Paste is too large. Please keep it under 1 MB.");
+  if (new TextEncoder().encode(text).byteLength > limits.max_paste_bytes) {
+    alert(`Paste is too large. Please keep it under ${limits.max_paste_label}.`);
     return;
   }
 
@@ -301,13 +365,12 @@ async function createPaste() {
   // can't tell much from sizes (see PART_PADDING in crypto.mjs).
   const encode = (value) => new TextEncoder().encode(value);
   const encrypted = await encryptPart(key, iv, "text", encode(text));
-  let encryptedFile = null;
-  let encryptedFileName = null;
-
-  if (fileData) {
-    encryptedFile = await encryptPart(key, iv, "file", fileData);
-    encryptedFileName = arrayBufferToBase64(await encryptPart(key, iv, "file-name", encode(fileName)));
-  }
+  // The attachment itself is encrypted as it's uploaded, after the paste is
+  // created (uploadFile).
+  const file = attachedFile ?? null;
+  const encryptedFileName = file
+    ? arrayBufferToBase64(await encryptPart(key, iv, "file-name", encode(fileName)))
+    : null;
 
   // The title and the language are encrypted together; an empty title is
   // shown as "Untitled". Cut by code point so the 64-character limit can't
@@ -331,7 +394,7 @@ async function createPaste() {
     syntax: "auto",
     file_name: encryptedFileName,
     // So the server can check it against the limits before creating anything.
-    file_size: encryptedFile ? encryptedFile.byteLength : null,
+    file_size: file ? encryptedFileLength(file.size) : null,
     // The server only sends the paste to a browser that has the proof; it
     // keeps just this hash of it.
     access_hash: await accessHash(accessProof),
@@ -356,8 +419,8 @@ async function createPaste() {
   if (remembered) {
     rememberDeleteToken(data.id, data.delete_token, lifetime);
   }
-  if (encryptedFile) {
-    await uploadEncryptedFile(encryptedFile, data.id, data.upload_token);
+  if (file) {
+    await uploadFile(file, key, iv, data.id, data.upload_token);
   }
 
   // Hand out /s/ (short for /share/) links: link-preview bots can fetch that
@@ -368,7 +431,7 @@ async function createPaste() {
     expiry: expiryLabel(expire),
     views,
     password: password !== "",
-    attachment: Boolean(encryptedFile),
+    attachment: Boolean(file),
     remembered,
   });
 }

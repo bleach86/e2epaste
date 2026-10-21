@@ -87,7 +87,7 @@ pub struct OpenResponse {
 #[post("/api/open/<id>", format = "application/json", data = "<request>")]
 pub fn open(
     db: &State<Arc<PasteDB>>,
-    unlocks: &State<UnlockLimiter>,
+    unlocks: &State<Arc<UnlockLimiter>>,
     tickets: &State<Arc<DownloadTickets>>,
     client: ClientIp,
     id: PasteId<'_>,
@@ -95,7 +95,7 @@ pub fn open(
 ) -> Result<Json<OpenResponse>, ApiError> {
     let id = id.to_string();
     // Too many wrong links or passwords from this IP.
-    unlocks.0.check(client.0).map_err(ApiError::RateLimited)?;
+    unlocks.check(client.0).map_err(ApiError::RateLimited)?;
 
     match db.open_paste(&id, request.proof.as_deref()) {
         Ok(Opened::Paste {
@@ -118,7 +118,7 @@ pub fn open(
         }
         Ok(Opened::NotFound) => Err(Status::NotFound.into()),
         Ok(Opened::WrongProof) => {
-            let _ = unlocks.0.take(client.0, 0);
+            unlocks.take(client.0);
             Err(Status::Forbidden.into())
         }
         Err(e) => {
@@ -174,13 +174,13 @@ pub fn delete_page(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Template {
 #[post("/api/delete/<id>")]
 pub async fn delete(
     db: &State<Arc<PasteDB>>,
-    unlocks: &State<UnlockLimiter>,
+    unlocks: &State<Arc<UnlockLimiter>>,
     client: ClientIp,
     id: PasteId<'_>,
     token: DeleteToken,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let id = id.to_string();
-    unlocks.0.check(client.0).map_err(ApiError::RateLimited)?;
+    unlocks.check(client.0).map_err(ApiError::RateLimited)?;
 
     let paste = db.get_paste(&id).ok_or(Status::NotFound)?;
     let authorized = paste
@@ -188,7 +188,7 @@ pub async fn delete(
         .as_deref()
         .is_some_and(|hash| secrets::matches_hash(&token.0, hash));
     if !authorized {
-        let _ = unlocks.0.take(client.0, 0);
+        unlocks.take(client.0);
         return Err(Status::Forbidden.into());
     }
 
@@ -205,7 +205,7 @@ pub async fn delete(
 pub async fn admin_delete(
     db: &State<Arc<PasteDB>>,
     config: &State<AppConfig>,
-    unlocks: &State<UnlockLimiter>,
+    unlocks: &State<Arc<UnlockLimiter>>,
     client: ClientIp,
     id: PasteId<'_>,
     auth: BearerToken,
@@ -214,9 +214,9 @@ pub async fn admin_delete(
     let Some(admin_token) = &config.admin_token else {
         return Err(Status::NotFound.into());
     };
-    unlocks.0.check(client.0).map_err(ApiError::RateLimited)?;
+    unlocks.check(client.0).map_err(ApiError::RateLimited)?;
     if !secrets::constant_time_eq(auth.0.as_bytes(), admin_token.as_bytes()) {
-        let _ = unlocks.0.take(client.0, 0);
+        unlocks.take(client.0);
         return Err(Status::Forbidden.into());
     }
 

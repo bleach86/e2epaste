@@ -16,6 +16,8 @@
 //       padPart), so the server only sees rounded sizes. The language is
 //       encrypted along with the title, and whether there's a password is
 //       carried in the link (see generateLinkSecret), not told to the server.
+//       Attachments are encrypted in chunks (see encryptFile), so files of
+//       any size are never held in memory whole.
 //
 // Each part of a paste (text, title, file name, file) is encrypted with its
 // own IV; see deriveIv.
@@ -314,11 +316,10 @@ function bitLength(n) {
 }
 
 // How each v4 part is padded (before encryption; the server sees 16 bytes
-// more, the AES-GCM tag). Every short text or file is the same size; the
-// title, with the language, is always the same size.
+// more, the AES-GCM tag). Every short text is the same size; the title,
+// with the language, is always the same size. Attachments: see encryptFile.
 export const PART_PADDING = {
   text: { min: 4096 },
-  file: { min: 4096 },
   "file-name": { min: 1024 },
   title: { fixed: 512 },
 };
@@ -356,7 +357,7 @@ export function unpadPart(padded) {
   return padded.subarray(LENGTH_BYTES, LENGTH_BYTES + length);
 }
 
-// v4: encrypts one part of a paste ("text", "title", "file-name" or "file"):
+// v4: encrypts one part of a paste ("text", "title" or "file-name"):
 // deflated, then padded, each with its own IV.
 export async function encryptPart(key, baseIv, label, data) {
   const plain = padPart(deflate(new Uint8Array(data)), PART_PADDING[label]);
@@ -376,6 +377,173 @@ export function decodeDetails(bytes) {
     title: typeof details.title === "string" ? details.title : "",
     syntax: typeof details.syntax === "string" ? details.syntax : "auto",
   };
+}
+
+// --- v4 attachments -----------------------------------------------------------
+//
+// An attachment is the stream [8-byte big-endian size][the file][zero bytes],
+// padded to a Padmé size (at least 4 KiB) and cut into 1 MiB chunks, each
+// encrypted on its own (the STREAM construction, as in age and Tink). A
+// chunk's nonce is a per-file prefix, the chunk's number and whether it's
+// the last one, so chunks can't be reordered, dropped, or swapped in from
+// another file, and a cut-off file fails to decrypt rather than coming out
+// short. Every chunk but the last is the same size.
+//
+// Attachments aren't compressed: the server would see both the size
+// declared up front (from the original) and the stored one, which together
+// would say how compressible, so roughly what kind of file, it is. Most
+// large files are compressed already. Must match src/padding.rs.
+
+export const FILE_CHUNK_BYTES = 1024 * 1024;
+const FILE_SIZE_BYTES = 8;
+const FILE_MIN_PADDED = 4096;
+const TAG_BYTES = 16;
+
+// The padded size of a file of `size` bytes, before encryption.
+export function paddedFileLength(size) {
+  return padme(Math.max(FILE_MIN_PADDED, FILE_SIZE_BYTES + size));
+}
+
+// What the server stores for a file of `size` bytes: the padded size plus a
+// tag per chunk. Declared when the paste is created.
+export function encryptedFileLength(size) {
+  const padded = paddedFileLength(size);
+  return padded + TAG_BYTES * Math.ceil(padded / FILE_CHUNK_BYTES);
+}
+
+async function chunkNoncePrefix(baseIv) {
+  return (await deriveIv(baseIv, "file")).subarray(0, 7);
+}
+
+// [7-byte prefix][4-byte chunk number][1 if the last chunk, else 0]
+function chunkNonce(prefix, index, last) {
+  const nonce = new Uint8Array(12);
+  nonce.set(prefix);
+  new DataView(nonce.buffer).setUint32(7, index);
+  nonce[11] = last ? 1 : 0;
+  return nonce;
+}
+
+// Encrypts `file` (a Blob or File), reading one chunk's worth at a time, and
+// awaits `send(index, last, encryptedChunk)` for each chunk in order.
+export async function encryptFile(file, key, baseIv, send) {
+  const padded = paddedFileLength(file.size);
+  const count = Math.ceil(padded / FILE_CHUNK_BYTES);
+  const prefix = await chunkNoncePrefix(baseIv);
+  for (let index = 0; index < count; index++) {
+    // This chunk's part of the stream: [start, end).
+    const start = index * FILE_CHUNK_BYTES;
+    const end = Math.min(padded, start + FILE_CHUNK_BYTES);
+    const plain = new Uint8Array(end - start);
+    if (index === 0) {
+      new DataView(plain.buffer).setBigUint64(0, BigInt(file.size));
+    }
+    const fileStart = Math.max(0, start - FILE_SIZE_BYTES);
+    const fileEnd = Math.min(file.size, end - FILE_SIZE_BYTES);
+    if (fileEnd > fileStart) {
+      const bytes = new Uint8Array(await file.slice(fileStart, fileEnd).arrayBuffer());
+      plain.set(bytes, fileStart + FILE_SIZE_BYTES - start);
+    }
+    const last = index === count - 1;
+    const iv = chunkNonce(prefix, index, last);
+    await send(index, last, new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain)));
+  }
+}
+
+// Bytes arriving in pieces of any size, taken out in fixed-size chunks.
+class ByteQueue {
+  constructor() {
+    this.pieces = [];
+    this.length = 0;
+  }
+
+  push(bytes) {
+    this.pieces.push(bytes);
+    this.length += bytes.length;
+  }
+
+  take(count) {
+    const out = new Uint8Array(count);
+    let filled = 0;
+    while (filled < count) {
+      const piece = this.pieces[0];
+      const used = Math.min(piece.length, count - filled);
+      out.set(piece.subarray(0, used), filled);
+      filled += used;
+      if (used === piece.length) {
+        this.pieces.shift();
+      } else {
+        this.pieces[0] = piece.subarray(used);
+      }
+    }
+    this.length -= count;
+    return out;
+  }
+}
+
+// Decrypted pieces are gathered into a Blob every so often, which the
+// browser can keep on disk rather than in memory.
+const BLOB_EVERY_BYTES = 32 * 1024 * 1024;
+
+// Decrypts a v4 attachment as it downloads. `stream` is the response body;
+// `onProgress(bytesReceived)` is called as it arrives. Returns the file as a
+// Blob. Throws if anything was changed, reordered or cut off.
+export async function decryptFile(stream, key, baseIv, onProgress = () => {}) {
+  const encryptedChunk = FILE_CHUNK_BYTES + TAG_BYTES;
+  const prefix = await chunkNoncePrefix(baseIv);
+  const queue = new ByteQueue();
+  let index = 0;
+  let size = null;
+  let remaining = 0;
+  let parts = [];
+  let unblobbed = 0;
+  let received = 0;
+
+  const open = async (chunk, last) => {
+    const iv = chunkNonce(prefix, index, last);
+    let plain = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, chunk));
+    index++;
+    if (size === null) {
+      size = Number(new DataView(plain.buffer).getBigUint64(0));
+      remaining = size;
+      plain = plain.subarray(FILE_SIZE_BYTES);
+    }
+    // What's left after the file is padding.
+    const used = Math.min(remaining, plain.length);
+    if (used > 0) {
+      parts.push(plain.subarray(0, used));
+      remaining -= used;
+      unblobbed += used;
+      if (unblobbed >= BLOB_EVERY_BYTES) {
+        parts = [new Blob(parts)];
+        unblobbed = 0;
+      }
+    }
+  };
+
+  const reader = stream.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    queue.push(value);
+    received += value.length;
+    onProgress(received);
+    // Keep at least one chunk back: only the end of the stream says which
+    // one is the last.
+    while (queue.length > encryptedChunk) {
+      await open(queue.take(encryptedChunk), false);
+    }
+  }
+  if (queue.length <= TAG_BYTES) {
+    throw new Error("The attachment is cut off");
+  }
+  await open(queue.take(queue.length), true);
+  if (remaining !== 0) {
+    throw new Error("The attachment is shorter than it says");
+  }
+  return new Blob(parts, { type: "application/octet-stream" });
 }
 
 // --- Viewing a stored paste -------------------------------------------------

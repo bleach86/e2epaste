@@ -275,6 +275,9 @@ impl PasteDB {
         txn.open_table(UPLOAD_TOKENS)?.remove(id)?;
         txn.commit()?;
 
+        // An upload that was never finished.
+        let _ = tokio::fs::remove_file(self.partial_upload_path(id)).await;
+
         // Only pastes with an attachment have a file, so a missing one is fine.
         let path = self.attachment_path(id);
         let size = tokio::fs::metadata(&path).await.map_or(0, |m| m.len());
@@ -409,10 +412,9 @@ impl PasteDB {
         self.file_dir.join(format!("{id}.bin"))
     }
 
-    /// Where an upload is written until it's complete and its token is used.
+    /// Where an upload is written, chunk by chunk, until it's complete.
     pub fn partial_upload_path(&self, id: &str) -> PathBuf {
-        let suffix: u64 = rand::random();
-        self.file_dir.join(format!("{id}.{suffix:016x}.part"))
+        self.file_dir.join(format!("{id}.part"))
     }
 
     /// Deletes uploads left half-written by a crash or restart.

@@ -15,7 +15,8 @@ uploaded, and the key never reaches the server, so the server only ever stores d
 - **Expiry and view limits.** Pastes expire after 10 minutes to 1 year. Set a view limit of 1 for
   "burn after reading". Views are counted by the server, and the paste is deleted on its last one.
 - **Delete links.** The creator gets a separate link to delete the paste early.
-- **File attachments** up to 25 MB, alongside up to 1 MB of text.
+- **File attachments** up to 25 MB, alongside up to 1 MB of text. Both limits are settings, and a site
+  can turn attachments off.
 - **Syntax highlighting** for 35 languages, live while you type, with the language detected automatically.
   The guess is made in the browser, so the server doesn't learn what kind of content a paste holds.
 - **Markdown rendering.** Markdown pastes can be viewed rendered or as source. Rendering is sanitized: no
@@ -33,7 +34,9 @@ When you create a paste, your browser:
 1. generates a random 128-bit secret,
 2. derives an AES-256 key from it with HKDF-SHA256 (if you set a password, it's stretched with
    PBKDF2-SHA256, 600,000 rounds, and mixed in),
-3. compresses the text, title, file and file name, then encrypts each with AES-256-GCM using its own IV,
+3. compresses the text, title and file name, pads each to a rounded size, then encrypts each with
+   AES-256-GCM using its own IV. An attachment is padded and encrypted in 1 MiB chunks as it uploads
+   (it isn't compressed, so the server can't tell how compressible it is),
 4. derives a separate _access proof_ from the same secret (and password) with different HKDF info, and
 5. uploads the encrypted data and a SHA-256 hash of the access proof.
 
@@ -103,9 +106,12 @@ variable named `ROCKET_` plus the setting in capitals, such as `ROCKET_SITE_URL`
 | `ip_header`                  | `X-Real-IP`             | Header the reverse proxy puts the visitor's IP in (see [Limits](#limits))                                                                                     |
 | `unlock_attempts_per_hour`   | `30`                    | Failed attempts to open or delete a paste (wrong link, password or delete link) one IP can make per hour                                                      |
 | `admin_token`                | unset                   | Turns on the [admin API](#taking-a-paste-down). At least 32 characters                                                                                        |
+| `max_paste_kib`              | `1024`                  | Largest paste text, in KiB (1024 is 1 MB). At most 65536                                                                                                      |
+| `allow_files`                | `true`                  | Whether pastes can have an attachment                                                                                                                         |
+| `max_file_mib`               | `25`                    | Largest attachment, in MiB. At most 4096. Uploads go in 1 MiB chunks, but downloads are put back together in the browser, so very large files can fail on phones |
 | `pastes_per_minute`          | `10`                    | Pastes one IP can create per minute                                                                                                                           |
 | `pastes_per_hour`            | `60`                    | Pastes one IP can create per hour                                                                                                                             |
-| `upload_mib_per_hour`        | `250`                   | Attachment data one IP can upload per hour, in MiB. At least 26, the largest attachment                                                                       |
+| `upload_mib_per_hour`        | `250`                   | Attachment data one IP can upload per hour, in MiB. At least one attachment's worth, `max_file_mib` plus a little for padding                                  |
 | `min_free_disk_mib`          | `1024`                  | New pastes are refused when the disk holding `data_dir` has less free space than this                                                                         |
 | `max_attachment_storage_mib` | `0`                     | Cap on the total size of all stored attachments                                                                                                               |
 | `static_dir`                 | `static`                | Front-end files, served at `/public`                                                                                                                          |
@@ -127,6 +133,14 @@ pastes and using the tools are never limited. A visitor over a limit is told how
 These limits are kept in memory, so they reset when the server restarts. Because they can't stop many
 addresses working together, the server also stops taking new pastes when the disk is nearly full
 (`min_free_disk_mib`), and can cap the total size of attachments (`max_attachment_storage_mib`).
+
+How much one paste can hold is up to you: `max_paste_kib` for the text and `max_file_mib` for the
+attachment, or `allow_files = false` to turn attachments off. The create page and the FAQ show your
+limits, and the server works out the largest encrypted size from them (allowing for compression and
+padding) and refuses anything bigger. Attachments are uploaded in 1 MiB chunks, so the largest request
+is the paste itself, about 1.4 times `max_paste_kib`. If you raise `max_paste_kib` past a few MB, raise
+your reverse proxy's request size limit to match (`client_max_body_size` in nginx, `LimitRequestBody` in
+Apache).
 
 **The reverse proxy must pass the visitor's IP.** Behind a proxy, every request comes from the proxy's
 own address, so without this all visitors would share one limit. The server reads the IP from the
@@ -273,6 +287,8 @@ server {
     ssl_certificate     /etc/letsencrypt/live/paste.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/paste.example.com/privkey.pem;
 
+    # Above the largest request: a paste, about 1.4 x max_paste_kib.
+    # Attachments are uploaded in 1 MiB chunks.
     client_max_body_size 30m;
 
     location / {
@@ -302,7 +318,8 @@ With Apache, enable the modules with `sudo a2enmod ssl proxy proxy_http headers`
     RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"
     RequestHeader set X-Forwarded-Proto "https"
 
-    # The largest request is a 26 MiB attachment.
+    # Above the largest request: a paste, about 1.4 x max_paste_kib.
+    # Attachments are uploaded in 1 MiB chunks.
     LimitRequestBody 31457280
 </VirtualHost>
 ```
