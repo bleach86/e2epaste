@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { BASE, check, finish, launch, local, watch } from "./lib.mjs";
+import { BASE, check, finish, launch, local, openIfAsked, watch } from "./lib.mjs";
 
 const ADMIN = process.env.ADMIN_TOKEN;
 const browser = await launch();
@@ -27,12 +27,13 @@ const openApi = (id, proof, ip = freshIp()) =>
   api(`/api/open/${id}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Real-IP": ip }, body: JSON.stringify({ proof }) });
 
 // Creates a paste through the real page; returns { url, id, secret, deleteUrl }.
-async function createPaste({ text = "secret text", password = "", burn = false, file = null, syntax = null, title = "" } = {}) {
+async function createPaste({ text = "secret text", password = "", burn = false, file = null, syntax = null, title = "", deleteAfterOpen = null } = {}) {
   const p = await newPage();
   await p.goto(BASE + "/", { waitUntil: "networkidle0" });
   await p.$eval("#paste-area", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, text);
   if (syntax) await p.select("#syntax", syntax);
   if (title) await p.type("#paste-title", title);
+  if (deleteAfterOpen) await p.select("#delete-after-open", String(deleteAfterOpen));
   if (password) await p.type("#paste-password", password);
   if (burn) await p.click('label[for="burn"]');
   if (file) { const input = await p.$("#fileInput"); await input.uploadFile(file); }
@@ -40,15 +41,17 @@ async function createPaste({ text = "secret text", password = "", burn = false, 
   await p.waitForSelector("#url-modal.show", { timeout: 20000 });
   const url = await p.$eval("#paste-url", (e) => e.value);
   const deleteUrl = await p.$eval("#delete-url", (e) => e.value);
+  const chips = await p.$$eval("#link-summary .chip", (els) => els.map((e) => e.textContent.trim()));
   await p.close();
   const [, id, secret] = url.match(/\/s\/(\w+)#(.+)$/);
-  return { url, id, secret, deleteUrl };
+  return { url, id, secret, deleteUrl, chips };
 }
 
 // Opens a paste in a fresh page and waits for it to decrypt (or fail).
 async function view(url, password = null) {
   const p = await newPage();
   await p.goto(local(url), { waitUntil: "networkidle0" });
+  await openIfAsked(p);
   if (password !== null) {
     await p.waitForSelector("#password-modal.show");
     await p.type("#password-input", password);
@@ -116,7 +119,9 @@ async function view(url, password = null) {
     p.waitForResponse((r) => r.url().includes("/api/download-attachment/")),
     p.$eval("#download-link", (b) => b.click()),
   ]);
-  const fileSize = (await download.buffer()).length;
+  // From the header: the page reads the body as a stream, and Chrome doesn't
+  // always keep a copy of streamed bodies for DevTools to hand out.
+  const fileSize = Number(download.headers()["content-length"]);
   check("v4: the attachment is stored padded, in chunks", fileSize === 2621440 + 3 * 16, fileSize);
   await p.waitForFunction(() => window.__dl.length === 1, { timeout: 20000 });
   check("v4: the attachment decrypts to the original", Buffer.compare(Buffer.from(await p.evaluate(() => window.__dl[0])), attachmentBytes) === 0);
@@ -327,6 +332,69 @@ const plain = await createPaste({ text: "the quick brown fox" });
   await lp.reload({ waitUntil: "networkidle0" });
   check("remember switch: back on sticks too", await lp.$eval("#remember-delete", (e) => e.checked));
   await lp.close();
+}
+
+// ------------------------------- asking the creator before using up a view
+{
+  const pageData = async (id) => JSON.parse((await (await api(`/paste/${id}`)).text()).match(/id="page-data">(.*?)<\/script>/s)[1]).paste;
+  const burn = await createPaste({ text: "only once", burn: true });
+  const p = await newPage();
+  await p.goto(local(burn.url), { waitUntil: "networkidle0" });
+  check("creator prompt: shown for this browser's burn paste", !(await p.$eval("#owner-prompt", (e) => e.hidden)));
+  check("creator prompt: says it's the last view", /uses its last view/.test(await p.$eval("#owner-prompt-text", (e) => e.textContent)));
+  check("creator prompt: nothing opened or counted yet", (await pageData(burn.id)).views === 0 && (await p.$eval("#decrypted-notice", (e) => e.hidden)));
+  check("creator prompt: Delete goes to the delete page", (await p.$eval("#owner-delete-link", (e) => e.getAttribute("href"))) === `/delete/${burn.id}#${burn.deleteUrl.split("#")[1]}`);
+  await p.click("#owner-open-btn");
+  await p.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  check("creator prompt: Open opens it", (await p.$eval("#view-area", (e) => e.textContent)) === "only once" && !(await p.$eval("#final-view", (e) => e.hidden)));
+  await p.close();
+
+  const limited = await createPaste({ text: "three views" });
+  const q = await newPage();
+  await q.goto(local(limited.url), { waitUntil: "networkidle0" });
+  await q.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  check("creator prompt: not for a paste with nothing to lose", await q.$eval("#owner-prompt", (e) => e.hidden));
+  await q.close();
+
+  // Someone else (another browser profile) opens it straight away.
+  const other = await createPaste({ text: "for someone else", burn: true });
+  const ctx = await browser.createBrowserContext();
+  const o = await ctx.newPage();
+  await o.goto(local(other.url), { waitUntil: "networkidle0" });
+  await o.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  check("creator prompt: not for other people", await o.$eval("#owner-prompt", (e) => e.hidden));
+  await ctx.close();
+}
+
+// ------------------------------------------------- delete after opening
+{
+  const pageData = async (id) => JSON.parse((await (await api(`/paste/${id}`)).text()).match(/id="page-data">(.*?)<\/script>/s)[1]).paste;
+  const timed = await createPaste({ text: "ten minutes", deleteAfterOpen: 600 });
+  check("timer: shown in the link dialog", timed.chips.includes("Deleted 10 minutes after opening"), JSON.stringify(timed.chips));
+  const before = await pageData(timed.id);
+  check("timer: stored, not started", before.delete_after_open === 600 && before.expires > Date.now() + 2 * 86400e3);
+
+  const p = await newPage();
+  await p.goto(local(timed.url), { waitUntil: "networkidle0" });
+  check("timer: the creator is told opening starts it", /starts its timer: it's deleted 10 minutes later/.test(await p.$eval("#owner-prompt-text", (e) => e.textContent)));
+  check("timer: chip before the first view", (await p.$eval("#timer-text", (e) => e.textContent)) === "Deleted 10 minutes after it's first opened");
+  await p.close();
+
+  // The reader, in another browser profile.
+  const ctx = await browser.createBrowserContext();
+  const r = await ctx.newPage();
+  await r.goto(local(timed.url), { waitUntil: "networkidle0" });
+  await r.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  check("timer: the first view starts it", (await r.$eval("#expire-date", (e) => e.textContent)) === "Expires in 10 minutes" && (await r.$eval("#timer-chip", (e) => e.hidden)));
+  await ctx.close();
+  const after = await pageData(timed.id);
+  check("timer: the server moved the expiry", after.expires <= Date.now() + 600e3 && after.expires > Date.now() + 590e3);
+
+  const again = await newPage();
+  await again.goto(local(timed.url), { waitUntil: "networkidle0" });
+  await again.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  check("timer: once started, the creator isn't asked again", await again.$eval("#owner-prompt", (e) => e.hidden));
+  await again.close();
 }
 
 // ----------------------------------------------------------------- admin

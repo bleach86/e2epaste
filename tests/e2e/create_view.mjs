@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { BASE, check, finish, launch, local, watch } from "./lib.mjs";
+import { BASE, check, finish, launch, local, openIfAsked, watch } from "./lib.mjs";
 
 const fileBytes = Buffer.from(Array.from({ length: 5000 }, (_, i) => (i * 7) % 256));
 const uploadPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "e2epaste-")), "upload.bin");
@@ -81,6 +81,9 @@ check("dialog close: paste counter +1", parseInt(await txt(c, "#total-pastes")) 
 // ------------------------------------------------------------------ view
 const v = await newPage();
 await v.goto(local(url), { waitUntil: "networkidle0" });
+// Dialog animations stall in a background tab.
+await v.bringToFront();
+await openIfAsked(v);
 await v.waitForSelector("#password-modal.show");
 check("view: /s/ forwards to /paste/ with key", v.url() === local(url).replace("/s/", "/paste/"), v.url());
 check("view: title placeholder before unlocking", (await txt(v, "#paste-title")) === "Encrypted paste");
@@ -156,6 +159,7 @@ const burnUrl = await b.$eval("#paste-url", (e) => e.value);
 check("burn: dialog chip", (await b.$$eval("#link-summary .chip", (els) => els.map((e) => e.textContent.trim()))).includes("Burns after 1 view"));
 const bv = await newPage();
 await bv.goto(local(burnUrl), { waitUntil: "networkidle0" });
+await openIfAsked(bv);
 await bv.waitForFunction(() => !document.getElementById("final-view").hidden, { timeout: 10000 });
 check("burn: final-view chip on the one view", (await txt(bv, "#views")) === "1 of 1 views");
 const again = await newPage();

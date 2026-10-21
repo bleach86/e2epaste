@@ -60,6 +60,9 @@ let fileName = null;
 // detect"), or null for plain text.
 let pasteLanguage = null;
 let passwordModal;
+// Whether the password dialog has finished opening. Bootstrap ignores hide()
+// until then, which a quick unlock (say, by a password manager) could hit.
+let passwordModalOpen = false;
 
 // --- Decrypting -----------------------------------------------------------
 
@@ -216,6 +219,11 @@ async function decrypt(password) {
 
   showViews(opened.views);
   document.getElementById("total-views").textContent = opened.total_views;
+  // Opening it may have started its delete-after-opening timer.
+  if (opened.expires) {
+    document.getElementById("expire-date").textContent = `Expires in ${timeUntil(opened.expires)}`;
+  }
+  document.getElementById("timer-chip").hidden = true;
   document.getElementById("decrypted-notice").hidden = false;
   copyButton.disabled = false;
   downloadButton.disabled = false;
@@ -261,7 +269,7 @@ async function decryptWithPassword() {
     await decrypt(passwordInput.value.trim());
   } catch (e) {
     if (e instanceof OpenError && e.kind === "not-found") {
-      passwordModal.hide();
+      hidePasswordModal();
       showOpenError(e);
       return;
     }
@@ -276,7 +284,15 @@ async function decryptWithPassword() {
     setUnlocking(false);
   }
 
-  passwordModal.hide();
+  hidePasswordModal();
+}
+
+function hidePasswordModal() {
+  if (passwordModalOpen) {
+    passwordModal.hide();
+  } else {
+    document.getElementById("password-modal").addEventListener("shown.bs.modal", () => passwordModal.hide(), { once: true });
+  }
 }
 
 function togglePasswordVisibility() {
@@ -376,7 +392,11 @@ attachmentButton.addEventListener("click", async () => {
 // --- Paste details ----------------------------------------------------------
 
 function timeUntil(timestamp) {
-  const seconds = Math.floor((timestamp - Date.now()) / 1000);
+  return durationText(Math.floor((timestamp - Date.now()) / 1000));
+}
+
+// "3 days", "10 minutes"
+function durationText(seconds) {
   const units = [
     ["year", 31536000],
     ["month", 2592000],
@@ -414,6 +434,13 @@ document.getElementById("paste-date").textContent = new Date(paste.timestamp * 1
 
 showViews(paste.views);
 
+// Before the first view: the timer that view will start.
+if (paste.delete_after_open && paste.views === 0) {
+  document.getElementById("timer-text").textContent =
+    `Deleted ${durationText(paste.delete_after_open)} after it's first opened`;
+  document.getElementById("timer-chip").hidden = false;
+}
+
 // Ctrl/Cmd+A selects only the paste content (but still works in text fields).
 document.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === "a" && !event.target.closest("input, textarea")) {
@@ -438,14 +465,16 @@ if (deleteToken) {
 
 // --- Start ------------------------------------------------------------------
 
-if (!cryptoAvailable()) {
-  // Plain-HTTP page: the banner from layout.html.j2 explains. Nothing is
-  // decrypted, so no view is used up.
-} else if (hasPassword) {
-  passwordModal = new bootstrap.Modal(document.getElementById("password-modal"));
-  document.getElementById("password-modal").addEventListener("shown.bs.modal", () => passwordInput.focus());
-  passwordModal.show();
-} else {
+function start() {
+  if (hasPassword) {
+    passwordModal = new bootstrap.Modal(document.getElementById("password-modal"));
+    document.getElementById("password-modal").addEventListener("shown.bs.modal", () => {
+      passwordModalOpen = true;
+      passwordInput.focus();
+    });
+    passwordModal.show();
+    return;
+  }
   decrypt("").catch((e) => {
     console.error("Failed to open paste", e);
     if (e instanceof OpenError && e.kind !== "wrong-key") {
@@ -454,4 +483,41 @@ if (!cryptoAvailable()) {
       document.getElementById("decrypt-error").hidden = false;
     }
   });
+}
+
+// What opening the paste would cost, or null if nothing: a limited view, or
+// starting its timer.
+function openingCost() {
+  const costs = [];
+  const left = paste.max_views ? paste.max_views - paste.views : null;
+  if (left === 1) {
+    // Its timer doesn't matter: the last view deletes it anyway.
+    return "Opening it here uses its last view, so it will be deleted and nobody else can open it.";
+  }
+  if (left) {
+    costs.push(`Opening it here uses one of its ${left.toLocaleString()} remaining views.`);
+  }
+  if (paste.delete_after_open && paste.views === 0) {
+    costs.push(
+      `Nobody has opened it yet. Opening it starts its timer: it's deleted ${durationText(paste.delete_after_open)} later.`,
+    );
+  }
+  return costs.length ? costs.join(" ") : null;
+}
+
+const cost = deleteToken ? openingCost() : null;
+if (!cryptoAvailable()) {
+  // Plain-HTTP page: the banner from layout.html.j2 explains. Nothing is
+  // decrypted, so no view is used up.
+} else if (cost) {
+  // This browser created the paste: checking the link shouldn't burn it.
+  document.getElementById("owner-prompt-text").textContent = cost;
+  document.getElementById("owner-delete-link").href = `/delete/${paste.id}#${deleteToken}`;
+  document.getElementById("owner-prompt").hidden = false;
+  document.getElementById("owner-open-btn").addEventListener("click", () => {
+    document.getElementById("owner-prompt").hidden = true;
+    start();
+  });
+} else {
+  start();
 }

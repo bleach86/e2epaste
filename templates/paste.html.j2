@@ -16,6 +16,17 @@
         {{ icons.icon("alert") }}
         <span id="open-error-text"></span>
     </div>
+    {# For the paste's creator (this browser has its delete token), when
+       opening it would use up a limited view or start its timer. #}
+    <section id="owner-prompt" class="panel panel-pad mb-3" aria-labelledby="owner-prompt-title" hidden>
+        <h2 class="h5 fw-bold mb-1" id="owner-prompt-title">You created this paste</h2>
+        <p class="text-secondary mb-3" id="owner-prompt-text"></p>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" id="owner-open-btn" class="btn btn-accent d-inline-flex align-items-center gap-2">
+                {{ icons.icon("eye") }} Open it</button>
+            <a id="owner-delete-link" class="btn btn-quiet btn-quiet-danger">{{ icons.icon("eraser") }} Delete it</a>
+        </div>
+    </section>
 
     <div class="paste-head">
         <div class="min-w-0">
@@ -26,6 +37,7 @@
                 <li class="chip">Created <span id="paste-date"></span></li>
                 <li class="chip">{{ icons.icon("clock") }} <span id="expire-date"></span></li>
                 <li class="chip">{{ icons.icon("eye") }} <span id="views"></span></li>
+                <li class="chip chip-warn" id="timer-chip" hidden>{{ icons.icon("clock") }} <span id="timer-text"></span></li>
                 <li class="chip chip-warn" id="final-view" hidden>{{ icons.icon("flame") }} Final view: it can't be opened again</li>
             </ul>
         </div>

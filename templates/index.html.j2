@@ -93,6 +93,17 @@
                     inputmode="numeric" placeholder="Unlimited">
             </div>
 
+            <div>
+                <label for="delete-after-open" class="field-label">After it's first opened</label>
+                <select id="delete-after-open" class="form-select">
+                    <option value="" selected>Keep it until it expires</option>
+                    <option value="600" data-chip="Deleted 10 minutes after opening">Delete it 10 minutes later</option>
+                    <option value="3600" data-chip="Deleted 1 hour after opening">Delete it 1 hour later</option>
+                    <option value="86400" data-chip="Deleted 1 day after opening">Delete it 1 day later</option>
+                </select>
+                <div class="field-hint">Gives the reader time to read or download it, then it's gone.</div>
+            </div>
+
             <hr class="panel-divider">
 
             <div>

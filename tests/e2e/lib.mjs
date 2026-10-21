@@ -40,6 +40,16 @@ export function launch(args = []) {
   });
 }
 
+// A paste this browser created with a view limit or a delete-after-opening
+// timer asks before opening ("You created this paste"). Says yes, if asked.
+export async function openIfAsked(page) {
+  const asked = await page.$eval("#owner-prompt", (e) => !e.hidden).catch(() => false);
+  if (asked) {
+    await page.click("#owner-open-btn");
+  }
+  return asked;
+}
+
 // A link the app made for this site's real address, pointed at the test server.
 export const local = (url) => url.replace(/^https?:\/\/[^/]+/, BASE);
 

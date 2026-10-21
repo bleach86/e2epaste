@@ -147,6 +147,7 @@ async fn upload(
         file_name: paste.file_name,
         access_hash: paste.access_hash,
         delete_hash: None,
+        delete_after_open: paste.delete_after_open,
     };
     let delete_token = secrets::new_token();
     paste_data.delete_hash = secrets::hash_secret(&delete_token);

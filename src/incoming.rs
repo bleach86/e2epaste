@@ -17,6 +17,10 @@ use crate::secrets;
 /// The longest a paste can live; the create page's longest choice.
 pub const MAX_LIFETIME: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 
+/// The shortest delete-after-opening time, in seconds: long enough to read
+/// something.
+const MIN_DELETE_AFTER_OPEN: u64 = 60;
+
 /// The paste format new pastes must use (js/crypto.mjs PASTE_VERSION).
 const CURRENT_VERSION: u32 = 4;
 /// AES-GCM base IV, which v3 also uses as the key derivation salt.
@@ -59,6 +63,9 @@ pub struct IncomingPaste {
     /// SHA-256 (hex) of the access proof the browser derived from the link.
     #[serde(default)]
     pub access_hash: Option<String>,
+    /// Seconds: delete the paste this long after it's first opened.
+    #[serde(default)]
+    pub delete_after_open: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -128,6 +135,11 @@ impl IncomingPaste {
         }
         if self.max_views == Some(0) {
             return Err("max_views must be at least 1");
+        }
+        if self.delete_after_open.is_some_and(|seconds| {
+            !(MIN_DELETE_AFTER_OPEN..=MAX_LIFETIME.as_secs()).contains(&seconds)
+        }) {
+            return Err("delete_after_open must be from a minute to a year");
         }
 
         let max_ms = MAX_LIFETIME.as_millis() as u64;
@@ -222,6 +234,7 @@ mod tests {
             file_name: None,
             file_size: None,
             access_hash: Some("ab".repeat(32)),
+            delete_after_open: None,
         }
     }
 
@@ -288,7 +301,7 @@ mod tests {
 
     #[test]
     fn refuses_bad_fields() {
-        let cases: [(&str, Spoil); 7] = [
+        let cases: [(&str, Spoil); 8] = [
             ("short iv", |p| p.iv = vec![1; 8]),
             ("empty content", |p| p.content.clear()),
             ("huge content", |p| {
@@ -300,6 +313,9 @@ mod tests {
             }),
             ("unknown syntax", |p| p.syntax = "<script>".into()),
             ("zero views", |p| p.max_views = Some(0)),
+            ("a delete-after-opening time under a minute", |p| {
+                p.delete_after_open = Some(10)
+            }),
         ];
         for (label, spoil) in cases {
             let mut p = paste();

@@ -133,12 +133,17 @@
             {% call faq("expiry", "How do expiry and view limits work?") %}
             <p>Every paste expires, after anywhere from 10 minutes to 1 year (3 days by default). Expired pastes can't
                 be opened and are deleted from the server.</p>
-            <p class="mb-0">A view limit caps how many times a paste can be opened; set it to 1 for "burn after
-                reading". The server counts a view each time it sends the paste to someone with the full link (and
-                the password, if there is one); a broken link or a wrong password doesn't use one. After the last
-                allowed view, the paste is deleted from the server straight away. If it has an attachment, only the
-                file is kept, for up to an hour, so the last viewer can download it. Leave the limit empty for no
-                limit.</p>
+            <p>A view limit caps how many times a paste can be opened; set it to 1 for "burn after reading". The
+                server counts a view each time it sends the paste to someone with the full link (and the password,
+                if there is one); a broken link or a wrong password doesn't use one. After the last allowed view, the
+                paste is deleted from the server straight away. If it has an attachment, only the file is kept, for
+                up to an hour (and never past its expiry), so the last viewer can download it. Leave the limit empty
+                for no limit.</p>
+            <p>You can also have a paste deleted a set time after it's first opened: 10 minutes, an hour or a day.
+                The timer starts on the first view, which gives the reader time to read it or download its
+                attachment, and then it's gone, however many views are left.</p>
+            <p class="mb-0">Opening your own link to check it would use up a view, or start the timer. So in the
+                browser you created a paste in, its page asks first, and offers to delete it instead.</p>
             {% endcall %}
 
             {% call faq("delete", "Can I delete a paste?") %}

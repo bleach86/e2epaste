@@ -58,6 +58,10 @@ pub struct PasteData<'a> {
     /// SHA-256 (hex) of the token in the creator's delete link.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delete_hash: Option<String>,
+    /// Seconds: once the first view is counted, the paste expires this long
+    /// after it (or at its own expiry time, if that's sooner).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delete_after_open: Option<u64>,
 }
 
 impl PasteData<'_> {
@@ -237,15 +241,35 @@ impl PasteDB {
         }
 
         paste.views += 1;
+        let now = now_millis();
+        let old_expires = paste.expires;
+        // The first view starts the delete-after-opening timer.
+        if paste.views == 1 {
+            if let Some(seconds) = paste.delete_after_open {
+                paste.expires = Some(soonest(paste.expires, now + seconds * 1000));
+            }
+        }
         let last_view = paste.used_up();
-        if last_view {
-            if let Some(expires) = paste.expires {
+        if last_view && paste.file_name.is_some() {
+            // Kept so the last viewer can download the attachment, but never
+            // past when it would have expired anyway.
+            paste.expires = Some(soonest(
+                paste.expires,
+                now + ATTACHMENT_WINDOW.as_millis() as u64,
+            ));
+        }
+        if paste.expires != old_expires {
+            if let Some(expires) = old_expires {
                 txn.open_table(EXPIRY)?.remove((expires, id))?;
             }
+        }
+        if last_view {
             if paste.file_name.is_some() {
-                paste.expires = Some(now_millis() + ATTACHMENT_WINDOW.as_millis() as u64);
                 write_paste(&txn, &paste)?;
             } else {
+                if let Some(expires) = paste.expires {
+                    txn.open_table(EXPIRY)?.remove((expires, id))?;
+                }
                 txn.open_table(PASTES)?.remove(id)?;
                 txn.open_table(UPLOAD_TOKENS)?.remove(id)?;
             }
@@ -468,6 +492,11 @@ pub(crate) fn add_to_stat(txn: &WriteTransaction, name: &str, amount: u64) -> Re
     Ok(value)
 }
 
+/// The earlier of an expiry time (`None`: never) and `at`.
+fn soonest(expires: Option<u64>, at: u64) -> u64 {
+    expires.map_or(at, |expires| expires.min(at))
+}
+
 fn now_millis() -> u64 {
     chrono::Utc::now().timestamp_millis() as u64
 }
@@ -543,6 +572,7 @@ pub(crate) mod tests {
             file_name: None,
             access_hash: None,
             delete_hash: None,
+            delete_after_open: None,
         }
     }
 
@@ -660,7 +690,8 @@ pub(crate) mod tests {
     fn last_view_keeps_an_attachment_for_a_while() {
         let dir = temp_dir();
         let db = open(&dir).unwrap();
-        let mut paste = sample_paste("burnFile", Some(now_millis() + 1_000_000), Some(1));
+        let day = 24 * 60 * 60 * 1000;
+        let mut paste = sample_paste("burnFile", Some(now_millis() + day), Some(1));
         paste.file_name = Some("encrypted name".into());
         db.create_paste(&paste, None).unwrap();
 
@@ -675,6 +706,53 @@ pub(crate) mod tests {
             matches!(db.open_paste("burnFile", None).unwrap(), Opened::NotFound),
             "no more views"
         );
+    }
+
+    #[test]
+    fn first_view_starts_the_delete_after_opening_timer() {
+        let dir = temp_dir();
+        let db = open(&dir).unwrap();
+        let day = 24 * 60 * 60 * 1000;
+        let mut paste = sample_paste("timer123", Some(now_millis() + day), None);
+        paste.delete_after_open = Some(600);
+        db.create_paste(&paste, None).unwrap();
+
+        let before = now_millis();
+        let (first, _, _) = opened(db.open_paste("timer123", None).unwrap());
+        let expires = first.expires.unwrap();
+        assert!(expires >= before + 600_000 && expires <= now_millis() + 600_000);
+        assert_eq!(
+            expiry_entries(&db),
+            vec![(expires, "timer123".to_string())],
+            "the expiry index moved with it"
+        );
+        let (second, _, _) = opened(db.open_paste("timer123", None).unwrap());
+        assert_eq!(
+            second.expires,
+            Some(expires),
+            "later views don't restart it"
+        );
+
+        // A paste due to expire sooner keeps its own time.
+        let mut soon = sample_paste("timer456", Some(now_millis() + 60_000), None);
+        soon.delete_after_open = Some(3600);
+        db.create_paste(&soon, None).unwrap();
+        let (opened_soon, _, _) = opened(db.open_paste("timer456", None).unwrap());
+        assert_eq!(opened_soon.expires, soon.expires);
+    }
+
+    #[test]
+    fn attachment_window_never_extends_a_paste() {
+        let dir = temp_dir();
+        let db = open(&dir).unwrap();
+        let expires = now_millis() + 60_000;
+        let mut paste = sample_paste("soonFile", Some(expires), Some(1));
+        paste.file_name = Some("encrypted name".into());
+        db.create_paste(&paste, None).unwrap();
+
+        assert!(opened(db.open_paste("soonFile", None).unwrap()).2);
+        assert_eq!(db.get_paste("soonFile").unwrap().expires, Some(expires));
+        assert_eq!(expiry_entries(&db), vec![(expires, "soonFile".to_string())]);
     }
 
     #[test]

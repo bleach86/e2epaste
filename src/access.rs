@@ -41,6 +41,8 @@ pub struct PastePublic<'a> {
     pub has_attachment: bool,
     /// v1 and v2 titles were stored unencrypted.
     pub title: Option<&'a str>,
+    /// Seconds after the first view that the paste is deleted.
+    pub delete_after_open: Option<u64>,
 }
 
 impl<'a> PastePublic<'a> {
@@ -58,6 +60,7 @@ impl<'a> PastePublic<'a> {
             max_views: paste.max_views,
             has_attachment: paste.file_name.is_some(),
             title: (paste.version < 3).then_some(paste.title.as_str()),
+            delete_after_open: paste.delete_after_open,
         }
     }
 }
@@ -77,6 +80,8 @@ pub struct OpenResponse {
     key_fragment: String,
     views: u64,
     total_views: u64,
+    /// When it expires now: opening it may have started its timer.
+    expires: Option<u64>,
     /// This was the last allowed view: the paste is gone (an attachment can
     /// still be downloaded for a while).
     last_view: bool,
@@ -112,6 +117,7 @@ pub fn open(
                 key_fragment: paste.key_fragment,
                 views: paste.views,
                 total_views,
+                expires: paste.expires,
                 last_view,
                 download_ticket,
             }))

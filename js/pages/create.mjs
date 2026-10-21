@@ -51,6 +51,7 @@ const attachmentRow = document.getElementById("attachment");
 const burnSwitch = document.getElementById("burn");
 const rememberSwitch = document.getElementById("remember-delete");
 const maxViewsInput = document.getElementById("max-views");
+const deleteAfterOpenSelect = document.getElementById("delete-after-open");
 const passwordInput = document.getElementById("paste-password");
 const passwordToggle = document.getElementById("toggle-password");
 const submitButton = document.getElementById("submit-paste");
@@ -352,6 +353,7 @@ async function createPaste() {
   const expire = selectedExpiry();
   const lifetime = EXPIRE_SECONDS[expire] ?? EXPIRE_SECONDS["1year"];
   const views = maxViews();
+  const deleteAfterOpen = Number(deleteAfterOpenSelect.value) || null;
   const password = passwordInput.value.trim();
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
@@ -385,6 +387,8 @@ async function createPaste() {
     // doesn't matter.
     expires_in: lifetime,
     max_views: views,
+    // Seconds; the server starts the timer at the first view.
+    delete_after_open: deleteAfterOpen,
     key_fragment: "", // no key material is stored on the server
     // In the link instead (see above).
     has_password: false,
@@ -430,6 +434,7 @@ async function createPaste() {
   showLink(`${location.origin}/s/${data.id}#${linkSecret}`, `${location.origin}/delete/${data.id}#${data.delete_token}`, {
     expiry: expiryLabel(expire),
     views,
+    deleteAfterOpen: deleteAfterOpen && deleteAfterOpenSelect.selectedOptions[0].dataset.chip,
     password: password !== "",
     attachment: Boolean(file),
     remembered,
@@ -483,6 +488,9 @@ function showLink(url, deleteUrl, settings) {
     chips.push(chip("flame", "Burns after 1 view", true));
   } else if (settings.views) {
     chips.push(chip("eye", `Limited to ${settings.views.toLocaleString()} views`));
+  }
+  if (settings.deleteAfterOpen) {
+    chips.push(chip("clock", settings.deleteAfterOpen, true));
   }
   if (settings.password) {
     chips.push(chip("lock", "Password protected"));
@@ -550,6 +558,7 @@ function resetForm() {
   burnSwitch.checked = false;
   maxViewsInput.disabled = false;
   maxViewsInput.value = "";
+  deleteAfterOpenSelect.value = "";
   passwordInput.value = "";
   setPasswordVisible(false);
 
