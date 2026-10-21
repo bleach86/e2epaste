@@ -3,15 +3,15 @@
 
 import {
   PASTE_VERSION,
-  arrayBufferToBase64,
-  deriveIv,
   accessHash,
+  arrayBufferToBase64,
   deriveV3Secrets,
-  encryptBytes,
-  encryptText,
+  encodeDetails,
+  encryptPart,
   generateLinkSecret,
 } from "../crypto.mjs";
 import { rememberDeleteToken, rememberingEnabled, setRemembering } from "../delete_tokens.mjs";
+import { enableEditorKeys } from "../editor_keys.mjs";
 import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable } from "../ui.mjs";
 
@@ -149,7 +149,7 @@ syntaxSelect.addEventListener("change", () => {
   resizePasteArea();
 });
 
-tabOverride.set(pasteArea);
+enableEditorKeys(pasteArea);
 
 // --- Attachment -----------------------------------------------------------
 
@@ -292,24 +292,28 @@ async function createPaste() {
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
   // The secret only ever goes in the link's #fragment, which browsers never
-  // send to the server. With a password, the key also depends on it.
-  const linkSecret = generateLinkSecret();
+  // send to the server. With a password, the key also depends on it, and the
+  // link (not the server) says there is one.
+  const linkSecret = generateLinkSecret({ password: password !== "" });
   const { key, accessProof } = await deriveV3Secrets(linkSecret, iv, password === "" ? null : password);
 
-  const encrypted = await encryptText(text, key, iv);
+  // Every part is padded to a rounded size before encryption, so the server
+  // can't tell much from sizes (see PART_PADDING in crypto.mjs).
+  const encode = (value) => new TextEncoder().encode(value);
+  const encrypted = await encryptPart(key, iv, "text", encode(text));
   let encryptedFile = null;
   let encryptedFileName = null;
 
   if (fileData) {
-    encryptedFile = await encryptBytes(fileData, key, await deriveIv(iv, "file"));
-    const cipherName = await encryptText(fileName, key, await deriveIv(iv, "file-name"));
-    encryptedFileName = arrayBufferToBase64(cipherName);
+    encryptedFile = await encryptPart(key, iv, "file", fileData);
+    encryptedFileName = arrayBufferToBase64(await encryptPart(key, iv, "file-name", encode(fileName)));
   }
 
-  // Encrypted like everything else; an empty title is shown as "Untitled".
-  // Cut by code point so the 64-character limit can't split an emoji.
+  // The title and the language are encrypted together; an empty title is
+  // shown as "Untitled". Cut by code point so the 64-character limit can't
+  // split an emoji.
   const titleText = Array.from(titleInput.value).slice(0, 64).join("");
-  const title = await encryptText(titleText, key, await deriveIv(iv, "title"));
+  const title = await encryptPart(key, iv, "title", encodeDetails(titleText, syntaxSelect.value));
 
   const paste = {
     content: arrayBufferToBase64(encrypted),
@@ -318,11 +322,13 @@ async function createPaste() {
     // doesn't matter.
     expires_in: lifetime,
     max_views: views,
-    key_fragment: "", // v3 stores no key material on the server
-    has_password: password !== "",
+    key_fragment: "", // no key material is stored on the server
+    // In the link instead (see above).
+    has_password: false,
     version: PASTE_VERSION,
     title: arrayBufferToBase64(title),
-    syntax: syntaxSelect.value,
+    // Encrypted with the title instead.
+    syntax: "auto",
     file_name: encryptedFileName,
     // So the server can check it against the limits before creating anything.
     file_size: encryptedFile ? encryptedFile.byteLength : null,

@@ -7,6 +7,7 @@ mod assets;
 mod config;
 mod incoming;
 mod migrate;
+mod padding;
 mod paste_db;
 mod paste_id;
 mod rate_limit;
@@ -251,6 +252,15 @@ async fn upload_attachment(
     if !written.is_complete() || written.n.written > max_bytes {
         let _ = tokio::fs::remove_file(&partial).await;
         return Err(Status::PayloadTooLarge.into());
+    }
+    // v4 attachments are exactly the padded size declared with the paste
+    // (checked then), so a client can't upload one unpadded.
+    let declared_exactly = db.get_paste(&id).is_some_and(|paste| paste.version >= 4);
+    if declared_exactly && written.n.written != max_bytes {
+        let _ = tokio::fs::remove_file(&partial).await;
+        return Err(ApiError::Invalid(
+            "the attachment isn't the size declared with the paste",
+        ));
     }
 
     // Of concurrent uploads with the right token, only one gets past here.

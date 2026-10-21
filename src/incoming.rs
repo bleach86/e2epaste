@@ -2,25 +2,28 @@
 //!
 //! The create page never sends anything that fails these. They stop other
 //! clients from storing pastes the site promises can't exist: ones that never
-//! expire, or that skip the access proof (see access.rs).
+//! expire, that skip the access proof (see access.rs), or that tell the
+//! server more than v4 pastes do (exact sizes, the language, whether there's
+//! a password).
 
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::padding::{self, Padding};
 use crate::secrets;
 
 /// The longest a paste can live; the create page's longest choice.
 pub const MAX_LIFETIME: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 
 /// The paste format new pastes must use (js/crypto.mjs PASTE_VERSION).
-const CURRENT_VERSION: u32 = 3;
+const CURRENT_VERSION: u32 = 4;
 /// AES-GCM base IV, which v3 also uses as the key derivation salt.
 const IV_BYTES: usize = 12;
 
-// Size limits, in characters, each comfortably above what the create page
-// sends: 1 MB of text compressed, encrypted and base64 encoded; a 64-character
-// title and a file name, encrypted.
+// Size limits, in characters, each above what the create page sends: 1 MB
+// of text compressed, padded, encrypted and base64 encoded (at most about
+// 1,442,000); the padded title; a file name, padded.
 const MAX_CONTENT_CHARS: usize = 1_450_000;
 const MAX_TITLE_CHARS: usize = 1024;
 const MAX_FILE_NAME_CHARS: usize = 2048;
@@ -86,8 +89,12 @@ impl IncomingPaste {
                 return Err("access_hash is missing or malformed");
             }
             if !self.key_fragment.is_empty() || self.password_hash.is_some() {
-                return Err("version 3 pastes don't store key material");
+                return Err("pastes don't store key material");
             }
+        }
+        // Also in the browser tests' legacy mode, which creates v4 pastes too.
+        if self.version >= CURRENT_VERSION {
+            self.check_v4_privacy()?;
         }
 
         if self.iv.len() != IV_BYTES {
@@ -129,6 +136,38 @@ impl IncomingPaste {
     }
 }
 
+impl IncomingPaste {
+    /// v4 pastes keep the language and the password flag encrypted or in the
+    /// link, and pad every part (see padding.rs).
+    fn check_v4_privacy(&self) -> Result<(), &'static str> {
+        if self.syntax != "auto" {
+            return Err("the language is encrypted with the title");
+        }
+        if self.has_password {
+            return Err("whether there's a password is in the link");
+        }
+        let padded = |base64: &str, padding: Padding| {
+            padding::base64_len(base64).is_some_and(|len| padding::is_padded(len, padding))
+        };
+        if !padded(&self.content, padding::TEXT) {
+            return Err("content isn't padded");
+        }
+        if !padded(&self.title, padding::TITLE) {
+            return Err("title isn't padded");
+        }
+        match (&self.file_name, self.file_size) {
+            (None, _) => Ok(()),
+            (Some(_), None) => Err("file_size is required with an attachment"),
+            (Some(name), Some(size))
+                if padded(name, padding::FILE_NAME) && padding::is_padded(size, padding::FILE) =>
+            {
+                Ok(())
+            }
+            (Some(_), Some(_)) => Err("the attachment's name or size isn't padded"),
+        }
+    }
+}
+
 /// Lets the browser tests create pastes the way older versions did (v1/v2,
 /// or v3 without an access proof), to check they still open. Only in debug
 /// builds, and only with the variable set: release builds don't contain it.
@@ -149,9 +188,16 @@ mod tests {
     const NOW: u64 = 1_800_000_000_000;
     const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 
+    /// Base64 text that decodes to `bytes` bytes.
+    fn base64_of(bytes: usize) -> String {
+        let tail = ["", "AA==", "AAA="][bytes % 3];
+        "A".repeat(bytes / 3 * 4) + tail
+    }
+
+    /// As the create page sends it: every part padded, plus the 16-byte tag.
     fn paste() -> IncomingPaste {
         IncomingPaste {
-            content: "Y2lwaGVydGV4dA==".into(),
+            content: base64_of(4096 + 16),
             iv: vec![7; 12],
             expires_in: Some(3 * 24 * 60 * 60),
             expires: None,
@@ -159,8 +205,8 @@ mod tests {
             key_fragment: String::new(),
             password_hash: None,
             has_password: false,
-            version: 3,
-            title: "dGl0bGU=".into(),
+            version: 4,
+            title: base64_of(512 + 16),
             syntax: "auto".into(),
             file_name: None,
             file_size: None,
@@ -200,7 +246,7 @@ mod tests {
 
     #[test]
     fn refuses_old_formats_and_missing_proofs() {
-        for version in [1, 2, 4] {
+        for version in [1, 2, 3, 5] {
             let mut p = paste();
             p.version = version;
             assert!(p.check(NOW).is_err(), "version {version}");
@@ -242,8 +288,37 @@ mod tests {
             assert!(p.check(NOW).is_err(), "{label}");
         }
         let mut p = paste();
-        p.syntax = "rust".into();
         p.max_views = Some(1);
         assert!(p.check(NOW).is_ok());
+    }
+
+    #[test]
+    fn refuses_what_v4_keeps_from_the_server() {
+        let cases: [(&str, Spoil); 7] = [
+            ("a chosen language", |p| p.syntax = "rust".into()),
+            ("the password flag", |p| p.has_password = true),
+            ("unpadded content", |p| p.content = base64_of(5000 + 16)),
+            ("content under the minimum", |p| {
+                p.content = base64_of(1024 + 16)
+            }),
+            ("unpadded title", |p| p.title = base64_of(100)),
+            ("an attachment without its size", |p| {
+                p.file_name = Some(base64_of(1024 + 16))
+            }),
+            ("an unpadded attachment", |p| {
+                p.file_name = Some(base64_of(1024 + 16));
+                p.file_size = Some(5000 + 16);
+            }),
+        ];
+        for (label, spoil) in cases {
+            let mut p = paste();
+            spoil(&mut p);
+            assert!(p.check(NOW).is_err(), "{label}");
+        }
+        let mut p = paste();
+        p.file_name = Some(base64_of(1024 + 16));
+        p.file_size = Some(5120 + 16);
+        p.content = base64_of(303_104 + 16);
+        assert!(p.check(NOW).is_ok(), "padded parts of other sizes");
     }
 }

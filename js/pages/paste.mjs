@@ -8,9 +8,10 @@
 
 import {
   base64ToArrayBuffer,
+  decodeDetails,
   decryptPart,
-  decryptText,
   getPasteSecrets,
+  linkHasPassword,
 } from "../crypto.mjs";
 import { deleteTokenFor } from "../delete_tokens.mjs";
 import { AUTO, effectiveLanguage, languageName } from "../highlight.mjs";
@@ -18,8 +19,10 @@ import { cryptoAvailable, readPageData } from "../ui.mjs";
 
 // Details only; the encrypted content comes from /api/open.
 const { paste } = readPageData();
-const hasPassword = paste.has_password;
 const linkHash = window.location.hash.substring(1);
+// v4 links say whether there's a password, so the server doesn't know;
+// older pastes told the server.
+const hasPassword = paste.version >= 4 ? linkHasPassword(linkHash) : paste.has_password;
 
 // File extensions for "Download", by syntax-highlighting language.
 const EXTENSIONS = {
@@ -59,7 +62,8 @@ let passwordModal;
 
 // --- Decrypting -----------------------------------------------------------
 
-function showText(text) {
+// `syntax` is the paste's chosen language, or "auto" to guess it.
+function showText(text, syntax) {
   pasteText = text;
   viewArea.textContent = text;
 
@@ -70,23 +74,26 @@ function showText(text) {
   }
   gutter.textContent = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
 
-  pasteLanguage = effectiveLanguage(paste.syntax, text);
+  pasteLanguage = effectiveLanguage(syntax, text);
   if (pasteLanguage) {
     // highlight.js escapes the text; its output is safe as HTML.
     viewArea.innerHTML = hljs.highlight(text, { language: pasteLanguage, ignoreIllegals: true }).value;
     viewArea.className = `hljs language-${pasteLanguage}`;
   }
-  if (paste.syntax === AUTO) {
+  if (syntax === AUTO) {
     document.getElementById("language-name").textContent = pasteLanguage
       ? `${languageName(pasteLanguage)} (detected)`
       : "Plain text";
+  } else if (paste.version >= 4) {
+    // The server only knows v4 pastes as "auto".
+    document.getElementById("language-name").textContent = languageName(syntax);
   }
 
   if (pasteLanguage === "markdown") {
     markdownToggle.hidden = false;
     // Rendered by default when the creator chose Markdown; a guess might be
     // wrong, so then it starts as source.
-    if (paste.syntax === "markdown") {
+    if (syntax === "markdown") {
       showMarkdown("rendered");
     }
   }
@@ -173,17 +180,22 @@ async function decrypt(password) {
     secrets = await getPasteSecrets({ ...paste, key_fragment: opened.key_fragment }, linkHash, hasPassword, password);
   }
 
-  const text = await decryptText(base64ToArrayBuffer(opened.content), secrets.key, secrets.iv);
+  const text = new TextDecoder().decode(await decryptPart(secrets, "text", base64ToArrayBuffer(opened.content)));
   pasteSecrets = secrets;
-  showText(text);
 
   // v3 titles are encrypted, so the server leaves the heading as a
-  // placeholder. A title that won't decrypt shouldn't stop the paste itself
-  // from showing.
+  // placeholder; v4 ones come with the language. A title that won't decrypt
+  // shouldn't stop the paste itself from showing.
+  let syntax = paste.syntax;
   if (paste.version >= 3) {
     let title = "";
     try {
-      title = new TextDecoder().decode(await decryptPart(secrets, "title", base64ToArrayBuffer(opened.title)));
+      const bytes = await decryptPart(secrets, "title", base64ToArrayBuffer(opened.title));
+      if (paste.version >= 4) {
+        ({ title, syntax } = decodeDetails(bytes));
+      } else {
+        title = new TextDecoder().decode(bytes);
+      }
     } catch (e) {
       console.error("Failed to decrypt title", e);
     }
@@ -192,6 +204,7 @@ async function decrypt(password) {
   } else {
     pasteTitle = opened.title;
   }
+  showText(text, syntax);
 
   if (opened.file_name) {
     const nameBytes = await decryptPart(secrets, "file-name", base64ToArrayBuffer(opened.file_name));

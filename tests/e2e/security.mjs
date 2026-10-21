@@ -27,10 +27,12 @@ const openApi = (id, proof, ip = freshIp()) =>
   api(`/api/open/${id}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Real-IP": ip }, body: JSON.stringify({ proof }) });
 
 // Creates a paste through the real page; returns { url, id, secret, deleteUrl }.
-async function createPaste({ text = "secret text", password = "", burn = false, file = null } = {}) {
+async function createPaste({ text = "secret text", password = "", burn = false, file = null, syntax = null, title = "" } = {}) {
   const p = await newPage();
   await p.goto(BASE + "/", { waitUntil: "networkidle0" });
   await p.$eval("#paste-area", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, text);
+  if (syntax) await p.select("#syntax", syntax);
+  if (title) await p.type("#paste-title", title);
   if (password) await p.type("#paste-password", password);
   if (burn) await p.click('label[for="burn"]');
   if (file) { const input = await p.$("#fileInput"); await input.uploadFile(file); }
@@ -73,6 +75,49 @@ async function view(url, password = null) {
   const asset = await api("/public/css/styles.css");
   check("headers: assets cached long, embeddable", /max-age=15552000/.test(asset.headers.get("cache-control")) && asset.headers.get("cross-origin-resource-policy") === null);
   check("robots: /delete/ disallowed", (await (await api("/robots.txt")).text()).includes("Disallow: /delete/"));
+}
+
+// ---------------------------------------- what the server learns (v4)
+{
+  const decoded = (base64) => (base64.length / 4) * 3 - (base64.match(/=*$/)[0].length);
+  const isPadme = (n) => { const e = n.toString(2).length - 1; const step = 2 ** (e - e.toString(2).length); return n % step === 0; };
+  const attachment = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "e2epaste-")), "v4.bin");
+  const attachmentBytes = Buffer.from(crypto.getRandomValues(new Uint8Array(6000)));
+  fs.writeFileSync(attachment, attachmentBytes);
+  const secret = await createPaste({ text: "fn main() {}\n".repeat(30), password: "pw-1", syntax: "rust", title: "Private title", file: attachment });
+  const page = JSON.parse((await (await api(`/paste/${secret.id}`)).text()).match(/id="page-data">(.*?)<\/script>/s)[1]).paste;
+  check("v4: the server is told no language", page.syntax === "auto" && page.version === 4, page.syntax);
+  check("v4: the server isn't told there's a password", page.has_password === false);
+
+  const p = await newPage();
+  let opened = null;
+  p.on("response", async (r) => { if (r.url().includes("/api/open/") && r.ok()) opened = await r.json(); });
+  await p.goto(local(secret.url), { waitUntil: "networkidle0" });
+  await p.waitForSelector("#password-modal.show");
+  check("v4: the link says to ask for the password", true);
+  await p.type("#password-input", "pw-1");
+  await p.click("#submit-password-btn");
+  await p.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  check("v4: the title decrypts", (await p.$eval("#paste-title", (e) => e.textContent)) === "Private title");
+  check("v4: the chosen language comes from the encrypted title", (await p.$eval("#language-name", (e) => e.textContent)) === "Rust" && (await p.$eval("#view-area", (e) => e.className)).includes("language-rust"));
+  const sizes = { content: decoded(opened.content) - 16, title: decoded(opened.title) - 16, name: decoded(opened.file_name) - 16 };
+  check("v4: the server only has padded sizes", isPadme(sizes.content) && sizes.content >= 4096 && sizes.title === 512 && sizes.name === 1024, JSON.stringify(sizes));
+  // Capture the decrypted file instead of saving it.
+  await p.evaluate(() => {
+    window.__dl = [];
+    const create = URL.createObjectURL;
+    URL.createObjectURL = (blob) => { blob.arrayBuffer().then((b) => window.__dl.push(Array.from(new Uint8Array(b)))); return create(blob); };
+    HTMLAnchorElement.prototype.click = function () {};
+  });
+  const [download] = await Promise.all([
+    p.waitForResponse((r) => r.url().includes("/api/download-attachment/")),
+    p.$eval("#download-link", (b) => b.click()),
+  ]);
+  const fileSize = (await download.buffer()).length;
+  check("v4: the attachment is stored padded", isPadme(fileSize - 16) && fileSize - 16 >= 4096 && fileSize - 16 !== 6000, fileSize);
+  await p.waitForFunction(() => window.__dl.length === 1, { timeout: 20000 });
+  check("v4: the attachment decrypts to the original", Buffer.compare(Buffer.from(await p.evaluate(() => window.__dl[0])), attachmentBytes) === 0);
+  await p.close();
 }
 
 // --------------------------------------------------- page holds no content
@@ -296,9 +341,12 @@ const plain = await createPaste({ text: "the quick brown fox" });
 
 // --------------------------------------------- what the server accepts
 {
-  // A valid paste as the create page sends it; each check below spoils it.
-  const valid = () => ({ content: "Y2lwaGVydGV4dA==", iv: Array(12).fill(7), expires_in: 3600, max_views: null,
-    key_fragment: "", version: 3, title: "dGl0bGU=", syntax: "auto", file_name: null, access_hash: "ab".repeat(32) });
+  // Base64 that decodes to `n` bytes (the server only checks the sizes).
+  const b64 = (n) => "A".repeat(Math.floor(n / 3) * 4) + ["", "AA==", "AAA="][n % 3];
+  // A valid paste as the create page sends it, with every part padded (plus
+  // the 16-byte tag); each check below spoils it.
+  const valid = () => ({ content: b64(4096 + 16), iv: Array(12).fill(7), expires_in: 3600, max_views: null,
+    key_fragment: "", version: 4, title: b64(512 + 16), syntax: "auto", file_name: null, access_hash: "ab".repeat(32) });
   const submit = (body) => api("/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json", "X-Real-IP": freshIp() }, body: JSON.stringify(body) });
   const pageData = async (id) => JSON.parse((await (await api(`/paste/${id}`)).text()).match(/id="page-data">(.*?)<\/script>/s)[1]).paste;
 
@@ -314,9 +362,19 @@ const plain = await createPaste({ text: "the quick brown fox" });
     ["no access hash", { ...valid(), access_hash: undefined }],
     ["a malformed access hash", { ...valid(), access_hash: "nope" }],
     ["an old format (v2)", { ...valid(), version: 2, key_fragment: "abc" }],
-    ["key material in a v3 paste", { ...valid(), key_fragment: "abc" }],
+    ["the previous format (v3)", { ...valid(), version: 3 }],
+    ["key material", { ...valid(), key_fragment: "abc" }],
     ["an expiry in the past", { ...valid(), expires_in: 0 }],
     ["an unknown language", { ...valid(), syntax: "<script>" }],
+    // What v4 keeps from the server.
+    ["a language in the clear", { ...valid(), syntax: "rust" }],
+    ["the password flag", { ...valid(), has_password: true }],
+    ["unpadded content", { ...valid(), content: b64(5000 + 16) }],
+    ["content under the minimum", { ...valid(), content: b64(100) }],
+    ["an unpadded title", { ...valid(), title: b64(40) }],
+    ["an attachment without its size", { ...valid(), file_name: b64(1024 + 16) }],
+    ["an unpadded attachment", { ...valid(), file_name: b64(1024 + 16), file_size: 5000 + 16 }],
+    ["an unpadded file name", { ...valid(), file_name: b64(30), file_size: 4096 + 16 }],
     ["a view limit of 0", { ...valid(), max_views: 0 }],
     ["a short IV", { ...valid(), iv: [1, 2, 3] }],
     ["a huge title", { ...valid(), title: "a".repeat(5000) }],
@@ -325,6 +383,14 @@ const plain = await createPaste({ text: "the quick brown fox" });
     const reason = res.status === 400 ? (await res.json()).reason : "";
     check(`create: refuses ${label}`, res.status === 400 && reason.length > 0, `${res.status} ${reason}`);
   }
+
+  // The attachment must be exactly the padded size declared with the paste.
+  const withFile = await (await submit({ ...valid(), file_name: b64(1024 + 16), file_size: 4096 + 16 })).json();
+  const upload = (bytes) => api(`/api/upload-attachment/${withFile.id}`, { method: "POST",
+    headers: { "Content-Type": "application/octet-stream", "X-Upload-Token": withFile.upload_token }, body: new Uint8Array(bytes) });
+  const short = await upload(3000);
+  check("upload: refuses a file smaller than declared", short.status === 400, short.status);
+  check("upload: the right size is accepted", (await upload(4096 + 16)).status === 200);
 }
 
 // --------------------------------------------------------- service worker

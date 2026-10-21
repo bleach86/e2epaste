@@ -11,13 +11,18 @@
 //       if any) with HKDF. The title is encrypted too. An access proof is
 //       derived the same way (with different HKDF info): the server stores
 //       its SHA-256, and only sends the paste to a browser that has the proof.
+//   4 - v3, with nothing left for the server to learn from sizes or flags.
+//       Each part is length-prefixed and zero-padded before encryption (see
+//       padPart), so the server only sees rounded sizes. The language is
+//       encrypted along with the title, and whether there's a password is
+//       carried in the link (see generateLinkSecret), not told to the server.
 //
 // Each part of a paste (text, title, file name, file) is encrypted with its
 // own IV; see deriveIv.
 
 import { deflate, inflate } from "pako";
 
-export const PASTE_VERSION = 3;
+export const PASTE_VERSION = 4;
 
 const PBKDF2_ITERATIONS = 600000;
 const HKDF_INFO_V2_PASSWORD = "e2epaste-v2-password";
@@ -26,6 +31,12 @@ const HKDF_INFO_V3_PASSWORD = "e2epaste-v3-password";
 const HKDF_INFO_V3_ACCESS = "e2epaste-v3-access";
 const HKDF_INFO_V3_PASSWORD_ACCESS = "e2epaste-v3-password-access";
 const LINK_SECRET_BYTES = 16;
+const LINK_SECRET_CHARS = 22;
+const BASE64URL_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+// 16 bytes take 22 base64 characters, which hold 132 bits: the last
+// character's low 4 bits are spare. v4 links use one for "has a password".
+const LINK_SPARE_BITS = 0b1111;
+const LINK_FLAG_PASSWORD = 0b0001;
 
 // Characters used to encode v2 key-fragment positions in the URL hash.
 const BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -69,12 +80,39 @@ export function base64ToArrayBuffer(base64) {
 // --- Keys -------------------------------------------------------------------
 
 // A new paste's link secret: 128 random bits as 22 base64url characters.
-export function generateLinkSecret() {
+// With `password`, one of the last character's spare bits is set, so the
+// viewer's page knows to ask for it without the server knowing (v4). The
+// link is no longer, and looks just as random either way.
+export function generateLinkSecret({ password = false } = {}) {
   const bytes = crypto.getRandomValues(new Uint8Array(LINK_SECRET_BYTES));
-  return arrayBufferToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const secret = arrayBufferToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return password ? withLastChar(secret, (value) => value | LINK_FLAG_PASSWORD) : secret;
 }
 
-function decodeLinkSecret(secret) {
+// v4: whether the link says the paste has a password. Only a complete link
+// is read: a cut-off one should get "check the link", not a password prompt.
+export function linkHasPassword(linkSecret) {
+  if (linkSecret.length !== LINK_SECRET_CHARS) {
+    return false;
+  }
+  const value = BASE64URL_CHARS.indexOf(linkSecret.at(-1));
+  return value !== -1 && (value & LINK_FLAG_PASSWORD) !== 0;
+}
+
+function withLastChar(secret, change) {
+  const value = BASE64URL_CHARS.indexOf(secret.at(-1) ?? "");
+  if (value === -1) {
+    return secret;
+  }
+  return secret.slice(0, -1) + BASE64URL_CHARS[change(value)];
+}
+
+function decodeLinkSecret(linkSecret) {
+  // The flags aren't part of the secret.
+  const secret = withLastChar(linkSecret, (value) => value & ~LINK_SPARE_BITS);
+  if (secret.length !== LINK_SECRET_CHARS) {
+    throw new Error("Invalid link secret");
+  }
   const base64 = secret.replace(/-/g, "+").replace(/_/g, "/");
   const bytes = new Uint8Array(base64ToArrayBuffer(base64));
   if (bytes.length !== LINK_SECRET_BYTES) {
@@ -255,6 +293,91 @@ export async function decryptText(encrypted, key, iv) {
   return new TextDecoder().decode(await decryptBytes(encrypted, key, iv));
 }
 
+// --- v4 padding ---------------------------------------------------------------
+
+// Padmé (Nikitin et al., "Reducing Metadata Leakage from Encrypted Files and
+// Communication with PURBs", 2019): rounds `length` up so that only its top
+// few bits can vary. The overhead is at most 12% and shrinks as sizes grow;
+// what's left of the length says about log log of it. Must match
+// src/padding.rs, which checks new pastes are padded.
+export function padme(length) {
+  if (length < 2) {
+    return length;
+  }
+  const exponent = bitLength(length) - 1;
+  const step = 2 ** (exponent - bitLength(exponent));
+  return Math.ceil(length / step) * step;
+}
+
+function bitLength(n) {
+  return n.toString(2).length;
+}
+
+// How each v4 part is padded (before encryption; the server sees 16 bytes
+// more, the AES-GCM tag). Every short text or file is the same size; the
+// title, with the language, is always the same size.
+export const PART_PADDING = {
+  text: { min: 4096 },
+  file: { min: 4096 },
+  "file-name": { min: 1024 },
+  title: { fixed: 512 },
+};
+
+const LENGTH_BYTES = 4;
+
+// The padded size for `length` bytes of data, with its length prefix.
+export function paddedLength(length, padding) {
+  const framed = LENGTH_BYTES + length;
+  if (padding.fixed !== undefined) {
+    if (framed > padding.fixed) {
+      throw new Error("Too long for its fixed size");
+    }
+    return padding.fixed;
+  }
+  return padme(Math.max(padding.min, framed));
+}
+
+// [4-byte big-endian length][data][zero bytes up to the padded size]
+export function padPart(data, padding) {
+  const out = new Uint8Array(paddedLength(data.length, padding));
+  new DataView(out.buffer).setUint32(0, data.length);
+  out.set(data, LENGTH_BYTES);
+  return out;
+}
+
+export function unpadPart(padded) {
+  if (padded.length < LENGTH_BYTES) {
+    throw new Error("Padded part is too short");
+  }
+  const length = new DataView(padded.buffer, padded.byteOffset, padded.byteLength).getUint32(0);
+  if (LENGTH_BYTES + length > padded.length) {
+    throw new Error("Padded part's length is out of range");
+  }
+  return padded.subarray(LENGTH_BYTES, LENGTH_BYTES + length);
+}
+
+// v4: encrypts one part of a paste ("text", "title", "file-name" or "file"):
+// deflated, then padded, each with its own IV.
+export async function encryptPart(key, baseIv, label, data) {
+  const plain = padPart(deflate(new Uint8Array(data)), PART_PADDING[label]);
+  const iv = label === "text" ? baseIv : await deriveIv(baseIv, label);
+  return new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain));
+}
+
+// v4: the title part holds the title and the language ("auto" to guess it
+// after decrypting), so the server learns neither.
+export function encodeDetails(title, syntax) {
+  return new TextEncoder().encode(JSON.stringify({ title, syntax }));
+}
+
+export function decodeDetails(bytes) {
+  const details = JSON.parse(new TextDecoder().decode(bytes));
+  return {
+    title: typeof details.title === "string" ? details.title : "",
+    syntax: typeof details.syntax === "string" ? details.syntax : "auto",
+  };
+}
+
 // --- Viewing a stored paste -------------------------------------------------
 
 // Returns the key, base IV and (v3) access proof for a paste. `paste` has
@@ -280,10 +403,18 @@ export async function getPasteSecrets(paste, linkHash, hasPassword, password) {
   return { key: pasteKey, iv: await legacyIv(password, salt), version: paste.version };
 }
 
-// Decrypts one part of a paste other than its text ("title", "file-name" or
-// "file"). Attachments on v1 pastes may predate per-part IVs and use the
-// paste IV, so retry with it.
+// Decrypts one part of a paste: "text", "title", "file-name" or "file".
+// Attachments on v1 pastes may predate per-part IVs and use the paste IV, so
+// retry with it.
 export async function decryptPart(secrets, label, encrypted) {
+  if (secrets.version >= 4) {
+    const iv = label === "text" ? secrets.iv : await deriveIv(secrets.iv, label);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, secrets.key, encrypted);
+    return inflate(unpadPart(new Uint8Array(plain)));
+  }
+  if (label === "text") {
+    return decryptBytes(encrypted, secrets.key, secrets.iv);
+  }
   try {
     return await decryptBytes(encrypted, secrets.key, await deriveIv(secrets.iv, label));
   } catch (e) {

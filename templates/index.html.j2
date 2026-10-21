@@ -44,7 +44,11 @@
             <div id="paste-editor" class="paste-editor">
                 <pre class="paste-highlight" aria-hidden="true"><code id="paste-highlight" class="hljs"></code></pre>
                 <label for="paste-area" class="visually-hidden">Paste content</label>
-                <textarea id="paste-area" placeholder="Paste or type here..." spellcheck="false"></textarea>
+                <textarea id="paste-area" placeholder="Paste or type here..." spellcheck="false"
+                    aria-describedby="paste-area-keys"></textarea>
+                {# js/editor_keys.mjs #}
+                <span id="paste-area-keys" class="visually-hidden">Tab inserts a tab. To move on, press Escape, then
+                    Tab.</span>
             </div>
             <div class="panel-foot">
                 <span id="paste-stats">0 lines · 0 bytes</span>

@@ -34,7 +34,7 @@ When you create a paste, your browser:
 2. derives an AES-256 key from it with HKDF-SHA256 (if you set a password, it's stretched with
    PBKDF2-SHA256, 600,000 rounds, and mixed in),
 3. compresses the text, title, file and file name, then encrypts each with AES-256-GCM using its own IV,
-4. derives a separate *access proof* from the same secret (and password) with different HKDF info, and
+4. derives a separate _access proof_ from the same secret (and password) with different HKDF info, and
 5. uploads the encrypted data and a SHA-256 hash of the access proof.
 
 The secret goes in the link after the `#`, for example `https://e2epaste.xyz/s/Ab3dE5gH#<secret>`.
@@ -52,9 +52,15 @@ view and only then sends the encrypted paste, which the browser decrypts locally
 The proof can't be turned back into the secret, the password or the key. Each view also comes with a
 one-time ticket for downloading the attachment, so attachments can't be fetched without a view either.
 
-The server does store some information it needs to work: the syntax highlighting choice, sizes, when the
-paste was created and expires, the view count and limit, whether it has a password, and the hashes of the
-access proof and the creator's delete link. Like any website, it can also see IP addresses.
+The server does store some information it needs to work: rounded sizes, when the paste was created and
+expires, the view count and limit, whether it has an attachment, and the hashes of the access proof and the
+creator's delete link. Like any website, it can also see IP addresses.
+
+It doesn't learn exact sizes, the language or whether there's a password. Every part of a paste is padded
+before encryption with [Padmé](https://arxiv.org/abs/1806.03160): every short paste or file is 4 KiB, larger
+ones are rounded up by at most 12%, and the title is always 512 bytes. The language is encrypted with the
+title. Whether there's a password is a spare bit in the link's secret, so the link is no longer, and the
+server refuses new pastes that aren't padded.
 
 Pages are served with a strict Content Security Policy: scripts only from the site itself, with no inline
 script or style. Paste pages and API responses are marked `no-store`, so browsers and proxies don't keep
@@ -66,8 +72,8 @@ encrypted service, the encryption code is delivered by the site itself, so you'r
 send unmodified code. That's why the code is open source.
 
 The encryption code is in [`js/crypto.mjs`](js/crypto.mjs). Older paste formats (v1 and v2) are still
-decrypted for existing links; new pastes always use v3. Pastes created before access proofs existed open
-without one, and their views are still counted by the server.
+decrypted for existing links, and so is v3 (before padding); new pastes always use v4. Pastes created
+before access proofs existed open without one, and their views are still counted by the server.
 
 ## Self-hosting
 
@@ -86,24 +92,24 @@ You can run your own instance with Docker or as a native binary. Either way:
 Settings are read from [`Rocket.toml`](Rocket.toml). Any of them can be overridden with an environment
 variable named `ROCKET_` plus the setting in capitals, such as `ROCKET_SITE_URL`.
 
-| Setting | Default | What it does |
-|---|---|---|
-| `site_url` | `http://localhost:8001` | The site's public address: `https://` plus the domain, with no path |
-| `site_name` | `site_url`'s host name | The name in page titles, the header and link previews, e.g. `Example Paste`. Up to 40 characters |
-| `source_url` | this repository | Where the "source code" links point. If you run a modified copy, point it at your code |
-| `data_dir` | `.` (working directory) | Where the database (`e2epaste.redb`) and attachments (`file_store/`) are kept. Both are created if missing |
-| `address` | `127.0.0.1` | Address to listen on. The default only accepts connections from the same machine, for a reverse proxy there. Use `0.0.0.0` if the proxy is on another machine |
-| `port` | `8001` | Port to listen on |
-| `ip_header` | `X-Real-IP` | Header the reverse proxy puts the visitor's IP in (see [Limits](#limits)) |
-| `unlock_attempts_per_hour` | `30` | Failed attempts to open or delete a paste (wrong link, password or delete link) one IP can make per hour |
-| `admin_token` | unset | Turns on the [admin API](#taking-a-paste-down). At least 32 characters |
-| `pastes_per_minute` | `10` | Pastes one IP can create per minute |
-| `pastes_per_hour` | `60` | Pastes one IP can create per hour |
-| `upload_mib_per_hour` | `250` | Attachment data one IP can upload per hour, in MiB. At least 26, the largest attachment |
-| `min_free_disk_mib` | `1024` | New pastes are refused when the disk holding `data_dir` has less free space than this |
-| `max_attachment_storage_mib` | `0` | Cap on the total size of all stored attachments |
-| `static_dir` | `static` | Front-end files, served at `/public` |
-| `template_dir` | `templates` | Page templates |
+| Setting                      | Default                 | What it does                                                                                                                                                  |
+| ---------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `site_url`                   | `http://localhost:8001` | The site's public address: `https://` plus the domain, with no path                                                                                           |
+| `site_name`                  | `site_url`'s host name  | The name in page titles, the header and link previews, e.g. `Example Paste`. Up to 40 characters                                                              |
+| `source_url`                 | this repository         | Where the "source code" links point. If you run a modified copy, point it at your code                                                                        |
+| `data_dir`                   | `.` (working directory) | Where the database (`e2epaste.redb`) and attachments (`file_store/`) are kept. Both are created if missing                                                    |
+| `address`                    | `127.0.0.1`             | Address to listen on. The default only accepts connections from the same machine, for a reverse proxy there. Use `0.0.0.0` if the proxy is on another machine |
+| `port`                       | `8001`                  | Port to listen on                                                                                                                                             |
+| `ip_header`                  | `X-Real-IP`             | Header the reverse proxy puts the visitor's IP in (see [Limits](#limits))                                                                                     |
+| `unlock_attempts_per_hour`   | `30`                    | Failed attempts to open or delete a paste (wrong link, password or delete link) one IP can make per hour                                                      |
+| `admin_token`                | unset                   | Turns on the [admin API](#taking-a-paste-down). At least 32 characters                                                                                        |
+| `pastes_per_minute`          | `10`                    | Pastes one IP can create per minute                                                                                                                           |
+| `pastes_per_hour`            | `60`                    | Pastes one IP can create per hour                                                                                                                             |
+| `upload_mib_per_hour`        | `250`                   | Attachment data one IP can upload per hour, in MiB. At least 26, the largest attachment                                                                       |
+| `min_free_disk_mib`          | `1024`                  | New pastes are refused when the disk holding `data_dir` has less free space than this                                                                         |
+| `max_attachment_storage_mib` | `0`                     | Cap on the total size of all stored attachments                                                                                                               |
+| `static_dir`                 | `static`                | Front-end files, served at `/public`                                                                                                                          |
+| `template_dir`               | `templates`             | Page templates                                                                                                                                                |
 
 For the limits, `0` turns a limit off.
 
@@ -125,7 +131,7 @@ addresses working together, the server also stops taking new pastes when the dis
 **The reverse proxy must pass the visitor's IP.** Behind a proxy, every request comes from the proxy's
 own address, so without this all visitors would share one limit. The server reads the IP from the
 `X-Real-IP` header, which every [proxy example below](#https-with-a-reverse-proxy) sets. The proxy must
-*overwrite* the header rather than pass on one sent by the visitor. Also make sure visitors can't reach
+_overwrite_ the header rather than pass on one sent by the visitor. Also make sure visitors can't reach
 the server's port directly, bypassing the proxy: the default `address` of `127.0.0.1` and the Docker
 setup's `127.0.0.1:8001` port binding both take care of that.
 
@@ -320,10 +326,10 @@ the admin API doesn't exist. Failed attempts count towards `unlock_attempts_per_
 
 ### Data
 
-| Path (in `data_dir`) | Contents |
-|---|---|
-| `e2epaste.redb` | The paste database ([redb](https://www.redb.org/)): encrypted pastes, the expiry index and site stats |
-| `file_store/` | Encrypted attachments, one file per paste |
+| Path (in `data_dir`) | Contents                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `e2epaste.redb`      | The paste database ([redb](https://www.redb.org/)): encrypted pastes, the expiry index and site stats |
+| `file_store/`        | Encrypted attachments, one file per paste                                                             |
 
 Expired pastes can't be opened, and a cleanup every minute deletes them from disk. Back up the database
 and `file_store/` together, with the server stopped.
@@ -353,18 +359,18 @@ that hasn't been imported.
 
 ### Build options
 
-| Variable | Effect |
-|---|---|
-| `SKIP_NPM_BUILD=1` | Skip `npm ci` and webpack, for example when the bundles in `static/js/dist/` are already built |
-| `NODE_ENV=development` | Build unminified JavaScript bundles |
+| Variable               | Effect                                                                                         |
+| ---------------------- | ---------------------------------------------------------------------------------------------- |
+| `SKIP_NPM_BUILD=1`     | Skip `npm ci` and webpack, for example when the bundles in `static/js/dist/` are already built |
+| `NODE_ENV=development` | Build unminified JavaScript bundles                                                            |
 
 ## Tests
 
-| Command | What it runs |
-|---|---|
-| `cargo test` | Rust unit tests: storage, migrations and the sled import, rate limits, tokens |
-| `npm test` | JavaScript unit tests: paste formats v1 to v3 (old pastes made with the code that created them), access proofs, the text tools |
-| `npm run test:e2e` | Browser tests in headless Chrome, each against its own server |
+| Command            | What it runs                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `cargo test`       | Rust unit tests: storage, migrations and the sled import, rate limits, tokens                                                  |
+| `npm test`         | JavaScript unit tests: paste formats v1 to v4 (old pastes made with the code that created them), v4 padding, access proofs, the text tools |
+| `npm run test:e2e` | Browser tests in headless Chrome, each against its own server                                                                  |
 
 The browser tests need a built server and their own npm package, kept apart so building the site doesn't
 install it:
@@ -378,6 +384,7 @@ npm run test:e2e security   # suites whose name contains "security"
 
 They find Chrome in the usual places, or set `CHROME_PATH`. Each suite gets a fresh server on its own port,
 with an empty data directory and the settings it needs. The suites cover:
+
 - creating and viewing pastes, attachments, burn after reading, delete links and the admin API
 - the security headers and Content Security Policy, which every suite checks for violations
 - access proofs and the unlock rate limit
@@ -389,16 +396,16 @@ with an empty data directory and the settings it needs. The suites cover:
 
 ## Project layout
 
-| Path | What's there |
-|---|---|
-| `src/` | The Rocket server: routes, settings ([`src/config.rs`](src/config.rs)), storage and the tool-page registry ([`src/tools.rs`](src/tools.rs)) |
-| `js/` | Browser code, bundled by webpack into `static/js/dist/`: encryption, page scripts and tools |
-| `templates/` | MiniJinja page templates |
-| `static/` | CSS, fonts, icons and vendored libraries |
-| `build.rs` | Runs npm and webpack during `cargo build` |
-| `Dockerfile`, `docker-compose.yml` | The Docker image and a Compose setup for it |
-| `tests/` | JavaScript unit tests, browser tests and their runner ([`tests/run-e2e.mjs`](tests/run-e2e.mjs)) |
-| `.github/workflows/` | CI |
+| Path                               | What's there                                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`                             | The Rocket server: routes, settings ([`src/config.rs`](src/config.rs)), storage and the tool-page registry ([`src/tools.rs`](src/tools.rs)) |
+| `js/`                              | Browser code, bundled by webpack into `static/js/dist/`: encryption, page scripts and tools                                                 |
+| `templates/`                       | MiniJinja page templates                                                                                                                    |
+| `static/`                          | CSS, fonts, icons and vendored libraries                                                                                                    |
+| `build.rs`                         | Runs npm and webpack during `cargo build`                                                                                                   |
+| `Dockerfile`, `docker-compose.yml` | The Docker image and a Compose setup for it                                                                                                 |
+| `tests/`                           | JavaScript unit tests, browser tests and their runner ([`tests/run-e2e.mjs`](tests/run-e2e.mjs))                                            |
+| `.github/workflows/`               | CI                                                                                                                                          |
 
 ## Credits
 

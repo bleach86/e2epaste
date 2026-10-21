@@ -134,6 +134,49 @@ body {
   --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%2304201c'/%3e%3c/svg%3e");
 }
 
+/* Range sliders. Bootstrap draws the track in --bs-secondary-bg, which is the
+   panel colour here, and the thumb in its own blue. */
+.form-range::-webkit-slider-runnable-track {
+  background-color: #3a4350;
+}
+
+.form-range::-moz-range-track {
+  background-color: #3a4350;
+}
+
+.form-range::-webkit-slider-thumb {
+  background-color: var(--e2e-accent);
+}
+
+.form-range::-moz-range-thumb {
+  background-color: var(--e2e-accent);
+}
+
+.form-range::-webkit-slider-thumb:active {
+  background-color: var(--e2e-accent-hover);
+}
+
+.form-range::-moz-range-thumb:active {
+  background-color: var(--e2e-accent-hover);
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px var(--e2e-ground), 0 0 0 4px var(--bs-focus-ring-color);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 1px var(--e2e-ground), 0 0 0 4px var(--bs-focus-ring-color);
+}
+
+/* Bootstrap's focus ring also shows on a mouse click; only keep it for the keyboard. */
+.form-range:focus:not(:focus-visible)::-webkit-slider-thumb {
+  box-shadow: none;
+}
+
+.form-range:focus:not(:focus-visible)::-moz-range-thumb {
+  box-shadow: none;
+}
+
 .dropdown-menu {
   --bs-dropdown-bg: var(--e2e-surface);
   --bs-dropdown-border-color: var(--e2e-border);
@@ -1034,6 +1077,10 @@ html {
 .markdown-body td {
   padding: 6px 12px;
   border: 1px solid var(--e2e-border);
+  /* Whole words: on a narrow screen the table scrolls sideways instead of
+     squeezing its columns down to a letter or two (the "anywhere" above
+     lets cells shrink below a word's width). */
+  overflow-wrap: normal;
 }
 
 .markdown-body th {

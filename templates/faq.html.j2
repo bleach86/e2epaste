@@ -56,8 +56,8 @@
             <ol>
                 <li>generates a random 128-bit secret,</li>
                 <li>derives an AES-256 key from it (with HKDF-SHA256),</li>
-                <li>compresses and encrypts the text, the title, the file and the file's name with AES-256-GCM,
-                    using your browser's built-in Web Crypto API, and</li>
+                <li>compresses the text, the title, the file and the file's name, pads each to a rounded size, and
+                    encrypts them with AES-256-GCM, using your browser's built-in Web Crypto API, and</li>
                 <li>uploads only the encrypted result.</li>
             </ol>
             <p class="mb-0">The secret goes into the link after the <code>#</code>, like
@@ -67,20 +67,22 @@
             {% endcall %}
 
             {% call faq("server", "What can the server see?") %}
-            <p>The server stores the encrypted paste, including its title and any attachment's name, none of which
-                it can read. It also stores some information it needs to work:</p>
+            <p>The server stores the encrypted paste, including its title, its syntax highlighting choice and any
+                attachment's name, none of which it can read. It also stores some information it needs to work:</p>
             <ul>
-                <li>the syntax highlighting choice (just "auto" if you leave it on Auto-detect: the language is
-                    guessed in your browser),</li>
-                <li>the size of the paste and attachment,</li>
+                <li>roughly how big the paste and its attachment are. Everything is padded to a rounded size
+                    before it's encrypted: every short paste is 4 KB, and larger ones are rounded up by at most 12%,
+                    so the exact size stays private,</li>
+                <li>whether there's an attachment,</li>
                 <li>when it was created and when it expires,</li>
                 <li>how many times it has been viewed, and the view limit,</li>
-                <li>whether it has a password,</li>
                 <li>a fingerprint of a check value your browser derives from the link (and password), so the
                     server can tell that someone has the full link before it sends them the paste. It can't be
                     turned back into the link, the password or the key.</li>
             </ul>
-            <p class="mb-0">Like any website, the server can also see the IP addresses that create and open pastes.</p>
+            <p class="mb-0">The server isn't told whether a paste has a password; the link says so, for the
+                viewer's browser. Like any website, the server can also see the IP addresses that create and open
+                pastes.</p>
             {% endcall %}
 
             {% call faq("password", "What does adding a password do?") %}
