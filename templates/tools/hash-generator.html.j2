@@ -8,11 +8,14 @@
 {% block tool %}
 <section class="panel panel-pad tool-panel" id="hash-tool" data-first="{{ variant.from if variant else '' }}"
     aria-label="Hash generator">
-    <div class="seg hash-mode" role="radiogroup" aria-label="What to hash">
-        <input type="radio" class="btn-check" name="hash-mode" id="mode-text" value="text" checked>
-        <label class="seg-btn" for="mode-text">Text</label>
-        <input type="radio" class="btn-check" name="hash-mode" id="mode-file" value="file">
-        <label class="seg-btn gap-2" for="mode-file">{{ icons.icon("file") }} File</label>
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div class="seg hash-mode flex-grow-1" role="radiogroup" aria-label="What to hash">
+            <input type="radio" class="btn-check" name="hash-mode" id="mode-text" value="text" checked>
+            <label class="seg-btn" for="mode-text">Text</label>
+            <input type="radio" class="btn-check" name="hash-mode" id="mode-file" value="file">
+            <label class="seg-btn gap-2" for="mode-file">{{ icons.icon("file") }} File</label>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm" id="hash-clear">{{ icons.icon("eraser") }} Clear</button>
     </div>
 
     <div id="hash-text-box" class="mt-3">

@@ -334,6 +334,16 @@ check("mb-to-gb: no JS errors", p.errors.length === 0, p.errors.join(" | "));
     && document.querySelector("#hash-results [data-algorithm]"), { timeout: 30000 });
   r = await rows();
   check("hash: a new file replaces one still hashing", r["SHA-256"] === createHash("sha256").update("small").digest("hex"), r["SHA-256"]);
+  // Clear while a big file is hashing: nothing left, and nothing turns up later.
+  await (await p.$("#hash-file")).uploadFile(bigFile);
+  await p.click("#hash-clear");
+  await new Promise((done) => setTimeout(done, 1500));
+  check("hash: clear empties the file and stops hashing it", (await txt(p, "#hash-file-name")) === "Choose a file, or drop it here"
+    && Object.keys(await rows()).length === 0 && await p.$eval("#hash-progress", (e) => e.hidden) && (await val(p, "#hash-file")) === "");
+  await p.click('label[for="mode-text"]');
+  await setValue(p, "#hash-text", "abc");
+  await p.click("#hash-clear");
+  check("hash: clear empties the text", (await val(p, "#hash-text")) === "" && Object.keys(await rows()).length === 0);
   check("hash: no JS errors", p.errors.length === 0, p.errors.join(" | "));
 
   // Firefox brings back the chosen mode on a reload, before the page's script

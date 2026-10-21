@@ -137,6 +137,23 @@ async function run() {
   showResults();
 }
 
+const DROP_PROMPT = {
+  name: document.getElementById("hash-file-name").textContent,
+  size: document.getElementById("hash-file-size").textContent,
+};
+
+// Clear: the text and the file, and any hashing still going. The key, the
+// checksum to compare with and the ticked algorithms stay.
+document.getElementById("hash-clear").addEventListener("click", () => {
+  textInput.value = "";
+  file = null;
+  fileInput.value = "";
+  document.getElementById("hash-file-name").textContent = DROP_PROMPT.name;
+  document.getElementById("hash-file-size").textContent = DROP_PROMPT.size;
+  run();
+  if (mode() === "text") textInput.focus();
+});
+
 function chooseFile(chosenFile) {
   file = chosenFile;
   document.getElementById("hash-file-name").textContent = file.name;
