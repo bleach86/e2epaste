@@ -1,7 +1,11 @@
 {% extends "layout" %}
 {% import "icons" as icons %}
+{% import "agent_hint" as agent_hint %}
+
+{% block head %}{{ agent_hint.head() }}{% endblock %}
 
 {% block page %}
+{{ agent_hint.notice() }}
 <div class="page">
     <div id="decrypted-notice" class="notice mb-3" hidden>
         {{ icons.icon("shield-check") }}

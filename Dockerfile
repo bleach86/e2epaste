@@ -15,11 +15,15 @@ FROM rust:1-trixie AS server
 WORKDIR /src
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src ./src
+# The rest of the Cargo workspace: the format crate the server uses, and the
+# client, whose manifest the workspace needs.
+COPY crates ./crates
+COPY cli ./cli
 COPY --from=web /src/static/js/dist ./static/js/dist
 ENV SKIP_NPM_BUILD=1
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked \
+    cargo build --release --locked -p e2epaste \
     && cp target/release/e2epaste /usr/local/bin/e2epaste
 
 # 3. Runtime image.

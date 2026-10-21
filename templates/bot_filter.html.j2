@@ -1,6 +1,10 @@
 {% extends "layout" %}
+{% import "agent_hint" as agent_hint %}
+
+{% block head %}{{ agent_hint.head() }}{% endblock %}
 
 {% block page %}
+{{ agent_hint.notice() }}
 {% endblock %}
 
 {% block scripts %}

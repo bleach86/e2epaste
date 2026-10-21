@@ -5,8 +5,9 @@
 //   node tests/run-e2e.mjs              all suites
 //   node tests/run-e2e.mjs security     only suites whose name contains "security"
 //
-// Needs a built server (cargo build; or set E2EPASTE_BIN) and Chrome (or set
-// CHROME_PATH). Server logs of failed suites are printed at the end.
+// Needs a built server and client (cargo build --workspace; or set
+// E2EPASTE_BIN and E2EP_BIN) and Chrome (or set CHROME_PATH). Server logs of
+// failed suites are printed at the end.
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -56,6 +57,8 @@ const SUITES = [
   },
   { file: "limits.mjs", env: { ...NO_PASTE_LIMITS, ROCKET_MAX_PASTE_KIB: "8", ROCKET_MAX_FILE_MIB: "1", ROCKET_MAX_ATTACHMENT_STORAGE_MIB: "1" } },
   { file: "no_files.mjs", env: { ...NO_PASTE_LIMITS, ROCKET_ALLOW_FILES: "false" } },
+  // Also lets the test make a v3 paste, to check e2ep still opens those.
+  { file: "cli.mjs", env: { ...NO_PASTE_LIMITS, E2EPASTE_TEST_LEGACY_PASTES: "1" } },
   { file: "rate_limit.mjs", env: {} },
 ];
 

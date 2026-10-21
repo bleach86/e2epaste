@@ -89,6 +89,20 @@ pub struct OpenResponse {
     download_ticket: Option<String>,
 }
 
+/// What the paste page shows before opening: no content, and no view used.
+/// For clients like e2ep, to check a paste (views left, expiry, timer,
+/// attachment) before opening it, which can use up its last view.
+#[get("/api/info/<id>")]
+pub fn info(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Result<Json<serde_json::Value>, Status> {
+    let paste = db
+        .get_paste(&id.to_string())
+        .filter(|paste| !paste.expired() && !paste.used_up())
+        .ok_or(Status::NotFound)?;
+    serde_json::to_value(PastePublic::new(&paste))
+        .map(Json)
+        .map_err(|_| Status::InternalServerError)
+}
+
 #[post("/api/open/<id>", format = "application/json", data = "<request>")]
 pub fn open(
     db: &State<Arc<PasteDB>>,

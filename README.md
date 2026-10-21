@@ -26,6 +26,23 @@ uploaded, and the key never reaches the server, so the server only ever stores d
 - **No accounts, no tracking**, and no third-party requests: fonts and scripts are served by the site itself.
 - **Browser-only tools:** a password generator and strength checker, Base64, hex and binary converters, a
   character counter and more. Like pastes, nothing you enter is sent to the server.
+- **A command-line client, `e2ep`,** for scripts and AI agents (see below).
+
+## Command-line client
+
+[`e2ep`](cli/README.md) creates, reads, checks and deletes pastes from the terminal, encrypting and
+decrypting on your machine in the same format as the site's pages:
+
+```sh
+cat error.log | e2ep --server https://paste.example.com --burn
+e2ep get 'https://paste.example.com/s/Ab3dE5gH#…' --attachment-dir .
+```
+
+It's built for scripts and AI agents: results on stdout, `--json` for everything, an exit code for each
+kind of failure, and checks before opening so a failed `get` never uses up a view. Builds for Linux,
+macOS and Windows are on the [releases](https://github.com/bleach86/e2epaste/releases) page. Paste
+pages point programs that fetch them at `e2ep`, in a `<noscript>` notice and their `<head>`, and
+`/llms.txt` explains the site to AI agents.
 
 ## How it works
 
@@ -385,15 +402,15 @@ that hasn't been imported.
 
 | Command            | What it runs                                                                                                                   |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `cargo test`       | Rust unit tests: storage, migrations and the sled import, rate limits, tokens                                                  |
+| `cargo test --workspace` | Rust unit tests: storage, migrations and the sled import, rate limits, tokens, the format's sizes, and e2ep's crypto |
 | `npm test`         | JavaScript unit tests: paste formats v1 to v4 (old pastes made with the code that created them), v4 padding, access proofs, the text tools |
 | `npm run test:e2e` | Browser tests in headless Chrome, each against its own server                                                                  |
 
-The browser tests need a built server and their own npm package, kept apart so building the site doesn't
-install it:
+The browser tests need a built server and `e2ep`, and their own npm package, kept apart so building the
+site doesn't install it:
 
 ```sh
-cargo build
+cargo build --workspace
 npm ci --prefix tests
 npm run test:e2e            # all suites
 npm run test:e2e security   # suites whose name contains "security"
@@ -407,22 +424,27 @@ with an empty data directory and the settings it needs. The suites cover:
 - access proofs and the unlock rate limit
 - Markdown rendering against hostile pastes, and language detection
 - old paste formats, plain-HTTP warnings, the tools, and the mobile layout
+- `e2ep` against a real server: its pastes open in the browser and the browser's open with it
 
 [GitHub Actions](.github/workflows/ci.yml) runs all of these on every push and pull request. It also runs
 `cargo fmt`, `clippy`, `cargo audit`, `npm audit` and a Docker build, and repeats the audits weekly.
+Pushing a `cli-v*` tag (matching `cli/Cargo.toml`'s version) builds `e2ep` for Linux, macOS and Windows
+and publishes a release with checksums ([release-cli.yml](.github/workflows/release-cli.yml)).
 
 ## Project layout
 
 | Path                               | What's there                                                                                                                                |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/`                             | The Rocket server: routes, settings ([`src/config.rs`](src/config.rs)), storage and the tool-page registry ([`src/tools.rs`](src/tools.rs)) |
+| `cli/`                             | `e2ep`, the command-line client                                                                                                             |
+| `crates/e2epaste-format/`          | The paste format's padded sizes, shared by the server and `e2ep`                                                                            |
 | `js/`                              | Browser code, bundled by webpack into `static/js/dist/`: encryption, page scripts and tools                                                 |
 | `templates/`                       | MiniJinja page templates                                                                                                                    |
 | `static/`                          | CSS, fonts, icons and vendored libraries                                                                                                    |
 | `build.rs`                         | Runs npm and webpack during `cargo build`                                                                                                   |
 | `Dockerfile`, `docker-compose.yml` | The Docker image and a Compose setup for it                                                                                                 |
 | `tests/`                           | JavaScript unit tests, browser tests and their runner ([`tests/run-e2e.mjs`](tests/run-e2e.mjs))                                            |
-| `.github/workflows/`               | CI                                                                                                                                          |
+| `.github/workflows/`               | CI, and `e2ep` releases                                                                                                                     |
 
 ## Credits
 
