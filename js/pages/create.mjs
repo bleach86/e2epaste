@@ -177,12 +177,8 @@ function clearAttachment() {
   }
 }
 
-fileInput?.addEventListener("change", (event) => {
-  const file = event.target.files[0];
-  if (!file) {
-    clearAttachment();
-    return;
-  }
+// From the picker or a drop; replaces any file attached before.
+function attachFile(file) {
   if (file.size > limits.max_file_bytes) {
     alert(`File is too large. Please keep it under ${limits.max_file_label}.`);
     clearAttachment();
@@ -197,6 +193,80 @@ fileInput?.addEventListener("change", (event) => {
     file.size,
   );
   attachmentRow.hidden = false;
+}
+
+fileInput?.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    attachFile(file);
+  } else {
+    clearAttachment();
+  }
+});
+
+// Files dropped anywhere on the page. Dragged text is left to the browser,
+// so it still drops into the editor as text. On a site that takes no files
+// the drop is still caught, so the browser doesn't open the file instead.
+const dropOverlay = document.getElementById("drop-overlay");
+let dragDepth = 0;
+
+function draggingFiles(event) {
+  return event.dataTransfer?.types.includes("Files") ?? false;
+}
+
+function showDropOverlay(show) {
+  dropOverlay.hidden = !show;
+  if (!show) {
+    dragDepth = 0;
+  }
+}
+
+document.addEventListener("dragenter", (event) => {
+  if (draggingFiles(event)) {
+    // dragenter/dragleave fire for every element crossed; count them.
+    dragDepth++;
+    showDropOverlay(!submitting);
+  }
+});
+
+document.addEventListener("dragleave", (event) => {
+  if (draggingFiles(event) && --dragDepth <= 0) {
+    showDropOverlay(false);
+  }
+});
+
+document.addEventListener("dragover", (event) => {
+  if (draggingFiles(event)) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = fileInput && !submitting ? "copy" : "none";
+  }
+});
+
+document.addEventListener("drop", (event) => {
+  if (!draggingFiles(event)) {
+    return;
+  }
+  event.preventDefault();
+  showDropOverlay(false);
+  if (!fileInput || submitting) {
+    return;
+  }
+
+  const items = [...event.dataTransfer.items].filter((i) => i.kind === "file");
+  if (items.length > 1) {
+    alert("A paste holds one file. To send several, zip them first.");
+    return;
+  }
+  if (items[0]?.webkitGetAsEntry?.()?.isDirectory) {
+    alert("A folder can't be attached. Zip it first.");
+    return;
+  }
+  const file = event.dataTransfer.files[0];
+  if (file) {
+    // The picker would still show its old choice.
+    fileInput.value = "";
+    attachFile(file);
+  }
 });
 
 document

@@ -15,6 +15,16 @@
 
     <div class="create-layout">
         <section class="panel create-editor" aria-label="Paste">
+            {# Shown while files are dragged over the page (js/pages/create.mjs) #}
+            <div id="drop-overlay" class="drop-overlay" hidden>
+                {% if limits.max_file_bytes %}
+                {{ icons.icon("paperclip") }}
+                <span>Drop to attach</span>
+                <span class="small text-secondary">One file, up to {{ limits.max_file_label }}</span>
+                {% else %}
+                <span>This site doesn't take files</span>
+                {% endif %}
+            </div>
             <div class="panel-bar">
                 <label for="paste-title" class="visually-hidden">Title</label>
                 <input id="paste-title" class="title-input" type="text" maxlength="64" placeholder="Title (optional)"

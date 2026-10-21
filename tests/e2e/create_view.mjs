@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { BASE, check, finish, launch, local, openIfAsked, watch } from "./lib.mjs";
+import { BASE, check, drag, finish, launch, local, openIfAsked, watch } from "./lib.mjs";
 
 const fileBytes = Buffer.from(Array.from({ length: 5000 }, (_, i) => (i * 7) % 256));
 const uploadPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "e2epaste-")), "upload.bin");
@@ -155,6 +155,48 @@ check("view: Ctrl+A still works in inputs", true);
   const file = await f.evaluate(() => window.__dl[0]);
   check("file only: the attachment downloads", file.name === "upload.bin" && Buffer.compare(Buffer.from(file.bytes), fileBytes) === 0);
   await f.close();
+}
+
+// ---------------------------------------------------------- drag and drop
+{
+  const d = await newPage();
+  await d.goto(BASE + "/", { waitUntil: "networkidle0" });
+  const overlay = () => d.$eval("#drop-overlay", (e) => !e.hidden);
+  const notes = [{ name: "notes.txt", text: "dropped in" }];
+
+  await drag(d, "dragenter", "#paste-area");
+  check("drop: dragging text doesn't show the overlay", !(await overlay()));
+  await drag(d, "dragenter", "#paste-area", notes);
+  await drag(d, "dragenter", ".create-options", notes);
+  await drag(d, "dragleave", "#paste-area", notes);
+  check("drop: overlay while files are over the page", await overlay());
+  await drag(d, "dragleave", ".create-options", notes);
+  check("drop: overlay gone when they leave", !(await overlay()));
+  check("drop: overlay says what to do", /Drop to attach\s+One file, up to/.test(await txt(d, "#drop-overlay")));
+
+  await drag(d, "dragenter", ".create-options", notes);
+  const taken = await drag(d, "drop", ".create-options", notes);
+  check("drop: a file dropped anywhere is attached", taken && !(await overlay()) && (await txt(d, "#attachment-name")) === "notes.txt"
+    && (await txt(d, "#attachment-size")) === "10 bytes", await txt(d, "#attachment-size"));
+
+  let said = "";
+  d.once("dialog", (dialog) => { said = dialog.message(); dialog.dismiss(); });
+  await drag(d, "drop", "#paste-area", [{ name: "a.txt", text: "a" }, { name: "b.txt", text: "b" }]);
+  check("drop: several files are refused, saying why", /one file/.test(said) && (await txt(d, "#attachment-name")) === "notes.txt", said);
+
+  await drag(d, "drop", "#paste-area", [{ name: "other.txt", text: "replacement" }]);
+  check("drop: another file replaces the first", (await txt(d, "#attachment-name")) === "other.txt");
+
+  await d.click("#submit-paste");
+  await d.waitForSelector("#url-modal.show", { timeout: 20000 });
+  await d.goto(local(await d.$eval("#paste-url", (e) => e.value)), { waitUntil: "networkidle0" });
+  await d.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  await hookDownloads(d);
+  await d.$eval("#download-link", (b) => b.click());
+  await d.waitForFunction(() => window.__dl.length === 1, { timeout: 10000 });
+  const dropped = await d.evaluate(() => window.__dl[0]);
+  check("drop: the dropped file arrives intact", dropped.name === "other.txt" && Buffer.from(dropped.bytes).toString() === "replacement");
+  await d.close();
 }
 
 // ------------------------------------------------------------------ burn

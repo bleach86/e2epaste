@@ -79,3 +79,20 @@ export async function watch(page, errors) {
   });
   page.on("console", (m) => m.text().startsWith("CSP violation") && errors.push(`${page.url()} ${m.text()}`));
 }
+
+// Fires a drag event of `type` on `selector`, carrying `files` ([{ name,
+// text }]) or, with none, some plain text. Returns whether the page took
+// the event (called preventDefault).
+export function drag(page, type, selector, files = []) {
+  return page.$eval(selector, (el, type, files) => {
+    const data = new DataTransfer();
+    if (files.length) {
+      for (const f of files) data.items.add(new File([f.text], f.name));
+    } else {
+      data.setData("text/plain", "some text");
+    }
+    const event = new DragEvent(type, { dataTransfer: data, bubbles: true, cancelable: true });
+    el.dispatchEvent(event);
+    return event.defaultPrevented;
+  }, type, files);
+}
