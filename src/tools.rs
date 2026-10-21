@@ -14,6 +14,7 @@ pub enum ToolGroup {
     Password,
     Strings,
     Numbers,
+    Security,
 }
 
 #[derive(Serialize)]
@@ -51,7 +52,7 @@ pub struct ToolHub {
     pub page: PageMeta,
 }
 
-pub static HUBS: [ToolHub; 3] = [
+pub static HUBS: [ToolHub; 4] = [
     ToolHub {
         group: ToolGroup::Password,
         name: "Password Tools",
@@ -89,9 +90,23 @@ pub static HUBS: [ToolHub; 3] = [
             canonical: Some("/tools/numbers"),
         },
     },
+    ToolHub {
+        group: ToolGroup::Security,
+        name: "Security Tools",
+        path: "/tools/security",
+        intro: "Decode JWTs, make hashes and checksums, and generate UUIDs and random tokens. \
+            Secrets stay on your device.",
+        page: PageMeta {
+            title: "Security Tools: JWT Decoder, Hash Generator & UUID Generator - {site}",
+            description: "Free security tools that run entirely in your browser, so tokens, keys and \
+                files never leave your device: a JWT decoder and verifier, MD5 and SHA hashes, and \
+                UUID and random token generators.",
+            canonical: Some("/tools/security"),
+        },
+    },
 ];
 
-pub static TOOLS: [Tool; 12] = [
+pub static TOOLS: [Tool; 15] = [
     Tool {
         slug: "password-generator",
         name: "Password Generator",
@@ -239,6 +254,45 @@ pub static TOOLS: [Tool; 12] = [
             canonical: Some("/tools/byte-size"),
         },
     },
+    Tool {
+        slug: "jwt-decoder",
+        name: "JWT Decoder",
+        summary: "Read a JSON Web Token's header and claims, and check its signature.",
+        group: ToolGroup::Security,
+        page: PageMeta {
+            title: "JWT Decoder & Verifier - {site}",
+            description: "Decode a JSON Web Token (JWT) to read its header and claims, see when it \
+                expires, and verify its signature with a secret or public key. Runs entirely in your \
+                browser: your token is never sent anywhere.",
+            canonical: Some("/tools/jwt-decoder"),
+        },
+    },
+    Tool {
+        slug: "hash-generator",
+        name: "Hash Generator",
+        summary: "MD5, SHA-1, SHA-256, SHA-512 and more, for text or a file.",
+        group: ToolGroup::Security,
+        page: PageMeta {
+            title: "Hash Generator: MD5, SHA-1, SHA-256, SHA-512 for Text & Files - {site}",
+            description: "Make MD5, SHA-1, SHA-256, SHA-512, SHA-3 and BLAKE3 hashes and HMACs of \
+                text or files, and check a download against its published checksum. Files are \
+                hashed in your browser and never uploaded.",
+            canonical: Some("/tools/hash-generator"),
+        },
+    },
+    Tool {
+        slug: "uuid-generator",
+        name: "UUID & Random Token Generator",
+        summary: "Generate UUIDs (v4 and v7) and random tokens for keys and secrets.",
+        group: ToolGroup::Security,
+        page: PageMeta {
+            title: "UUID Generator (v4 & v7) and Random Token Generator - {site}",
+            description: "Generate random UUIDs (v4) and time-ordered UUIDs (v7) in bulk, inspect a \
+                UUID, and make random tokens in hex, base64 or letters and digits for API keys and \
+                secrets. Runs entirely in your browser.",
+            canonical: Some("/tools/uuid-generator"),
+        },
+    },
 ];
 
 /// A "<from> to <to> Converter" variant of `tool`. `summary` and
@@ -294,7 +348,32 @@ macro_rules! bytes_variant {
     };
 }
 
-pub static VARIANTS: [ToolVariant; 14] = [
+/// "<name> Hash Generator": the hash generator with `algorithm` first.
+macro_rules! hash_variant {
+    ($slug:literal, $algorithm:literal, $name:literal) => {
+        ToolVariant {
+            slug: $slug,
+            tool: "hash-generator",
+            name: concat!($name, " Hash Generator"),
+            summary: concat!("Make the ", $name, " hash of text or a file."),
+            from: $algorithm,
+            to: "",
+            page: PageMeta {
+                title: concat!($name, " Hash Generator for Text & Files - {site}"),
+                description: concat!(
+                    "Make the ",
+                    $name,
+                    " hash of text or a file, or check a download against its ",
+                    $name,
+                    " checksum. Files are hashed in your browser and never uploaded."
+                ),
+                canonical: Some(concat!("/tools/", $slug)),
+            },
+        }
+    };
+}
+
+pub static VARIANTS: [ToolVariant; 18] = [
     base_variant!("hex-to-decimal", "16", "10", "Hex", "Decimal"),
     base_variant!("decimal-to-hex", "10", "16", "Decimal", "Hex"),
     base_variant!("binary-to-decimal", "2", "10", "Binary", "Decimal"),
@@ -309,6 +388,10 @@ pub static VARIANTS: [ToolVariant; 14] = [
     bytes_variant!("gb-to-tb", "GB", "TB"),
     bytes_variant!("tb-to-gb", "TB", "GB"),
     bytes_variant!("gb-to-gib", "GB", "GiB"),
+    hash_variant!("md5-hash", "md5", "MD5"),
+    hash_variant!("sha1-hash", "sha1", "SHA-1"),
+    hash_variant!("sha256-hash", "sha256", "SHA-256"),
+    hash_variant!("sha512-hash", "sha512", "SHA-512"),
 ];
 
 /// A hub with its tools, for templates that list tools by group.

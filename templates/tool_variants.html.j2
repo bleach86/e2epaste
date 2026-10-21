@@ -1,8 +1,8 @@
 {# Links to a tool's variants (e.g. Hex to Decimal), and back to the tool
-   itself on a variant's page. #}
+   itself on a variant's page. A tool can set `variants_heading`. #}
 {% if variants %}
 <nav class="mt-4" aria-labelledby="conversions-heading">
-    <h2 class="h6 fw-semibold mb-2" id="conversions-heading">Common conversions</h2>
+    <h2 class="h6 fw-semibold mb-2" id="conversions-heading">{{ variants_heading | default("Common conversions") }}</h2>
     <ul class="list-inline mb-0 num-links">
         {% if variant %}
         <li class="list-inline-item"><a href="/tools/{{ tool.slug }}">{{ tool.name }}</a></li>

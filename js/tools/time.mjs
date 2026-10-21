@@ -91,13 +91,15 @@ const RELATIVE_STEPS = [
   ["second", 1],
 ];
 
-// "3 days ago", "in 2 hours", "now"; rounded to the largest whole unit.
+// "3 days ago", "in 2 hours", "now", in the largest unit that fits,
+// rounded: 1 hour 59 minutes away is "in 2 hours". Under a minute it's whole
+// seconds, so anything within the last second is "now".
 export function relativeTime(ms, nowMs, locale) {
   const seconds = (ms - nowMs) / 1000;
   const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   for (const [unit, size] of RELATIVE_STEPS) {
     if (Math.abs(seconds) >= size || unit === "second") {
-      return format.format(Math.trunc(seconds / size), unit);
+      return format.format(unit === "second" ? Math.trunc(seconds) : Math.round(seconds / size), unit);
     }
   }
   return "";

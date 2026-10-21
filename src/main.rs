@@ -408,6 +408,11 @@ fn number_tools(db: &State<Arc<PasteDB>>) -> Template {
     tool_hub(db, tools::ToolGroup::Numbers)
 }
 
+#[get("/tools/security")]
+fn security_tools(db: &State<Arc<PasteDB>>) -> Template {
+    tool_hub(db, tools::ToolGroup::Security)
+}
+
 fn tool_hub(db: &State<Arc<PasteDB>>, group: tools::ToolGroup) -> Template {
     let hub = tools::hub(group);
     let listings = tools::listings();
@@ -739,6 +744,7 @@ async fn rocket() -> _ {
                 password_tools,
                 string_tools,
                 number_tools,
+                security_tools,
                 tool_page,
                 access::download_attachment,
                 upload_attachment,

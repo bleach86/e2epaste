@@ -445,6 +445,11 @@ html {
   color: var(--e2e-warn);
 }
 
+.chip-ok {
+  border-color: var(--e2e-accent-tint-border);
+  color: var(--e2e-accent);
+}
+
 /* A tinted note, e.g. "Decrypted in your browser". */
 .notice {
   display: flex;
@@ -1431,6 +1436,76 @@ html {
 
 .now-time {
   font-size: 18px;
+  font-weight: 600;
+}
+
+/* Security tools */
+.seg-2,
+.hash-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 20rem;
+}
+
+.count-input {
+  width: 6rem;
+}
+
+.hash-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 16px;
+  border: 2px dashed var(--e2e-border);
+  border-radius: var(--e2e-radius-sm);
+  text-align: center;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.hash-drop:hover {
+  border-color: var(--e2e-accent);
+}
+
+.hash-drop .icon {
+  width: 24px;
+  height: 24px;
+  color: var(--e2e-accent);
+}
+
+#hash-results .is-match input {
+  border-color: var(--e2e-accent);
+  color: var(--e2e-accent);
+}
+
+.tool-area.jwt-in {
+  min-height: 0;
+  word-break: break-all;
+}
+
+.tool-area.jwt-json {
+  min-height: 0;
+}
+
+.jwt-claims {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  font-size: 14px;
+}
+
+.jwt-claims dt {
+  font-weight: 600;
+  color: var(--e2e-text-soft);
+}
+
+.jwt-claims dd {
+  margin: 0;
+  font-family: var(--bs-font-monospace);
+  overflow-wrap: anywhere;
+}
+
+.jwt-verify {
   font-weight: 600;
 }
 

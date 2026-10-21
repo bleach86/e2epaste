@@ -1,0 +1,115 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{# js/tools/pages/uuid-generator.mjs #}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" aria-labelledby="uuid-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <h2 class="h5 fw-semibold mb-1" id="uuid-heading">UUIDs</h2>
+            <p class="small text-secondary mb-0">v4 is fully random. v7 starts with the time, so they sort in the
+                order they were made.</p>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm" id="uuid-again">{{ icons.icon("refresh") }} New</button>
+    </div>
+    <div class="num-options mt-3">
+        <div class="seg seg-2" role="radiogroup" aria-label="UUID version">
+            <input type="radio" class="btn-check" name="uuid-version" id="uuid-v4" value="4" checked>
+            <label class="seg-btn" for="uuid-v4">Version 4</label>
+            <input type="radio" class="btn-check" name="uuid-version" id="uuid-v7" value="7">
+            <label class="seg-btn" for="uuid-v7">Version 7</label>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label for="uuid-count" class="small text-secondary">How many</label>
+            <input id="uuid-count" class="form-control form-control-sm count-input" type="number" min="1" max="1000"
+                value="5">
+        </div>
+        <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="uuid-upper">
+            <label class="form-check-label small" for="uuid-upper">Uppercase</label>
+        </div>
+        <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="uuid-hyphens" checked>
+            <label class="form-check-label small" for="uuid-hyphens">Hyphens</label>
+        </div>
+        <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="uuid-braces">
+            <label class="form-check-label small" for="uuid-braces">{braces}</label>
+        </div>
+    </div>
+    <label for="uuid-out" class="visually-hidden">Generated UUIDs</label>
+    <textarea id="uuid-out" class="form-control tool-area mt-3" rows="5" readonly></textarea>
+    <div class="mt-3">
+        <button type="button" class="btn btn-accent" data-copy="uuid-out">{{ icons.icon("copy") }} Copy</button>
+    </div>
+</section>
+
+<section class="panel panel-pad tool-panel" aria-labelledby="token-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <h2 class="h5 fw-semibold mb-1" id="token-heading">Random tokens</h2>
+            <p class="small text-secondary mb-0">For API keys, secrets and session IDs.</p>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm" id="token-again">{{ icons.icon("refresh") }} New</button>
+    </div>
+    <div class="num-options mt-3">
+        <div class="d-flex align-items-center gap-2">
+            <label for="token-format" class="small text-secondary">Format</label>
+            <select id="token-format" class="form-select form-select-sm w-auto">
+                <option value="hex" selected>Hex</option>
+                <option value="base64">Base64</option>
+                <option value="base64url">Base64url (URL-safe)</option>
+                <option value="alphanumeric">Letters and digits</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label for="token-length" class="small text-secondary">Length</label>
+            <input id="token-length" class="form-control form-control-sm count-input" type="number" min="1" max="1024"
+                value="32">
+            <span id="token-unit" class="small text-secondary">bytes</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label for="token-count" class="small text-secondary">How many</label>
+            <input id="token-count" class="form-control form-control-sm count-input" type="number" min="1" max="100"
+                value="1">
+        </div>
+    </div>
+    <label for="token-out" class="visually-hidden">Generated tokens</label>
+    <textarea id="token-out" class="form-control tool-area mt-3" rows="3" readonly></textarea>
+    <p id="token-strength" class="small text-secondary mt-2 mb-0" role="status"></p>
+    <div class="mt-3">
+        <button type="button" class="btn btn-accent" data-copy="token-out">{{ icons.icon("copy") }} Copy</button>
+    </div>
+</section>
+
+<section class="panel panel-pad tool-panel" aria-labelledby="inspect-heading">
+    <h2 class="h5 fw-semibold mb-1" id="inspect-heading">Inspect a UUID</h2>
+    <p class="small text-secondary mb-3">See its version, and when it was made if it says.</p>
+    <label for="inspect-in" class="visually-hidden">UUID to inspect</label>
+    <input id="inspect-in" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
+        placeholder="e.g. 0192f2a4-7c4b-7d3e-9a1f-2b6c8d0e4f51">
+    <div id="inspect-error" class="small text-warn mt-1" role="status"></div>
+    <dl id="inspect-out" class="jwt-claims mt-3 mb-0"></dl>
+</section>
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What is a UUID?</h2>
+<p>A UUID (universally unique identifier, also called a GUID) is a 128-bit ID written as 32 hex digits, like
+    <code>550e8400-e29b-41d4-a716-446655440000</code>. They're random enough that anyone can make one without
+    checking with anyone else, and still never expect to see a duplicate.</p>
+
+<h2 class="h4">Version 4 or version 7?</h2>
+<p><strong>Version 4</strong> is 122 random bits: the usual choice, and it gives nothing away about when or where
+    it was made. <strong>Version 7</strong> (from RFC 9562, 2024) starts with the time in milliseconds, followed
+    by 74 random bits. Because they sort in creation order, v7 UUIDs make better database keys: new rows go at
+    the end of an index instead of all over it. The catch is that anyone can read the creation time from a v7,
+    so use v4 when that matters.</p>
+
+<h2 class="h4">Random tokens</h2>
+<p>For an API key or secret, 32 random bytes (256 bits) is plenty, and 16 bytes (128 bits) is enough for most
+    things. Hex is the easiest to handle, base64url is shorter and safe in URLs, and letters and digits avoid
+    every symbol. The strength line shows how many bits of randomness a token has. Everything here comes from
+    your browser's cryptographically secure random generator, and nothing is sent anywhere.</p>
+{% endblock %}

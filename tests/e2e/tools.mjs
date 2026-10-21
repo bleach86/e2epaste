@@ -1,5 +1,13 @@
 // The tool pages: every tool's behaviour, the hubs and the 404 for unknown tools.
-import { BASE, check, finish, launch, watch } from "./lib.mjs";
+import { createHash, createHmac, createSign, generateKeyPairSync } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { BASE, check, drag, finish, launch, watch } from "./lib.mjs";
+
+const bigBytes = Buffer.from(Array.from({ length: 10 * 1024 * 1024 + 5 }, (_, i) => (i * 31) % 256));
+const bigFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "e2epaste-")), "big.bin");
+fs.writeFileSync(bigFile, bigBytes);
 
 const browser = await launch();
 await browser.defaultBrowserContext().overridePermissions(BASE, ["clipboard-read", "clipboard-write", "clipboard-sanitized-write"]);
@@ -19,10 +27,10 @@ const val = (p, sel) => p.$eval(sel, (el) => el.value ?? el.textContent);
 const txt = (p, sel) => p.$eval(sel, (el) => el.textContent);
 
 // hubs
-for (const path of ["/tools/password", "/tools/strings", "/tools/numbers"]) {
+for (const path of ["/tools/password", "/tools/strings", "/tools/numbers", "/tools/security"]) {
   const p = await open(path);
   const cards = await p.$$eval(".tool-card", (els) => els.map((e) => e.getAttribute("href")));
-  check(`${path}: 200, lists all 12 tools (not the variants)`, p.status === 200 && cards.length === 12
+  check(`${path}: 200, lists all 15 tools (not the variants)`, p.status === 200 && cards.length === 15
     && !cards.includes("/tools/hex-to-decimal"), `${p.status} ${cards.length}`);
   check(`${path}: own group first`, (await p.$eval("section h2 a", (a) => a.getAttribute("href"))) === path);
   check(`${path}: no JS errors`, p.errors.length === 0, p.errors.join(" | "));
@@ -42,7 +50,7 @@ check("base64: copy", (await p.evaluate(() => navigator.clipboard.readText())) =
 await p.$eval('[data-clear="encode-in"]', (b) => b.click());
 check("base64: clear empties input and output", (await val(p, "#encode-in")) === "" && (await val(p, "#encode-out")) === "");
 const related = await p.$$eval(".tool-card", (els) => els.map((e) => e.getAttribute("href")));
-check("base64: related tools exclude itself", related.length === 11 && !related.includes("/tools/base64"));
+check("base64: related tools exclude itself", related.length === 14 && !related.includes("/tools/base64"));
 const crumbs = await p.$$eval(".breadcrumb-item", (els) => els.map((e) => e.textContent.trim()));
 check("base64: breadcrumb", crumbs.join(" > ") === "Home > String Tools > Base64 Encoder & Decoder", crumbs.join(" > "));
 check("base64: no JS errors", p.errors.length === 0, p.errors.join(" | "));
@@ -244,6 +252,145 @@ const byteLinks = await p.$$eval(".num-links a", (els) => els.map((a) => a.getAt
 check("mb-to-gb: links to the tool and the other byte pages only", byteLinks[0] === "/tools/byte-size" && byteLinks.includes("/tools/gb-to-gib")
   && !byteLinks.includes("/tools/mb-to-gb") && !byteLinks.includes("/tools/hex-to-decimal") && byteLinks.length === 6, byteLinks.join());
 check("mb-to-gb: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+
+// JWT decoder
+{
+  const b64url = (v) => Buffer.from(typeof v === "string" ? v : JSON.stringify(v)).toString("base64url");
+  const nowS = Math.floor(Date.now() / 1000);
+  const body = `${b64url({ alg: "HS256", typ: "JWT" })}.${b64url({ sub: "ada", iat: nowS - 60, exp: nowS + 7200 })}`;
+  const hsToken = `${body}.${createHmac("sha256", "s3cret").update(body).digest("base64url")}`;
+  p = await open("/tools/jwt-decoder");
+  await setValue(p, "#jwt-in", `Bearer ${hsToken}`);
+  const chips = () => p.$$eval("#jwt-summary .chip", (els) => els.map((e) => e.textContent));
+  check("jwt: decodes, says how it's signed and when it expires", !(await p.$eval("#jwt-decoded", (e) => e.hidden))
+    && JSON.parse(await val(p, "#jwt-payload")).sub === "ada" && JSON.stringify(await chips()) === JSON.stringify(["Algorithm: HS256", "Expires in 2 hours"]),
+    JSON.stringify(await chips()));
+  check("jwt: claims as dates", /Expires \(exp\)/.test(await txt(p, "#jwt-claims")) && /1 minute ago/.test(await txt(p, "#jwt-claims")), await txt(p, "#jwt-claims"));
+  check("jwt: asks for the secret, not a public key", !(await p.$eval("#jwt-secret-box", (e) => e.hidden)) && await p.$eval("#jwt-public-box", (e) => e.hidden));
+  await setValue(p, "#jwt-secret", "s3cret");
+  await p.waitForFunction(() => document.getElementById("jwt-verify-result").textContent !== "");
+  check("jwt: the right secret verifies", (await txt(p, "#jwt-verify-result")).startsWith("✓ Signature verified"));
+  await setValue(p, "#jwt-secret", "wrong");
+  await p.waitForFunction(() => document.getElementById("jwt-verify-result").textContent.startsWith("✗"));
+  check("jwt: the wrong one doesn't", true);
+
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const rsBody = `${b64url({ alg: "RS256", kid: "a" })}.${b64url({ sub: "bob", exp: nowS - 86400 * 3 })}`;
+  const rsToken = `${rsBody}.${createSign("RSA-SHA256").update(rsBody).sign(privateKey).toString("base64url")}`;
+  await setValue(p, "#jwt-in", rsToken);
+  check("jwt: an expired token says so", (await chips()).includes("Expired 3 days ago"), JSON.stringify(await chips()));
+  await setValue(p, "#jwt-public", publicKey.export({ type: "spki", format: "pem" }));
+  await p.waitForFunction(() => document.getElementById("jwt-verify-result").textContent !== "");
+  check("jwt: RS256 verifies with a PEM public key", (await txt(p, "#jwt-verify-result")).startsWith("✓"), await txt(p, "#jwt-verify-result"));
+  await setValue(p, "#jwt-in", "a.b.c.d.e");
+  check("jwt: an encrypted token is explained", /encrypted token/.test(await txt(p, "#jwt-error")) && await p.$eval("#jwt-decoded", (e) => e.hidden));
+  check("jwt: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+}
+
+// hash generator
+{
+  p = await open("/tools/hash-generator");
+  const rows = () => p.$$eval("#hash-results [data-algorithm]", (els) => Object.fromEntries(els.map((r) => [r.querySelector("label").textContent, r.querySelector("input").value])));
+  check("hash: nothing for empty text", Object.keys(await rows()).length === 0);
+  await setValue(p, "#hash-text", "abc");
+  let r = await rows();
+  check("hash: the usual four, live", JSON.stringify(Object.keys(r)) === JSON.stringify(["MD5", "SHA-1", "SHA-256", "SHA-512"])
+    && r["SHA-256"] === createHash("sha256").update("abc").digest("hex") && r.MD5 === createHash("md5").update("abc").digest("hex"), JSON.stringify(r));
+  await p.click("#algo-blake3");
+  await p.select("#hash-format", "HEX");
+  r = await rows();
+  check("hash: more algorithms, upper case", r.BLAKE3 === "6437B3AC38465133FFB63B75273A8DB548C558465D79DB03FD359C6CD5BD9D85" && r.MD5 === r.MD5.toUpperCase(), r.BLAKE3);
+  await setValue(p, "#hash-compare", createHash("sha1").update("abc").digest("hex"));
+  check("hash: compare finds the match", (await txt(p, "#hash-compare-result")) === "✓ Matches the SHA-1." && (await p.$eval(".is-match", (e) => e.dataset.algorithm)) === "sha1");
+  await setValue(p, "#hash-key", "key");
+  r = await rows();
+  check("hash: HMAC with a key, BLAKE3 sits out", r["HMAC-SHA-256"] === createHmac("sha256", "key").update("abc").digest("hex").toUpperCase() && !("BLAKE3" in r)
+    && /No match/.test(await txt(p, "#hash-compare-result")), JSON.stringify(Object.keys(r)));
+  await setValue(p, "#hash-key", "");
+  await setValue(p, "#hash-compare", "");
+  await p.click('label[for="mode-file"]');
+  await (await p.$("#hash-file")).uploadFile(bigFile);
+  await p.waitForFunction(() => document.getElementById("hash-progress").hidden && document.querySelector("#hash-results [data-algorithm]"), { timeout: 30000 });
+  r = await rows();
+  check("hash: a 10 MB file, in pieces", r["SHA-256"] === createHash("sha256").update(bigBytes).digest("hex").toUpperCase()
+    && (await txt(p, "#hash-file-name")) === "big.bin", r["SHA-256"]);
+  // Every ticked algorithm, as HMACs, each in its own worker.
+  const workers = [];
+  p.on("workercreated", (w) => workers.push(w.url()));
+  await p.select("#hash-format", "hex");
+  await setValue(p, "#hash-key", "key");
+  await p.waitForFunction(() => document.getElementById("hash-progress").hidden && document.querySelector("#hash-results [data-algorithm]"), { timeout: 30000 });
+  r = await rows();
+  const hmacs = { md5: "HMAC-MD5", sha1: "HMAC-SHA-1", sha256: "HMAC-SHA-256", sha512: "HMAC-SHA-512" };
+  check("hash: a file's HMACs, one worker per algorithm", Object.entries(hmacs).every(([alg, label]) => r[label] === createHmac(alg, "key").update(bigBytes).digest("hex"))
+    && !("BLAKE3" in r) && workers.length === 4 && workers.every((u) => /\/public\/js\/dist\/chunks\//.test(u)), JSON.stringify({ r: Object.keys(r), workers }));
+  // A new file while the old one is still hashing: only the new one's hashes.
+  await setValue(p, "#hash-key", "");
+  const second = path.join(path.dirname(bigFile), "small.txt");
+  fs.writeFileSync(second, "small");
+  await p.evaluate(() => document.getElementById("hash-key").dispatchEvent(new Event("input")));
+  await (await p.$("#hash-file")).uploadFile(second);
+  await p.waitForFunction(() => document.getElementById("hash-file-name").textContent === "small.txt" && document.getElementById("hash-progress").hidden
+    && document.querySelector("#hash-results [data-algorithm]"), { timeout: 30000 });
+  r = await rows();
+  check("hash: a new file replaces one still hashing", r["SHA-256"] === createHash("sha256").update("small").digest("hex"), r["SHA-256"]);
+  check("hash: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+
+  // Firefox brings back the chosen mode on a reload, before the page's script
+  // runs; the page must show the box for it.
+  p = await browser.newPage();
+  p.errors = [];
+  await watch(p, p.errors);
+  await p.evaluateOnNewDocument(() => {
+    new MutationObserver((_, observer) => {
+      const file = document.getElementById("mode-file");
+      if (file) {
+        file.checked = true;
+        observer.disconnect();
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await p.goto(BASE + "/tools/hash-generator", { waitUntil: "networkidle0" });
+  check("hash: a mode kept over a reload shows its box", !(await p.$eval("#hash-file-box", (e) => e.hidden)) && await p.$eval("#hash-text-box", (e) => e.hidden));
+  check("hash: no JS errors after the reload", p.errors.length === 0, p.errors.join(" | "));
+  await p.close();
+
+  p = await open("/tools/sha256-hash");
+  check("sha256-hash: own heading, SHA-256 first", (await txt(p, "h1")) === "SHA-256 Hash Generator"
+    && (await p.$eval("#hash-algorithms input", (e) => e.id)) === "algo-sha256");
+  await setValue(p, "#hash-text", "abc");
+  check("sha256-hash: shown first", (await p.$eval("#hash-results [data-algorithm]", (e) => e.dataset.algorithm)) === "sha256");
+  await drag(p, "drop", "#hash-tool", [{ name: "dropped.txt", text: "abc" }]);
+  await p.waitForFunction(() => document.getElementById("hash-file-name").textContent === "dropped.txt" && document.querySelector("#hash-results [data-algorithm]"));
+  check("sha256-hash: a dropped file switches to file mode", (await p.$eval("#mode-file", (e) => e.checked))
+    && (await rows())["SHA-256"] === createHash("sha256").update("abc").digest("hex"));
+  check("sha256-hash: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+}
+
+// UUIDs and tokens
+{
+  p = await open("/tools/uuid-generator");
+  let lines = (await val(p, "#uuid-out")).split("\n");
+  check("uuid: five v4s to start", lines.length === 5 && lines.every((u) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(u)), lines[0]);
+  await p.click('label[for="uuid-v7"]');
+  await p.$eval("#uuid-count", (e) => { e.value = "20"; e.dispatchEvent(new Event("change")); });
+  lines = (await val(p, "#uuid-out")).split("\n");
+  check("uuid: v7s, in order", lines.length === 20 && lines.every((u, i) => /-7/.test(u) && (i === 0 || lines[i - 1] < u)));
+  await p.click("#uuid-upper");
+  await p.click("#uuid-hyphens");
+  await p.click("#uuid-braces");
+  check("uuid: formats", /^\{[0-9A-F]{32}\}$/.test((await val(p, "#uuid-out")).split("\n")[0]));
+  check("token: 32 random bytes of hex", /^[0-9a-f]{64}$/.test(await val(p, "#token-out")) && (await txt(p, "#token-strength")).startsWith("256 bits"));
+  await p.select("#token-format", "alphanumeric");
+  await p.$eval("#token-length", (e) => { e.value = "10"; e.dispatchEvent(new Event("change")); });
+  check("token: letters and digits, with a warning when short", /^[A-Za-z0-9]{10}$/.test(await val(p, "#token-out")) && (await txt(p, "#token-unit")) === "characters"
+    && /128 bits or more is safer/.test(await txt(p, "#token-strength")));
+  await setValue(p, "#inspect-in", "017f22e2-79b0-7cc3-98c4-dc0c0c07398f");
+  check("uuid: inspect a v7, with its time", /Version\s*7/.test(await txt(p, "#inspect-out")) && /2022/.test(await txt(p, "#inspect-out")), await txt(p, "#inspect-out"));
+  await setValue(p, "#inspect-in", "nope");
+  check("uuid: inspect says what's wrong", /32 hex digits/.test(await txt(p, "#inspect-error")));
+  check("uuid: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+}
 
 p = await open("/tools/nope");
 check("unknown tool: 404", p.status === 404, p.status);

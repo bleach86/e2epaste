@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/bleach86/e2epaste#readme",
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
     "@zxcvbn-ts/core": "^4.2.0",
     "@zxcvbn-ts/language-common": "^4.1.3",
     "@zxcvbn-ts/language-en": "^4.1.1",
