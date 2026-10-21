@@ -20,6 +20,7 @@ import {
 import { enableEditorKeys } from "../editor_keys.mjs";
 import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
+import { buildZip, zipEntries, zipFits, zipSize } from "../zip.mjs";
 
 // The site's limits (max_paste_kib, max_file_mib, allow_files), before
 // encryption. max_file_bytes is null when the site takes no attachments.
@@ -64,9 +65,10 @@ const urlModalEl = document.getElementById("url-modal");
 const copyUrlButton = document.getElementById("copy-url-btn");
 const copyDeleteButton = document.getElementById("copy-delete-btn");
 
-// The File picked for the attachment; read a chunk at a time on upload.
-let attachedFile;
-let fileName;
+// The attachment: { name, file } for one file, read a chunk at a time on
+// upload, or { name, entries } for several files, zipped into one when the
+// paste is sent.
+let attachment;
 let highlightTimer;
 let submitting = false;
 
@@ -168,37 +170,62 @@ enableEditorKeys(pasteArea);
 // --- Attachment -----------------------------------------------------------
 
 function clearAttachment() {
-  attachedFile = undefined;
-  fileName = undefined;
+  attachment = undefined;
   // Neither is on the page when the site takes no attachments.
   if (fileInput) {
     fileInput.value = "";
     attachmentRow.hidden = true;
+    attachmentRow.title = "";
   }
 }
 
-// From the picker or a drop; replaces any file attached before.
-function attachFile(file) {
-  if (file.size > limits.max_file_bytes) {
-    alert(`File is too large. Please keep it under ${limits.max_file_label}.`);
-    clearAttachment();
-    return;
-  }
-
-  // Read a chunk at a time when it's uploaded, not now.
-  attachedFile = file;
-  fileName = file.name;
-  document.getElementById("attachment-name").textContent = file.name;
-  document.getElementById("attachment-size").textContent = formatBytes(
-    file.size,
-  );
+function showAttachment(name, details, contents = "") {
+  document.getElementById("attachment-name").textContent = name;
+  document.getElementById("attachment-size").textContent = details;
+  attachmentRow.title = contents;
   attachmentRow.hidden = false;
 }
 
+// From the picker or a drop; replaces whatever was attached before. One
+// file goes as it is; several are zipped.
+function attachFiles(files) {
+  if (files.length === 1) {
+    const [file] = files;
+    if (file.size > limits.max_file_bytes) {
+      alert(`File is too large. Please keep it under ${limits.max_file_label}.`);
+      clearAttachment();
+      return;
+    }
+    attachment = { name: file.name, file };
+    showAttachment(file.name, formatBytes(file.size));
+    return;
+  }
+
+  const entries = zipEntries(files);
+  const size = zipSize(entries);
+  if (!zipFits(entries) || size > limits.max_file_bytes) {
+    alert(
+      `Those files come to ${formatBytes(size)}. Please keep them under ${limits.max_file_label}.`,
+    );
+    clearAttachment();
+    return;
+  }
+  attachment = { name: "files.zip", entries };
+  const shown = entries.slice(0, 40).map((e) => e.name);
+  if (entries.length > shown.length) {
+    shown.push(`and ${entries.length - shown.length} more`);
+  }
+  showAttachment(
+    "files.zip",
+    `${formatBytes(size)} · ${entries.length.toLocaleString()} files, zipped`,
+    shown.join("\n"),
+  );
+}
+
 fileInput?.addEventListener("change", (event) => {
-  const file = event.target.files[0];
-  if (file) {
-    attachFile(file);
+  const files = [...event.target.files];
+  if (files.length) {
+    attachFiles(files);
   } else {
     clearAttachment();
   }
@@ -252,20 +279,20 @@ document.addEventListener("drop", (event) => {
     return;
   }
 
-  const items = [...event.dataTransfer.items].filter((i) => i.kind === "file");
-  if (items.length > 1) {
-    alert("A paste holds one file. To send several, zip them first.");
+  // A folder shows up as a file that can't be read; only its entry says
+  // what it is.
+  const folder = [...event.dataTransfer.items].some(
+    (i) => i.kind === "file" && i.webkitGetAsEntry?.()?.isDirectory,
+  );
+  if (folder) {
+    alert("Folders can't be attached. Zip the folder first, or drop the files in it.");
     return;
   }
-  if (items[0]?.webkitGetAsEntry?.()?.isDirectory) {
-    alert("A folder can't be attached. Zip it first.");
-    return;
-  }
-  const file = event.dataTransfer.files[0];
-  if (file) {
+  const files = [...event.dataTransfer.files];
+  if (files.length) {
     // The picker would still show its old choice.
     fileInput.value = "";
-    attachFile(file);
+    attachFiles(files);
   }
 });
 
@@ -394,7 +421,7 @@ async function refusal(response, what) {
       );
     case 413:
       return new RefusedError(
-        what === "attachment" || attachedFile
+        what === "attachment" || attachment
           ? `The attachment is too large. Please keep it under ${limits.max_file_label}.`
           : `The paste is too large. Please keep it under ${limits.max_paste_label}.`,
       );
@@ -464,7 +491,7 @@ async function createPaste() {
   const text = pasteArea.value;
 
   // A paste can be just an attachment.
-  if (text === "" && !attachedFile) {
+  if (text === "" && !attachment) {
     pasteArea.focus();
     return;
   }
@@ -483,6 +510,22 @@ async function createPaste() {
   const password = passwordInput.value.trim();
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
+  // Several files are zipped first: the paste says the attachment's size.
+  let file = attachment?.file ?? null;
+  if (attachment?.entries) {
+    file = await buildZip(attachment.entries, {
+      onProgress: (done, total) => {
+        submitStatus.textContent = `Zipping files... ${Math.floor((done / total) * 100)}%`;
+      },
+    }).catch((e) => {
+      console.error(e);
+      throw new RefusedError(
+        "One of the files couldn't be read, or changed since it was attached. Please attach them again.",
+      );
+    });
+    submitStatus.textContent = "Encrypting...";
+  }
+
   // The secret only ever goes in the link's #fragment, which browsers never
   // send to the server. With a password, the key also depends on it, and the
   // link (not the server) says there is one.
@@ -499,10 +542,9 @@ async function createPaste() {
   const encrypted = await encryptPart(key, iv, "text", encode(text));
   // The attachment itself is encrypted as it's uploaded, after the paste is
   // created (uploadFile).
-  const file = attachedFile ?? null;
   const encryptedFileName = file
     ? arrayBufferToBase64(
-        await encryptPart(key, iv, "file-name", encode(fileName)),
+        await encryptPart(key, iv, "file-name", encode(attachment.name)),
       )
     : null;
 

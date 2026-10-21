@@ -20,7 +20,7 @@
                 {% if limits.max_file_bytes %}
                 {{ icons.icon("paperclip") }}
                 <span>Drop to attach</span>
-                <span class="small text-secondary">One file, up to {{ limits.max_file_label }}</span>
+                <span class="small text-secondary">One file or several, up to {{ limits.max_file_label }}</span>
                 {% else %}
                 <span>This site doesn't take files</span>
                 {% endif %}
@@ -41,9 +41,9 @@
                     </optgroup>
                 </select>
                 {% if limits.max_file_bytes %}
-                <input type="file" id="fileInput" class="visually-hidden file-input">
+                <input type="file" id="fileInput" class="visually-hidden file-input" multiple>
                 <label for="fileInput" class="btn btn-quiet btn-sm file-pick">{{ icons.icon("paperclip") }} Attach
-                    file</label>
+                    files</label>
                 {% endif %}
             </div>
             {% if limits.max_file_bytes %}
@@ -60,7 +60,7 @@
                 <pre class="paste-highlight" aria-hidden="true"><code id="paste-highlight" class="hljs"></code></pre>
                 <label for="paste-area" class="visually-hidden">Paste content</label>
                 <textarea id="paste-area"
-                    placeholder="{% if limits.max_file_bytes %}Paste or type here, or just attach a file...{% else %}Paste or type here...{% endif %}"
+                    placeholder="{% if limits.max_file_bytes %}Paste or type here, or just attach files...{% else %}Paste or type here...{% endif %}"
                     spellcheck="false" aria-describedby="paste-area-keys"></textarea>
                 {# js/editor_keys.mjs #}
                 <span id="paste-area-keys" class="visually-hidden">Tab inserts a tab. To move on, press Escape, then
@@ -68,7 +68,7 @@
             </div>
             <div class="panel-foot">
                 <span id="paste-stats">0 lines · 0 bytes</span>
-                <span>Up to {{ limits.max_paste_label }} of text{% if limits.max_file_label %} · one file up to
+                <span>Up to {{ limits.max_paste_label }} of text{% if limits.max_file_label %} · files up to
                     {{ limits.max_file_label }}{% endif %}</span>
             </div>
         </section>

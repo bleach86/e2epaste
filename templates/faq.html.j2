@@ -126,8 +126,9 @@
         <div class="accordion">
             {% call faq("limits", "How large can a paste be?") %}
             <p class="mb-0">Text can be up to {{ limits.max_paste_label }}{% if limits.max_file_label %}, and you can
-                attach one file of up to {{ limits.max_file_label }}{% else %}. This site doesn't accept
-                attachments{% endif %}.</p>
+                attach files of up to {{ limits.max_file_label }} in all{% else %}. This site doesn't accept
+                attachments{% endif %}.{% if limits.max_file_label %} Several files are zipped in your browser and sent
+                as one .zip; the files inside keep their names but not their dates.{% endif %}</p>
             {% endcall %}
 
             {% call faq("expiry", "How do expiry and view limits work?") %}

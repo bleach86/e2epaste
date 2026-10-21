@@ -16,7 +16,7 @@ const alerts = [];
 p.on("dialog", async (d) => { alerts.push(d.message()); await d.dismiss(); });
 await p.goto(BASE + "/", { waitUntil: "networkidle0" });
 
-check("create page: shows the site's limits", (await p.$eval(".panel-foot", (e) => e.textContent.replace(/\s+/g, " "))).includes("Up to 8 KB of text · one file up to 1 MB"));
+check("create page: shows the site's limits", (await p.$eval(".panel-foot", (e) => e.textContent.replace(/\s+/g, " "))).includes("Up to 8 KB of text · files up to 1 MB"));
 
 // Text over the limit: the counter turns red and the page won't send it.
 await p.$eval("#paste-area", (el) => { el.value = "x".repeat(9 * 1024); el.dispatchEvent(new Event("input")); });
@@ -61,7 +61,7 @@ check("create page: a full attachment store is explained",
   alerts.at(-1) === "This site has reached its storage limit for attachments. You can still create a paste without one.", alerts.at(-1));
 
 const faq = await (await fetch(BASE + "/faq")).text();
-check("faq: states the site's limits", /Text can be up to 8 KB, and you can\s+attach one file of up to 1 MB/.test(faq));
+check("faq: states the site's limits", /Text can be up to 8 KB, and you can\s+attach files of up to 1 MB in all/.test(faq));
 
 // The server applies the same limits to the encrypted sizes.
 const b64 = (n) => "A".repeat(Math.floor(n / 3) * 4) + ["", "AA==", "AAA="][n % 3];

@@ -1,5 +1,6 @@
 // Creating and viewing pastes: the editor, the link dialog, passwords,
 // attachments, downloads, burn after reading and the mobile layout.
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -135,7 +136,7 @@ check("view: Ctrl+A still works in inputs", true);
 {
   const f = await newPage();
   await f.goto(BASE + "/", { waitUntil: "networkidle0" });
-  check("file only: the editor says a file alone is fine", (await f.$eval("#paste-area", (e) => e.placeholder)).includes("just attach a file"));
+  check("file only: the editor says a file alone is fine", (await f.$eval("#paste-area", (e) => e.placeholder)).includes("just attach files"));
   await f.click("#submit-paste");
   check("file only: nothing at all isn't sent", !(await f.$eval("#url-modal", (e) => e.classList.contains("show"))));
   await (await f.$("#fileInput")).uploadFile(uploadPath);
@@ -172,30 +173,63 @@ check("view: Ctrl+A still works in inputs", true);
   check("drop: overlay while files are over the page", await overlay());
   await drag(d, "dragleave", ".create-options", notes);
   check("drop: overlay gone when they leave", !(await overlay()));
-  check("drop: overlay says what to do", /Drop to attach\s+One file, up to/.test(await txt(d, "#drop-overlay")));
+  check("drop: overlay says what to do", /Drop to attach\s+One file or several, up to/.test(await txt(d, "#drop-overlay")));
 
   await drag(d, "dragenter", ".create-options", notes);
   const taken = await drag(d, "drop", ".create-options", notes);
   check("drop: a file dropped anywhere is attached", taken && !(await overlay()) && (await txt(d, "#attachment-name")) === "notes.txt"
     && (await txt(d, "#attachment-size")) === "10 bytes", await txt(d, "#attachment-size"));
 
-  let said = "";
-  d.once("dialog", (dialog) => { said = dialog.message(); dialog.dismiss(); });
   await drag(d, "drop", "#paste-area", [{ name: "a.txt", text: "a" }, { name: "b.txt", text: "b" }]);
-  check("drop: several files are refused, saying why", /one file/.test(said) && (await txt(d, "#attachment-name")) === "notes.txt", said);
+  check("drop: several files are zipped together", (await txt(d, "#attachment-name")) === "files.zip"
+    && / · 2 files, zipped$/.test(await txt(d, "#attachment-size"))
+    && (await d.$eval("#attachment", (e) => e.title)) === "a.txt\nb.txt", await txt(d, "#attachment-size"));
 
   await drag(d, "drop", "#paste-area", [{ name: "other.txt", text: "replacement" }]);
-  check("drop: another file replaces the first", (await txt(d, "#attachment-name")) === "other.txt");
+  check("drop: another file replaces them", (await txt(d, "#attachment-name")) === "other.txt");
+  const second = path.join(path.dirname(uploadPath), "second.txt");
+  fs.writeFileSync(second, "second\n");
+  await (await d.$("#fileInput")).uploadFile(uploadPath, second);
+  check("picker: picking several files zips them too", (await txt(d, "#attachment-name")) === "files.zip");
+  await drag(d, "drop", "#paste-area", [{ name: "other.txt", text: "replacement" }]);
 
+  // A real folder, dropped through Chrome's own drag and drop (the only way
+  // a page sees one), is refused.
+  const album = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "e2epaste-")), "album");
+  fs.mkdirSync(album);
+  fs.writeFileSync(path.join(album, "a.txt"), "in a folder\n");
+  let said = "";
+  d.once("dialog", (dialog) => { said = dialog.message(); dialog.dismiss(); });
+  const cdp = await d.createCDPSession();
+  const at = await d.$eval(".create-options", (e) => { const r = e.getBoundingClientRect(); return { x: r.x + 20, y: r.y + 20 }; });
+  for (const type of ["dragEnter", "dragOver", "drop"]) {
+    await cdp.send("Input.dispatchDragEvent", { type, ...at, data: { items: [], files: [album], dragOperationsMask: 1 } });
+  }
+  await d.waitForFunction(() => true);
+  check("drop: a folder is refused, saying why", /Folders can't be attached/.test(said) && (await txt(d, "#attachment-name")) === "other.txt", said);
+
+  await drag(d, "drop", "#paste-area", [{ name: "a.txt", text: "first file\n" }, { name: "a.txt", text: "same name\n" }]);
   await d.click("#submit-paste");
   await d.waitForSelector("#url-modal.show", { timeout: 20000 });
+  check("drop: the dialog counts it as one attachment", (await d.$$eval("#link-summary .chip", (els) => els.map((e) => e.textContent.trim())))
+    .includes("Encrypted attachment"));
   await d.goto(local(await d.$eval("#paste-url", (e) => e.value)), { waitUntil: "networkidle0" });
   await d.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
   await hookDownloads(d);
   await d.$eval("#download-link", (b) => b.click());
   await d.waitForFunction(() => window.__dl.length === 1, { timeout: 10000 });
   const dropped = await d.evaluate(() => window.__dl[0]);
-  check("drop: the dropped file arrives intact", dropped.name === "other.txt" && Buffer.from(dropped.bytes).toString() === "replacement");
+  const zipPath = path.join(path.dirname(album), "download.zip");
+  fs.writeFileSync(zipPath, Buffer.from(dropped.bytes));
+  const listing = execFileSync("python3", ["-I", "-c", `
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as z:
+    assert z.testzip() is None
+    for i in z.infolist():
+        print(i.filename, repr(z.read(i).decode()))
+`, zipPath]).toString().trim().split("\n");
+  check("drop: the files arrive as a zip, intact", dropped.name === "files.zip"
+    && JSON.stringify(listing) === JSON.stringify(["a.txt 'first file\\n'", "a (2).txt 'same name\\n'"]), listing.join(" | "));
   await d.close();
 }
 
