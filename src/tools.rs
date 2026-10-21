@@ -1,6 +1,8 @@
 //! Browser-side tool pages under /tools. Each tool has its own page (template
 //! `tools/<slug>`, script `/public/js/dist/tools/<slug>.js`) so it can rank for
-//! its own searches; the two hub pages link to them.
+//! its own searches; the hub pages link to them. A tool can also have
+//! variants: the same tool under another address, with its own title and
+//! heading, for a common search such as "hex to decimal".
 
 use serde::Serialize;
 
@@ -11,6 +13,7 @@ use crate::PageMeta;
 pub enum ToolGroup {
     Password,
     Strings,
+    Numbers,
 }
 
 #[derive(Serialize)]
@@ -23,6 +26,22 @@ pub struct Tool {
     pub page: PageMeta,
 }
 
+/// A tool under another address, e.g. the number base converter as "Hex to
+/// Decimal Converter" at /tools/hex-to-decimal. Not listed in menus; in the
+/// sitemap, and linked from the tool's own page.
+#[derive(Serialize)]
+pub struct ToolVariant {
+    pub slug: &'static str,
+    /// The tool it shows.
+    pub tool: &'static str,
+    pub name: &'static str,
+    pub summary: &'static str,
+    /// Tool-specific settings for its script, e.g. which field to start in.
+    pub from: &'static str,
+    pub to: &'static str,
+    pub page: PageMeta,
+}
+
 #[derive(Serialize)]
 pub struct ToolHub {
     pub group: ToolGroup,
@@ -32,7 +51,7 @@ pub struct ToolHub {
     pub page: PageMeta,
 }
 
-pub static HUBS: [ToolHub; 2] = [
+pub static HUBS: [ToolHub; 3] = [
     ToolHub {
         group: ToolGroup::Password,
         name: "Password Tools",
@@ -58,9 +77,21 @@ pub static HUBS: [ToolHub; 2] = [
             canonical: Some("/tools/strings"),
         },
     },
+    ToolHub {
+        group: ToolGroup::Numbers,
+        name: "Number Tools",
+        path: "/tools/numbers",
+        intro: "Convert numbers between bases: decimal, hex, binary, octal and more.",
+        page: PageMeta {
+            title: "Number Tools: Hex, Binary, Octal & Decimal Converters - {site}",
+            description: "Free number tools that run entirely in your browser: convert between \
+                decimal, hexadecimal, binary, octal and any base from 2 to 36.",
+            canonical: Some("/tools/numbers"),
+        },
+    },
 ];
 
-pub static TOOLS: [Tool; 9] = [
+pub static TOOLS: [Tool; 10] = [
     Tool {
         slug: "password-generator",
         name: "Password Generator",
@@ -169,6 +200,63 @@ pub static TOOLS: [Tool; 9] = [
             canonical: Some("/tools/count-occurrences"),
         },
     },
+    Tool {
+        slug: "number-base",
+        name: "Number Base Converter",
+        summary: "Convert between decimal, hex, binary, octal and any base from 2 to 36.",
+        group: ToolGroup::Numbers,
+        page: PageMeta {
+            title: "Number Base Converter: Decimal, Hex, Binary & Octal - {site}",
+            description: "Convert numbers between decimal, hexadecimal, binary, octal and any base \
+                from 2 to 36, as you type. Numbers of any size, and two's complement for \
+                negatives. Runs entirely in your browser.",
+            canonical: Some("/tools/number-base"),
+        },
+    },
+];
+
+/// One variant of the number base converter, converting `from_name` (base
+/// `from`) to `to_name`.
+macro_rules! base_variant {
+    ($slug:literal, $from:literal, $to:literal, $from_name:literal, $to_name:literal) => {
+        ToolVariant {
+            slug: $slug,
+            tool: "number-base",
+            name: concat!($from_name, " to ", $to_name, " Converter"),
+            summary: concat!(
+                "Convert ",
+                $from_name,
+                " to ",
+                $to_name,
+                " as you type, with the other bases alongside."
+            ),
+            from: $from,
+            to: $to,
+            page: PageMeta {
+                title: concat!($from_name, " to ", $to_name, " Converter - {site}"),
+                description: concat!(
+                    "Convert ",
+                    $from_name,
+                    " numbers to ",
+                    $to_name,
+                    " instantly, as you type. Numbers of any size, prefixes like 0x and 0b \
+                    accepted, and two's complement for negatives. Runs entirely in your browser."
+                ),
+                canonical: Some(concat!("/tools/", $slug)),
+            },
+        }
+    };
+}
+
+pub static VARIANTS: [ToolVariant; 8] = [
+    base_variant!("hex-to-decimal", "16", "10", "Hex", "Decimal"),
+    base_variant!("decimal-to-hex", "10", "16", "Decimal", "Hex"),
+    base_variant!("binary-to-decimal", "2", "10", "Binary", "Decimal"),
+    base_variant!("decimal-to-binary", "10", "2", "Decimal", "Binary"),
+    base_variant!("hex-to-binary", "16", "2", "Hex", "Binary"),
+    base_variant!("binary-to-hex", "2", "16", "Binary", "Hex"),
+    base_variant!("octal-to-decimal", "8", "10", "Octal", "Decimal"),
+    base_variant!("decimal-to-octal", "10", "8", "Decimal", "Octal"),
 ];
 
 /// A hub with its tools, for templates that list tools by group.
@@ -191,6 +279,20 @@ pub fn find_tool(slug: &str) -> Option<&'static Tool> {
     TOOLS.iter().find(|t| t.slug == slug)
 }
 
+/// The tool at /tools/<slug>, and the variant when it's one.
+pub fn find_page(slug: &str) -> Option<(&'static Tool, Option<&'static ToolVariant>)> {
+    if let Some(tool) = find_tool(slug) {
+        return Some((tool, None));
+    }
+    let variant = VARIANTS.iter().find(|v| v.slug == slug)?;
+    Some((find_tool(variant.tool)?, Some(variant)))
+}
+
+/// A tool's variants, for links from its page.
+pub fn variants_of(tool: &str) -> Vec<&'static ToolVariant> {
+    VARIANTS.iter().filter(|v| v.tool == tool).collect()
+}
+
 pub fn hub(group: ToolGroup) -> &'static ToolHub {
     HUBS.iter()
         .find(|h| h.group == group)
@@ -202,4 +304,39 @@ pub fn sitemap_paths() -> impl Iterator<Item = &'static str> {
     HUBS.iter()
         .map(|h| h.path)
         .chain(TOOLS.iter().filter_map(|t| t.page.canonical))
+        .chain(VARIANTS.iter().filter_map(|v| v.page.canonical))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_tool_and_variant_is_found() {
+        for tool in &TOOLS {
+            assert!(matches!(find_page(tool.slug), Some((t, None)) if t.slug == tool.slug));
+        }
+        for variant in &VARIANTS {
+            assert!(
+                find_tool(variant.tool).is_some(),
+                "{} has no tool",
+                variant.slug
+            );
+            assert!(
+                find_tool(variant.slug).is_none(),
+                "{} is also a tool",
+                variant.slug
+            );
+            assert!(
+                matches!(find_page(variant.slug), Some((_, Some(v))) if v.slug == variant.slug)
+            );
+        }
+        for hub in &HUBS {
+            assert!(
+                TOOLS.iter().any(|t| t.group == hub.group),
+                "{} is empty",
+                hub.name
+            );
+        }
+    }
 }

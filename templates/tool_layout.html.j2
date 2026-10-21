@@ -2,7 +2,9 @@
 {% import "icons" as icons %}
 
 {# Base for templates/tools/<slug>: fill `tool` with the widget and `about`
-   with the explanatory text. Loads /public/js/dist/tools/<slug>.js. #}
+   with the explanatory text. Loads /public/js/dist/tools/<slug>.js. On a
+   variant's page (e.g. /tools/hex-to-decimal), `variant` names it. #}
+{% set heading = variant.name if variant else tool.name %}
 
 {% block page %}
 <div class="page">
@@ -10,12 +12,12 @@
         <ol class="breadcrumb small mb-3">
             <li class="breadcrumb-item"><a href="/" class="link-secondary">Home</a></li>
             <li class="breadcrumb-item"><a href="{{ hub.path }}" class="link-secondary">{{ hub.name }}</a></li>
-            <li class="breadcrumb-item active" aria-current="page">{{ tool.name }}</li>
+            <li class="breadcrumb-item active" aria-current="page">{{ heading }}</li>
         </ol>
     </nav>
 
-    <h1 class="page-title">{{ tool.name }}</h1>
-    <p class="page-lede">{{ tool.summary }}</p>
+    <h1 class="page-title">{{ heading }}</h1>
+    <p class="page-lede">{{ variant.summary if variant else tool.summary }}</p>
     <p class="small text-secondary d-flex align-items-center gap-2 mt-2 mb-4">
         <span class="text-accent d-inline-flex">{{ icons.icon("shield") }}</span>
         Runs entirely in your browser. Nothing you enter is sent to the server.

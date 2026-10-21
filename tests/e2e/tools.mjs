@@ -19,10 +19,11 @@ const val = (p, sel) => p.$eval(sel, (el) => el.value ?? el.textContent);
 const txt = (p, sel) => p.$eval(sel, (el) => el.textContent);
 
 // hubs
-for (const [path, n] of [["/tools/password", 2], ["/tools/strings", 7]]) {
+for (const path of ["/tools/password", "/tools/strings", "/tools/numbers"]) {
   const p = await open(path);
   const cards = await p.$$eval(".tool-card", (els) => els.map((e) => e.getAttribute("href")));
-  check(`${path}: 200, lists all 9 tools`, p.status === 200 && cards.length === 9, `${p.status} ${cards.length}`);
+  check(`${path}: 200, lists all 10 tools (not the variants)`, p.status === 200 && cards.length === 10
+    && !cards.includes("/tools/hex-to-decimal"), `${p.status} ${cards.length}`);
   check(`${path}: own group first`, (await p.$eval("section h2 a", (a) => a.getAttribute("href"))) === path);
   check(`${path}: no JS errors`, p.errors.length === 0, p.errors.join(" | "));
   await p.close();
@@ -41,7 +42,7 @@ check("base64: copy", (await p.evaluate(() => navigator.clipboard.readText())) =
 await p.$eval('[data-clear="encode-in"]', (b) => b.click());
 check("base64: clear empties input and output", (await val(p, "#encode-in")) === "" && (await val(p, "#encode-out")) === "");
 const related = await p.$$eval(".tool-card", (els) => els.map((e) => e.getAttribute("href")));
-check("base64: related tools exclude itself", related.length === 8 && !related.includes("/tools/base64"));
+check("base64: related tools exclude itself", related.length === 9 && !related.includes("/tools/base64"));
 const crumbs = await p.$$eval(".breadcrumb-item", (els) => els.map((e) => e.textContent.trim()));
 check("base64: breadcrumb", crumbs.join(" > ") === "Home > String Tools > Base64 Encoder & Decoder", crumbs.join(" > "));
 check("base64: no JS errors", p.errors.length === 0, p.errors.join(" | "));
@@ -120,6 +121,67 @@ check("strength: show toggle", (await p.$eval("#strength-in", (e) => e.type)) ==
 await p.$eval('[data-clear="strength-in"]', (b) => b.click());
 check("strength: clear hides result", await p.$eval("#strength-result", (e) => e.hidden));
 check("strength: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+
+// number base converter
+p = await open("/tools/number-base");
+const nums = () => p.evaluate(() => Object.fromEntries(["dec", "hex", "bin", "oct", "custom"]
+  .map((k) => [k, document.getElementById(`num-${k}`).value])));
+const order = () => p.$$eval("#base-converter .num-field", (els) => els.map((e) => e.id));
+check("base: starts in decimal, then hex", (await p.evaluate(() => document.activeElement.id)) === "num-dec"
+  && (await order()).join() === "num-dec,num-hex,num-bin,num-oct,num-custom", (await order()).join());
+await setValue(p, "#num-dec", "255");
+check("base: decimal fills the rest", JSON.stringify(await nums()) === JSON.stringify({ dec: "255", hex: "ff", bin: "11111111", oct: "377", custom: "73" }), JSON.stringify(await nums()));
+check("base: says how many bits", (await txt(p, "#num-info")) === "Needs 8 bits (1 byte)", await txt(p, "#num-info"));
+await setValue(p, "#num-hex", "0xDEAD_BEEF");
+check("base: hex with prefix and separators", (await nums()).dec === "3735928559" && (await nums()).bin === "11011110101011011011111011101111");
+await setValue(p, "#num-bin", "10 2");
+check("base: a bad digit says which", (await txt(p, "#num-bin-error")) === "\"2\" isn't a binary digit (0 or 1)." && (await nums()).dec === "", await txt(p, "#num-bin-error"));
+const big = "123456789012345678901234567890123456789";
+await setValue(p, "#num-dec", big);
+check("base: numbers of any size", BigInt("0x" + (await nums()).hex) === BigInt(big));
+await setValue(p, "#num-dec", "-1");
+check("base: negatives with a minus sign", (await nums()).hex === "-1" && (await txt(p, "#num-info")).endsWith("as two's complement"));
+await p.select("#bit-width", "8");
+check("base: 8-bit two's complement", JSON.stringify(await nums()) === JSON.stringify({ dec: "-1", hex: "ff", bin: "11111111", oct: "377", custom: "73" })
+  && (await txt(p, "#num-info")) === "As 8 bits: signed -1, unsigned 255", JSON.stringify(await nums()) + " " + await txt(p, "#num-info"));
+await setValue(p, "#num-hex", "80");
+check("base: decimal shows the signed value", (await nums()).dec === "-128");
+await setValue(p, "#num-hex", "1ff");
+check("base: too big for the width", /doesn't fit in 8 bits/.test(await txt(p, "#num-hex-error")));
+await p.select("#bit-width", "16");
+await p.click("#opt-upper");
+await p.click("#opt-group");
+await p.click("#opt-prefix");
+check("base: uppercase, grouped, prefixed and padded", JSON.stringify(await nums()) === JSON.stringify({ dec: "511", hex: "1ff", bin: "0b0000 0001 1111 1111", oct: "0o000 777", custom: "E7" }),
+  JSON.stringify(await nums()));
+await p.select("#custom-base", "3");
+check("base: picking another base rewrites that field", (await nums()).custom === "20 0221", (await nums()).custom);
+await p.click("#num-clear");
+check("base: clear empties everything", Object.values(await nums()).every((v) => v === "") && (await txt(p, "#num-info")) === "");
+await setValue(p, "#num-dec", "42");
+await p.$eval('[data-copy="num-bin"]', (b) => b.click());
+check("base: copy a field", (await p.evaluate(() => navigator.clipboard.readText())) === "0b0000 0000 0010 1010");
+check("base: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+
+// a variant page: the same tool, its own title, heading and starting field
+p = await open("/tools/hex-to-decimal");
+check("hex-to-decimal: own title and heading", p.status === 200 && (await p.title()).startsWith("Hex to Decimal Converter")
+  && (await txt(p, "h1")) === "Hex to Decimal Converter", await p.title());
+check("hex-to-decimal: canonical is itself", (await p.$eval('link[rel="canonical"]', (l) => l.href)).endsWith("/tools/hex-to-decimal"));
+check("hex-to-decimal: hex first and focused, decimal second", (await order()).slice(0, 2).join() === "num-hex,num-dec"
+  && (await p.evaluate(() => document.activeElement.id)) === "num-hex");
+await p.keyboard.type("ff");
+check("hex-to-decimal: typing converts", (await nums()).dec === "255");
+const links = await p.$$eval(".num-links a", (els) => els.map((a) => a.getAttribute("href")));
+check("hex-to-decimal: links to the other conversions, not itself", links.includes("/tools/number-base") && links.includes("/tools/decimal-to-hex")
+  && !links.includes("/tools/hex-to-decimal") && links.length === 8, links.join());
+const crumbs2 = await p.$$eval(".breadcrumb-item", (els) => els.map((e) => e.textContent.trim()));
+check("hex-to-decimal: breadcrumb", crumbs2.join(" > ") === "Home > Number Tools > Hex to Decimal Converter", crumbs2.join(" > "));
+check("hex-to-decimal: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+
+const sitemap = await (await fetch(BASE + "/sitemap.xml")).text();
+check("sitemap: has the numbers hub, the tool and its variants", ["/tools/numbers<", "/tools/number-base<", "/tools/hex-to-decimal<", "/tools/decimal-to-octal<"]
+  .every((s) => sitemap.includes(s)));
 
 p = await open("/tools/nope");
 check("unknown tool: 404", p.status === 404, p.status);

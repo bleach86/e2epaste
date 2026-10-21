@@ -1,0 +1,116 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{# js/tools/pages/number-base.mjs. On a variant's page (e.g. Hex to Decimal)
+   its "from" field comes first and its "to" field second. #}
+{% set bases = [["10", "Decimal", "num-dec", "e.g. 255 or -42"], ["16", "Hexadecimal", "num-hex", "e.g. ff or 0xFF"],
+    ["2", "Binary", "num-bin", "e.g. 1111 1111 or 0b1010"], ["8", "Octal", "num-oct", "e.g. 377 or 0o17"]] %}
+{% set from = variant.from if variant else "10" %}
+{% set to = variant.to if variant else "16" %}
+
+{% macro field(id, label, placeholder, base) %}
+<div class="row g-2 align-items-start num-row">
+    <div class="col-md-3 col-lg-2">
+        {% if base == "custom" %}
+        <div class="d-flex align-items-center gap-2">
+            <label for="custom-base" class="num-label">Base</label>
+            <select id="custom-base" class="form-select form-select-sm w-auto" aria-label="Custom base">
+                {% for n in range(2, 37) %}
+                <option value="{{ n }}" {% if n == 36 %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% else %}
+        <label for="{{ id }}" class="num-label">{{ label }}</label>
+        {% endif %}
+    </div>
+    <div class="col">
+        {% if base == "custom" %}<label for="{{ id }}" class="visually-hidden">Number in the chosen base</label>{% endif %}
+        <textarea id="{{ id }}" class="form-control tool-area num-field" rows="1" data-base="{{ base }}"
+            placeholder="{{ placeholder }}" spellcheck="false" autocomplete="off" autocapitalize="off"
+            {% if base in ["2", "8"] %}inputmode="numeric" {% endif %}aria-describedby="{{ id }}-error"></textarea>
+        <div id="{{ id }}-error" class="small text-warn mt-1" role="status"></div>
+    </div>
+    <div class="col-auto">
+        <button type="button" class="btn btn-quiet" data-copy="{{ id }}" aria-label="Copy {{ label }}">{{ icons.icon("copy") }}</button>
+    </div>
+</div>
+{% endmacro %}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" id="base-converter" data-from="{{ from }}" data-to="{{ to }}"
+    aria-label="Number base converter">
+    <div class="num-options">
+        <div class="d-flex align-items-center gap-2">
+            <label for="bit-width" class="small text-secondary text-nowrap">Bit width</label>
+            <select id="bit-width" class="form-select form-select-sm w-auto">
+                <option value="" selected>Any size (− for negatives)</option>
+                {% for w in [8, 16, 32, 64, 128] %}
+                <option value="{{ w }}">{{ w }}-bit (two's complement)</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="opt-upper">
+            <label class="form-check-label small" for="opt-upper">Uppercase</label>
+        </div>
+        <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="opt-group">
+            <label class="form-check-label small" for="opt-group">Group digits</label>
+        </div>
+        <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="opt-prefix">
+            <label class="form-check-label small" for="opt-prefix">0x / 0b / 0o prefixes</label>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm ms-auto" id="num-clear">{{ icons.icon("eraser") }} Clear</button>
+    </div>
+
+    <div class="mt-3 d-flex flex-column gap-3">
+        {% for b in bases if b[0] == from %}{{ field(b[2], b[1], b[3], b[0]) }}{% endfor %}
+        {% for b in bases if b[0] == to and b[0] != from %}{{ field(b[2], b[1], b[3], b[0]) }}{% endfor %}
+        {% for b in bases if b[0] != from and b[0] != to %}{{ field(b[2], b[1], b[3], b[0]) }}{% endfor %}
+        {{ field("num-custom", "the chosen base", "Base 36", "custom") }}
+    </div>
+    <p id="num-info" class="small text-secondary mt-3 mb-0" role="status"></p>
+</section>
+
+<nav class="mt-4" aria-labelledby="conversions-heading">
+    <h2 class="h6 fw-semibold mb-2" id="conversions-heading">Common conversions</h2>
+    <ul class="list-inline mb-0 num-links">
+        {% if variant %}
+        <li class="list-inline-item"><a href="/tools/number-base">All bases</a></li>
+        {% endif %}
+        {% for v in variants if not (variant and v.slug == variant.slug) %}
+        <li class="list-inline-item"><a href="/tools/{{ v.slug }}">{{ v.name | replace(" Converter", "") }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">How number bases work</h2>
+<p>A number base says how many digits there are before you carry to the next place. Decimal (base 10) has ten,
+    0 to 9. Binary (base 2) has two, 0 and 1. Octal (base 8) uses 0 to 7, and hexadecimal (base 16) uses 0 to 9
+    and then the letters a to f for ten to fifteen. Bases above 16 carry on through the alphabet, up to base 36,
+    which uses every digit and letter.</p>
+<p>Each place is worth the base times the place to its right. In hex, <code>1f</code> is 1 sixteen plus 15 ones,
+    which is 31 in decimal. In binary, <code>1010</code> is 8 + 2, which is 10.</p>
+
+<h2 class="h4">Hex, binary and bytes</h2>
+<p>One hex digit is exactly four binary digits (bits), and two hex digits are one byte. That's why hex is the
+    usual way to write raw bytes, memory addresses, colours and hash values: <code>ff</code> is the byte
+    <code>1111 1111</code>, or 255. Octal digits are three bits each, and are still used for Unix file
+    permissions such as <code>755</code>.</p>
+
+<h2 class="h4">What you can type</h2>
+<p>Prefixes like <code>0x</code>, <code>0b</code> and <code>0o</code> are optional, letters can be upper or
+    lower case, and spaces, underscores and commas between digits are ignored, so <code>0xDEAD_BEEF</code> and
+    <code>1,000,000</code> both work. Numbers can be any size, up to 10,000 digits.</p>
+
+<h2 class="h4">Negative numbers and two's complement</h2>
+<p>With no bit width, a negative number is written with a minus sign in every base: −10 is <code>-a</code> in
+    hex. Computers store negatives as <em>two's complement</em> instead, in a fixed number of bits: −1 is
+    <code>ff</code> as an 8-bit number and <code>ffffffff</code> as a 32-bit one. Pick a bit width to see
+    numbers that way. Decimal then shows the signed value, and the line below the fields shows both the signed
+    and the unsigned value, so <code>ff</code> reads as −1 or 255.</p>
+{% endblock %}

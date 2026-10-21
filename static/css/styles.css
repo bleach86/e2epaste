@@ -1385,6 +1385,31 @@ html {
   background: #11151b;
 }
 
+/* Number base converter: one-line fields that grow for long numbers
+   (js/tools/pages/number-base.mjs sets the height). */
+.num-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.num-label {
+  font-weight: 600;
+  padding-top: 7px;
+}
+
+.tool-area.num-field {
+  min-height: 0;
+  resize: none;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.num-links .list-inline-item {
+  margin: 0 1rem 0.25rem 0;
+}
+
 .tool-preview {
   white-space: break-spaces;
   overflow-wrap: anywhere;

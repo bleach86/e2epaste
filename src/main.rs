@@ -403,6 +403,11 @@ fn string_tools(db: &State<Arc<PasteDB>>) -> Template {
     tool_hub(db, tools::ToolGroup::Strings)
 }
 
+#[get("/tools/numbers")]
+fn number_tools(db: &State<Arc<PasteDB>>) -> Template {
+    tool_hub(db, tools::ToolGroup::Numbers)
+}
+
 fn tool_hub(db: &State<Arc<PasteDB>>, group: tools::ToolGroup) -> Template {
     let hub = tools::hub(group);
     let listings = tools::listings();
@@ -420,12 +425,14 @@ fn tool_hub(db: &State<Arc<PasteDB>>, group: tools::ToolGroup) -> Template {
 
 #[get("/tools/<slug>")]
 fn tool_page(db: &State<Arc<PasteDB>>, slug: &str) -> Option<Template> {
-    let tool = tools::find_tool(slug)?;
+    let (tool, variant) = tools::find_page(slug)?;
     Some(Template::render(
         format!("tools/{}", tool.slug),
         context! {
-            page: &tool.page,
+            page: variant.map_or(&tool.page, |v| &v.page),
             tool,
+            variant,
+            variants: tools::variants_of(tool.slug),
             hub: tools::hub(tool.group),
             listings: tools::listings(),
             site_stats: db.get_site_stats(),
@@ -731,6 +738,7 @@ async fn rocket() -> _ {
                 access::admin_delete,
                 password_tools,
                 string_tools,
+                number_tools,
                 tool_page,
                 access::download_attachment,
                 upload_attachment,
