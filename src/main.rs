@@ -511,6 +511,12 @@ Text can be up to {paste}. {files}
 Source code and releases: {source}
 
 Run `e2ep --help` for every option, the JSON output and the exit codes.
+
+## As MCP tools
+
+`e2ep mcp --server {site} --files-dir DIR` runs e2ep as an MCP server, with the tools \
+`create_paste`, `get_paste`, `paste_info`, `delete_paste` and `site_limits`. For example, with \
+Claude Code: `claude mcp add e2ep -- e2ep mcp --server {site} --files-dir ~/e2ep-files`.
 ",
         paste = limits.max_paste_label,
         source = config.source_url,

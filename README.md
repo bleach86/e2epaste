@@ -39,7 +39,9 @@ e2ep get 'https://paste.example.com/s/Ab3dE5gH#…' --attachment-dir .
 ```
 
 It's built for scripts and AI agents: results on stdout, `--json` for everything, an exit code for each
-kind of failure, and checks before opening so a failed `get` never uses up a view. Builds for Linux,
+kind of failure, and checks before opening so a failed `get` never uses up a view. `e2ep mcp` runs it as
+an MCP server, so Claude Code, Claude Desktop and other AI apps can use it as tools, with the server and
+the files it may touch fixed when you set it up. Builds for Linux,
 macOS and Windows are on the [releases](https://github.com/bleach86/e2epaste/releases) page. Paste
 pages point programs that fetch them at `e2ep`, in a `<noscript>` notice and their `<head>`, and
 `/llms.txt` explains the site to AI agents.
@@ -425,6 +427,7 @@ with an empty data directory and the settings it needs. The suites cover:
 - Markdown rendering against hostile pastes, and language detection
 - old paste formats, plain-HTTP warnings, the tools, and the mobile layout
 - `e2ep` against a real server: its pastes open in the browser and the browser's open with it
+- `e2ep mcp`, driven as an MCP client would, including what the model isn't allowed to do
 
 [GitHub Actions](.github/workflows/ci.yml) runs all of these on every push and pull request. It also runs
 `cargo fmt`, `clippy`, `cargo audit`, `npm audit` and a Docker build, and repeats the audits weekly.

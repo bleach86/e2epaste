@@ -40,6 +40,51 @@ e2ep limits
 `get`, `info` and `delete` use the site in the link. `e2ep --help` lists every option, the JSON each
 command prints, and the exit codes.
 
+## Use it from AI agents (MCP)
+
+`e2ep mcp` runs e2ep as an [MCP](https://modelcontextprotocol.io) server, so AI apps can use it as
+tools: Claude Code, Claude Desktop and other MCP clients. The app starts it on your machine and talks
+to it over stdin and stdout; there's no port, and pastes are still encrypted and decrypted locally.
+
+With Claude Code:
+
+```sh
+claude mcp add e2ep -- e2ep mcp --server https://paste.example.com --files-dir ~/e2ep-files
+```
+
+With Claude Desktop, in its `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "e2ep": {
+      "command": "e2ep",
+      "args": ["mcp", "--server", "https://paste.example.com", "--files-dir", "/home/you/e2ep-files"]
+    }
+  }
+}
+```
+
+| Tool           | What it does                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| `create_paste` | Encrypts text (and a file) and returns the link and delete link                                |
+| `get_paste`    | Opens and decrypts a paste; uses a view. The text comes back marked as someone else's content |
+| `paste_info`   | Checks a paste without opening it: views left, expiry, timer, password, attachment             |
+| `delete_paste` | Deletes a paste with its delete link                                                           |
+| `site_limits`  | What the server takes                                                                          |
+
+What the model can do is limited on purpose:
+
+- **New pastes only go to `--server`.** A prompt can't send your content to another site. Reading a
+  link works for any site, since the site is in the link.
+- **Files only from `--files-dir`.** Attachments are read from and saved to that directory, and
+  nowhere else (paths and symlinks out of it are refused). Without it, there are no attachments.
+- **Passwords are named, not passed.** Tools take `password_env`, the name of an environment variable
+  of the MCP server, so the password never goes through the model. Set it when adding the server, e.g.
+  `claude mcp add e2ep -e PASTE_PW=… -- e2ep mcp …`.
+- **No accidental burns.** `get_paste` checks everything first (the password, and whether to save an
+  attachment, which the model must say), so a failed call uses no view.
+
 ## Things to know
 
 - **Opening a paste uses a view.** A burn-after-reading paste is gone after one, and opening may start

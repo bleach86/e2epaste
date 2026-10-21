@@ -6,4 +6,6 @@ pub mod api;
 pub mod crypto;
 pub mod error;
 pub mod link;
+pub mod mcp;
 pub mod ops;
+pub mod report;

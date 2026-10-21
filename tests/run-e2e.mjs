@@ -59,6 +59,7 @@ const SUITES = [
   { file: "no_files.mjs", env: { ...NO_PASTE_LIMITS, ROCKET_ALLOW_FILES: "false" } },
   // Also lets the test make a v3 paste, to check e2ep still opens those.
   { file: "cli.mjs", env: { ...NO_PASTE_LIMITS, E2EPASTE_TEST_LEGACY_PASTES: "1" } },
+  { file: "mcp.mjs", env: NO_PASTE_LIMITS },
   { file: "rate_limit.mjs", env: {} },
 ];
 

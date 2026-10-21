@@ -15,7 +15,24 @@ use crate::error::Error;
 use crate::link::{DeleteLink, PasteLink};
 
 /// Progress messages ("Uploading... 40%"), for showing on stderr.
-pub type Progress<'a> = &'a dyn Fn(&str);
+pub type Progress<'a> = &'a (dyn Fn(&str) + Sync);
+
+/// A password from an environment variable, trimmed as the site's pages
+/// trim them.
+pub fn password_from_env(var: &str) -> Result<String, Error> {
+    let password = std::env::var(var)
+        .map_err(|_| Error::Usage(format!("the environment variable {var} isn't set")))?;
+    checked_password(password)
+}
+
+/// A password read from somewhere, trimmed; an empty one is an error.
+pub fn checked_password(password: String) -> Result<String, Error> {
+    let password = password.trim().to_string();
+    if password.is_empty() {
+        return Err(Error::Usage("the password is empty".into()));
+    }
+    Ok(password)
+}
 
 // --- create ----------------------------------------------------------------------
 
