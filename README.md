@@ -230,53 +230,41 @@ cargo run --release
 Open <http://localhost:8001>. Pastes are stored in `e2epaste.redb` and `file_store/` in the repository
 directory.
 
-#### Running it as a service
+#### As a systemd service
 
-This sets it up with systemd, with the code in `/opt/e2epaste` and the data in `/var/lib/e2epaste`.
+[`deploy/`](deploy/) has a hardened systemd unit and an install script. The program and its files go in
+`/opt/e2epaste` (read-only to the service), the data in `/var/lib/e2epaste`, and the settings, including
+any admin token, in `/etc/e2epaste/e2epaste.env`, readable only by root and the service. The service
+runs as its own `e2epaste` user, with no access to the rest of the system (`systemd-analyze security
+e2epaste` rates it 1.2, "OK").
 
-1. Clone and build:
-
-   ```sh
-   sudo mkdir /opt/e2epaste && sudo chown "$USER" /opt/e2epaste
-   git clone https://github.com/bleach86/e2epaste.git /opt/e2epaste
-   cd /opt/e2epaste
-   cargo build --release
-   ```
-
-2. Create `/etc/systemd/system/e2epaste.service`:
-
-   ```ini
-   [Unit]
-   Description=e2ePaste
-   After=network.target
-
-   [Service]
-   WorkingDirectory=/opt/e2epaste
-   ExecStart=/opt/e2epaste/target/release/e2epaste
-   Environment=ROCKET_SITE_URL=https://paste.example.com
-   Environment=ROCKET_DATA_DIR=/var/lib/e2epaste
-   # Runs as a throwaway user that can only write to /var/lib/e2epaste.
-   DynamicUser=yes
-   StateDirectory=e2epaste
-   Restart=on-failure
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-3. Start it, and check the log:
+1. Install the build tools. On Debian 13: `sudo apt install build-essential pkg-config git nodejs npm`,
+   and Rust from [rustup](https://rustup.rs) as your own user.
+2. Build, as yourself:
 
    ```sh
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now e2epaste
+   git clone https://github.com/bleach86/e2epaste.git && cd e2epaste
+   cargo build --release --locked -p e2epaste
+   ```
+
+3. Install, as root. This creates the user, the directories, the settings file and the service:
+
+   ```sh
+   sudo deploy/install.sh
+   ```
+
+   To bring along an existing instance's data, stop it first and add `--data-from <its data
+   directory>`: the database (`paste_db/` or `e2epaste.redb`) and `file_store/` are moved together.
+4. Set at least `ROCKET_SITE_URL` in `/etc/e2epaste/e2epaste.env`, then start it and watch the log:
+
+   ```sh
+   sudo systemctl start e2epaste
    journalctl -u e2epaste -f
    ```
 
-To update: `git pull && cargo build --release && sudo systemctl restart e2epaste`.
-
-If you already run an instance with the data in the repository directory, stop it and move the
-database (`e2epaste.redb`, or `paste_db/` from older versions) and `file_store/` into the new
-`data_dir`. Move them together so the database and attachments stay in step.
+To update: `git pull`, build again, and run `sudo deploy/install.sh`. It installs the new build,
+restarts the service, and keeps the previous binary as `/opt/e2epaste/e2epaste.previous` for going back.
+[`deploy/README.md`](deploy/README.md) walks through moving a running site to a new server.
 
 ### HTTPS with a reverse proxy
 
@@ -446,6 +434,7 @@ and publishes a release with checksums ([release-cli.yml](.github/workflows/rele
 | `static/`                          | CSS, fonts, icons and vendored libraries                                                                                                    |
 | `build.rs`                         | Runs npm and webpack during `cargo build`                                                                                                   |
 | `Dockerfile`, `docker-compose.yml` | The Docker image and a Compose setup for it                                                                                                 |
+| `deploy/`                          | The systemd unit, its settings file and install script, and how to move a site to a new server                                            |
 | `tests/`                           | JavaScript unit tests, browser tests and their runner ([`tests/run-e2e.mjs`](tests/run-e2e.mjs))                                            |
 | `.github/workflows/`               | CI, and `e2ep` releases                                                                                                                     |
 
