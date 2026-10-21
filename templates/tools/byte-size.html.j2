@@ -1,0 +1,76 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{# js/tools/pages/byte-size.mjs fills the rows. On a variant's page (e.g. MB
+   to GB) it starts at 1 of its "from" unit, with its "to" unit picked out. #}
+{% set groups = [
+    ["decimal", "Decimal (1 KB = 1000 bytes)", [["B", "Bytes"], ["KB", "Kilobytes"], ["MB", "Megabytes"], ["GB", "Gigabytes"], ["TB", "Terabytes"], ["PB", "Petabytes"]]],
+    ["binary", "Binary (1 KiB = 1024 bytes)", [["KiB", "Kibibytes"], ["MiB", "Mebibytes"], ["GiB", "Gibibytes"], ["TiB", "Tebibytes"], ["PiB", "Pebibytes"]]],
+    ["bits", "Bits (8 bits = 1 byte)", [["bit", "Bits"], ["kbit", "Kilobits"], ["Mbit", "Megabits"], ["Gbit", "Gigabits"]]],
+] %}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" id="byte-converter" data-from="{{ variant.from if variant else 'GB' }}"
+    data-to="{{ variant.to if variant else 'GiB' }}" aria-label="Byte size converter">
+    <div class="row g-2 align-items-start">
+        <div class="col">
+            <label for="bytes-in" class="visually-hidden">Size</label>
+            <input id="bytes-in" class="form-control font-monospace bytes-in" type="text" inputmode="decimal"
+                spellcheck="false" autocomplete="off" value="1" placeholder="e.g. 1.5" aria-describedby="bytes-error">
+            <div id="bytes-error" class="small text-warn mt-1" role="status"></div>
+        </div>
+        <div class="col-auto">
+            <label for="bytes-unit" class="visually-hidden">Unit</label>
+            <select id="bytes-unit" class="form-select">
+                {% for group in groups %}
+                <optgroup label="{{ group[1] }}">
+                    {% for u in group[2] %}
+                    <option value="{{ u[0] }}">{{ u[0] }} ({{ u[1] | lower }})</option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <p id="bytes-headline" class="bytes-headline mt-3 mb-0" role="status"></p>
+
+    <div class="row g-4 mt-1">
+        {% for group in groups %}
+        <div class="col-lg-4">
+            <h2 class="h6 fw-semibold mb-2">{{ group[1] }}</h2>
+            <div class="d-flex flex-column gap-2">
+                {% for u in group[2] %}
+                <div class="bytes-row d-flex align-items-center gap-2" data-unit="{{ u[0] }}">
+                    <label for="bytes-{{ u[0] }}" class="bytes-unit" title="{{ u[1] }}">{{ u[0] }}</label>
+                    <input id="bytes-{{ u[0] }}" class="form-control form-control-sm font-monospace" type="text" readonly>
+                    <button type="button" class="btn btn-quiet btn-sm" data-copy="bytes-{{ u[0] }}"
+                        aria-label="Copy {{ u[1] | lower }}">{{ icons.icon("copy") }}</button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% include "tool_variants" %}
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">KB or KiB: 1000 or 1024?</h2>
+<p>There are two ways to count file sizes. <strong>Decimal</strong> units go up in thousands, like the rest of
+    the metric system: 1 kilobyte (KB) is 1000 bytes and 1 megabyte (MB) is 1000 KB. <strong>Binary</strong> units
+    go up in 1024s, a power of two that suits computer memory: 1 kibibyte (KiB) is 1024 bytes and 1 mebibyte (MiB)
+    is 1024 KiB.</p>
+<p>The gap grows with each step: a KiB is 2.4% bigger than a KB, but a TiB is almost 10% bigger than a TB. The
+    trouble is that many programs show binary sizes with decimal names, so "1 GB" can mean either.</p>
+
+<h2 class="h4">Why does my 1 TB drive show as 931 GB?</h2>
+<p>Drive makers count in decimal, so a 1 TB drive holds 1,000,000,000,000 bytes. Windows counts in binary but
+    labels the result "GB", so it shows those bytes as 931 GiB, written "931 GB". Nothing is missing. macOS and
+    most phones count in decimal, and show the full 1 TB.</p>
+
+<h2 class="h4">Bits and bytes</h2>
+<p>A byte is 8 bits. Storage is measured in bytes (B), but network speeds are usually in bits per second
+    (bit/s), so a 100 Mbit/s connection moves at most 12.5 MB of data a second. A lower-case <code>b</code>
+    usually means bits and an upper-case <code>B</code> means bytes.</p>
+{% endblock %}

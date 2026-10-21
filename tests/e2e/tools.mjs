@@ -22,7 +22,7 @@ const txt = (p, sel) => p.$eval(sel, (el) => el.textContent);
 for (const path of ["/tools/password", "/tools/strings", "/tools/numbers"]) {
   const p = await open(path);
   const cards = await p.$$eval(".tool-card", (els) => els.map((e) => e.getAttribute("href")));
-  check(`${path}: 200, lists all 10 tools (not the variants)`, p.status === 200 && cards.length === 10
+  check(`${path}: 200, lists all 12 tools (not the variants)`, p.status === 200 && cards.length === 12
     && !cards.includes("/tools/hex-to-decimal"), `${p.status} ${cards.length}`);
   check(`${path}: own group first`, (await p.$eval("section h2 a", (a) => a.getAttribute("href"))) === path);
   check(`${path}: no JS errors`, p.errors.length === 0, p.errors.join(" | "));
@@ -42,7 +42,7 @@ check("base64: copy", (await p.evaluate(() => navigator.clipboard.readText())) =
 await p.$eval('[data-clear="encode-in"]', (b) => b.click());
 check("base64: clear empties input and output", (await val(p, "#encode-in")) === "" && (await val(p, "#encode-out")) === "");
 const related = await p.$$eval(".tool-card", (els) => els.map((e) => e.getAttribute("href")));
-check("base64: related tools exclude itself", related.length === 9 && !related.includes("/tools/base64"));
+check("base64: related tools exclude itself", related.length === 11 && !related.includes("/tools/base64"));
 const crumbs = await p.$$eval(".breadcrumb-item", (els) => els.map((e) => e.textContent.trim()));
 check("base64: breadcrumb", crumbs.join(" > ") === "Home > String Tools > Base64 Encoder & Decoder", crumbs.join(" > "));
 check("base64: no JS errors", p.errors.length === 0, p.errors.join(" | "));
@@ -182,6 +182,68 @@ check("hex-to-decimal: no JS errors", p.errors.length === 0, p.errors.join(" | "
 const sitemap = await (await fetch(BASE + "/sitemap.xml")).text();
 check("sitemap: has the numbers hub, the tool and its variants", ["/tools/numbers<", "/tools/number-base<", "/tools/hex-to-decimal<", "/tools/decimal-to-octal<"]
   .every((s) => sitemap.includes(s)));
+
+// unix timestamp, in a fixed time zone
+p = await browser.newPage();
+p.errors = [];
+await watch(p, p.errors);
+await p.emulateTimezone("America/New_York");
+await p.goto(BASE + "/tools/unix-timestamp", { waitUntil: "networkidle0" });
+const ts = () => p.evaluate(() => Object.fromEntries(["s", "ms", "iso", "local-iso", "local", "http", "rel"]
+  .map((k) => [k, document.getElementById(`out-${k}`).value])));
+const nowS = Number(await val(p, "#now-s"));
+check("timestamp: shows the current time", Math.abs(nowS - Date.now() / 1000) < 5 && (await val(p, "#now-ms")).startsWith(String(nowS).slice(0, 8)));
+check("timestamp: names the time zone", (await txt(p, "#tz-name")) === "America/New_York");
+await setValue(p, "#ts-in", "1700000000");
+let r = await ts();
+check("timestamp: seconds to dates", r.ms === "1700000000000" && r.iso === "2023-11-14T22:13:20.000Z" && r["local-iso"] === "2023-11-14T17:13:20-05:00"
+  && r.http === "Tue, 14 Nov 2023 22:13:20 GMT" && /ago$/.test(r.rel) && (await txt(p, "#ts-note")) === "Read as seconds.", JSON.stringify(r));
+await setValue(p, "#ts-in", "1700000000000");
+check("timestamp: milliseconds guessed", (await ts()).s === "1700000000" && (await txt(p, "#ts-note")) === "Read as milliseconds.");
+await setValue(p, "#ts-in", "1700000000");
+await p.select("#ts-unit", "ms");
+check("timestamp: a chosen unit", (await ts()).iso === "1970-01-20T16:13:20.000Z" && (await txt(p, "#ts-note")) === "", (await ts()).iso);
+await setValue(p, "#ts-in", "99999999999999999");
+await p.select("#ts-unit", "s");
+check("timestamp: too far from 1970", (await txt(p, "#ts-error")).includes("too far") && (await ts()).s === "");
+await p.select("#ts-unit", "auto");
+await setValue(p, "#ts-in", "2026-10-21T14:30");
+r = await ts();
+check("timestamp: a date with no zone is local time", r.s === "1792607400" && r["local-iso"] === "2026-10-21T14:30:00-04:00"
+  && /local time/.test(await txt(p, "#ts-note")), JSON.stringify(r));
+await setValue(p, "#ts-in", "soon");
+check("timestamp: can't read it, says so", /isn't a timestamp or a date/.test(await txt(p, "#ts-error")) && (await ts()).iso === "");
+await p.$eval("#ts-pick", (e) => { e.value = "2038-01-18T22:14:07"; e.dispatchEvent(new Event("change")); });
+check("timestamp: the date picker, in local time", (await ts()).s === "2147483647", (await ts()).s);
+await p.click("#ts-now");
+check("timestamp: Now", Math.abs(Number((await ts()).s) - Date.now() / 1000) < 5 && (await ts()).rel === "now");
+await p.$eval('[data-copy="out-iso"]', (b) => b.click());
+check("timestamp: copy", (await p.evaluate(() => navigator.clipboard.readText())) === (await ts()).iso);
+await p.click("#ts-clear");
+check("timestamp: clear", (await val(p, "#ts-in")) === "" && Object.values(await ts()).every((v) => v === ""));
+check("timestamp: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+
+// byte sizes
+p = await open("/tools/byte-size");
+const sizes = () => p.$$eval(".bytes-row", (rows) => Object.fromEntries(rows.map((r) => [r.dataset.unit, r.querySelector("input").value])));
+check("bytes: starts with an example, 1 GB in GiB", (await val(p, "#bytes-in")) === "1" && (await val(p, "#bytes-unit")) === "GB"
+  && (await txt(p, "#bytes-headline")) === "1 GB = 0.931322574615 GiB" && (await p.$eval(".is-target", (e) => e.dataset.unit)) === "GiB", await txt(p, "#bytes-headline"));
+await setValue(p, "#bytes-in", "1");
+await p.select("#bytes-unit", "TB");
+let s = await sizes();
+check("bytes: every unit at once", s.B === "1,000,000,000,000" && s.GB === "1,000" && s.GiB === "931.322574615" && s.TiB === "0.909494701773" && s.Gbit === "8,000", JSON.stringify(s));
+await setValue(p, "#bytes-in", "-5");
+check("bytes: bad input says why", /can't be negative/.test(await txt(p, "#bytes-error")) && (await sizes()).B === "" && (await txt(p, "#bytes-headline")) === "");
+check("bytes: no JS errors", p.errors.length === 0, p.errors.join(" | "));
+p = await open("/tools/mb-to-gb");
+check("mb-to-gb: own heading, starts at 1 MB in GB", (await txt(p, "h1")) === "MB to GB Converter" && (await txt(p, "#bytes-headline")) === "1 MB = 0.001 GB"
+  && (await p.$eval(".is-target", (e) => e.dataset.unit)) === "GB", await txt(p, "#bytes-headline"));
+await setValue(p, "#bytes-in", "1536");
+check("mb-to-gb: typing converts", (await txt(p, "#bytes-headline")) === "1,536 MB = 1.536 GB");
+const byteLinks = await p.$$eval(".num-links a", (els) => els.map((a) => a.getAttribute("href")));
+check("mb-to-gb: links to the tool and the other byte pages only", byteLinks[0] === "/tools/byte-size" && byteLinks.includes("/tools/gb-to-gib")
+  && !byteLinks.includes("/tools/mb-to-gb") && !byteLinks.includes("/tools/hex-to-decimal") && byteLinks.length === 6, byteLinks.join());
+check("mb-to-gb: no JS errors", p.errors.length === 0, p.errors.join(" | "));
 
 p = await open("/tools/nope");
 check("unknown tool: 404", p.status === 404, p.status);

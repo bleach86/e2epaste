@@ -22,7 +22,7 @@ await p.goto(BASE + "/", { waitUntil: "networkidle0" });
 await p.click(".navbar .dropdown-toggle");
 await new Promise((r) => setTimeout(r, 300));
 const links = await p.$$eval(".tools-menu a", (els) => els.map((e) => [e.textContent.trim(), e.getAttribute("href")]));
-check("menu lists 3 hub headings + 10 tools", links.length === 13, links.length);
+check("menu lists 3 hub headings + 12 tools", links.length === 15, links.length);
 const groups = await p.$$eval(".tools-menu-group", (g) => g.map((x) => x.getBoundingClientRect()).map((r) => [Math.round(r.left), Math.round(r.top)]));
 check("desktop: groups side by side", groups.length === 3 && groups.every((g) => g[1] === groups[0][1]) && groups[1][0] > groups[0][0]
   && groups[2][0] > groups[1][0], JSON.stringify(groups));

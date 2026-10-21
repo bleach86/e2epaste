@@ -81,17 +81,17 @@ pub static HUBS: [ToolHub; 3] = [
         group: ToolGroup::Numbers,
         name: "Number Tools",
         path: "/tools/numbers",
-        intro: "Convert numbers between bases: decimal, hex, binary, octal and more.",
+        intro: "Convert numbers between bases, Unix timestamps to dates, and file sizes between units.",
         page: PageMeta {
-            title: "Number Tools: Hex, Binary, Octal & Decimal Converters - {site}",
+            title: "Number Tools: Base, Timestamp & Byte Size Converters - {site}",
             description: "Free number tools that run entirely in your browser: convert between \
-                decimal, hexadecimal, binary, octal and any base from 2 to 36.",
+                decimal, hex, binary and octal, Unix timestamps and dates, and bytes, MB, GB and GiB.",
             canonical: Some("/tools/numbers"),
         },
     },
 ];
 
-pub static TOOLS: [Tool; 10] = [
+pub static TOOLS: [Tool; 12] = [
     Tool {
         slug: "password-generator",
         name: "Password Generator",
@@ -213,42 +213,88 @@ pub static TOOLS: [Tool; 10] = [
             canonical: Some("/tools/number-base"),
         },
     },
+    Tool {
+        slug: "unix-timestamp",
+        name: "Unix Timestamp Converter",
+        summary: "Convert Unix (epoch) timestamps to dates, and dates to timestamps.",
+        group: ToolGroup::Numbers,
+        page: PageMeta {
+            title: "Unix Timestamp Converter (Epoch Time to Date) - {site}",
+            description: "Convert Unix epoch timestamps in seconds, milliseconds, microseconds or \
+                nanoseconds to a date in UTC and your time zone, and dates back to timestamps. \
+                Shows the current Unix time. Runs entirely in your browser.",
+            canonical: Some("/tools/unix-timestamp"),
+        },
+    },
+    Tool {
+        slug: "byte-size",
+        name: "Byte Size Converter",
+        summary: "Convert between bytes, KB, MB, GB and TB, and KiB, MiB, GiB and TiB.",
+        group: ToolGroup::Numbers,
+        page: PageMeta {
+            title: "Byte Size Converter: KB, MB, GB, TB, KiB, MiB, GiB - {site}",
+            description: "Convert file and disk sizes between bytes, KB, MB, GB, TB and PB, the \
+                binary KiB, MiB, GiB and TiB, and bits. Explains why a 1 TB drive shows as 931 GB. \
+                Runs entirely in your browser.",
+            canonical: Some("/tools/byte-size"),
+        },
+    },
 ];
 
-/// One variant of the number base converter, converting `from_name` (base
-/// `from`) to `to_name`.
-macro_rules! base_variant {
-    ($slug:literal, $from:literal, $to:literal, $from_name:literal, $to_name:literal) => {
+/// A "<from> to <to> Converter" variant of `tool`. `summary` and
+/// `description` follow "Convert <from> to <to>".
+macro_rules! variant {
+    ($tool:literal, $slug:literal, $from:literal, $to:literal, $from_name:literal,
+     $to_name:literal, $summary:literal, $description:literal) => {
         ToolVariant {
             slug: $slug,
-            tool: "number-base",
+            tool: $tool,
             name: concat!($from_name, " to ", $to_name, " Converter"),
-            summary: concat!(
-                "Convert ",
-                $from_name,
-                " to ",
-                $to_name,
-                " as you type, with the other bases alongside."
-            ),
+            summary: concat!("Convert ", $from_name, " to ", $to_name, $summary),
             from: $from,
             to: $to,
             page: PageMeta {
                 title: concat!($from_name, " to ", $to_name, " Converter - {site}"),
-                description: concat!(
-                    "Convert ",
-                    $from_name,
-                    " numbers to ",
-                    $to_name,
-                    " instantly, as you type. Numbers of any size, prefixes like 0x and 0b \
-                    accepted, and two's complement for negatives. Runs entirely in your browser."
-                ),
+                description: concat!("Convert ", $from_name, " to ", $to_name, $description),
                 canonical: Some(concat!("/tools/", $slug)),
             },
         }
     };
 }
 
-pub static VARIANTS: [ToolVariant; 8] = [
+macro_rules! base_variant {
+    ($slug:literal, $from:literal, $to:literal, $from_name:literal, $to_name:literal) => {
+        variant!(
+            "number-base",
+            $slug,
+            $from,
+            $to,
+            $from_name,
+            $to_name,
+            " as you type, with the other bases alongside.",
+            " numbers instantly, as you type. Numbers of any size, prefixes like 0x and 0b \
+            accepted, and two's complement for negatives. Runs entirely in your browser."
+        )
+    };
+}
+
+macro_rules! bytes_variant {
+    ($slug:literal, $from:literal, $to:literal) => {
+        variant!(
+            "byte-size",
+            $slug,
+            $from,
+            $to,
+            $from,
+            $to,
+            ", in both decimal (1000) and binary (1024) units.",
+            " instantly, in both decimal (1000) and binary (1024) units, with every other \
+            size alongside. Runs entirely in your browser."
+        )
+    };
+}
+
+pub static VARIANTS: [ToolVariant; 14] = [
     base_variant!("hex-to-decimal", "16", "10", "Hex", "Decimal"),
     base_variant!("decimal-to-hex", "10", "16", "Decimal", "Hex"),
     base_variant!("binary-to-decimal", "2", "10", "Binary", "Decimal"),
@@ -257,6 +303,12 @@ pub static VARIANTS: [ToolVariant; 8] = [
     base_variant!("binary-to-hex", "2", "16", "Binary", "Hex"),
     base_variant!("octal-to-decimal", "8", "10", "Octal", "Decimal"),
     base_variant!("decimal-to-octal", "10", "8", "Decimal", "Octal"),
+    bytes_variant!("kb-to-mb", "KB", "MB"),
+    bytes_variant!("mb-to-gb", "MB", "GB"),
+    bytes_variant!("gb-to-mb", "GB", "MB"),
+    bytes_variant!("gb-to-tb", "GB", "TB"),
+    bytes_variant!("tb-to-gb", "TB", "GB"),
+    bytes_variant!("gb-to-gib", "GB", "GiB"),
 ];
 
 /// A hub with its tools, for templates that list tools by group.

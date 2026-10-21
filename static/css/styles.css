@@ -1406,6 +1406,34 @@ html {
   word-break: break-all;
 }
 
+/* Byte size converter */
+.bytes-in {
+  font-size: 18px;
+}
+
+.bytes-headline {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--e2e-accent);
+  overflow-wrap: anywhere;
+}
+
+.bytes-unit {
+  flex: none;
+  width: 3rem;
+  font-weight: 600;
+}
+
+.bytes-row.is-target input {
+  border-color: var(--e2e-accent);
+  color: var(--e2e-accent);
+}
+
+.now-time {
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .num-links .list-inline-item {
   margin: 0 1rem 0.25rem 0;
 }
