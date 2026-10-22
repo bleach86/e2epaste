@@ -20,6 +20,11 @@
         {{ icons.icon("alert") }}
         <span id="open-error-text"></span>
     </div>
+    {# The Markdown renderer is loaded on demand (js/pages/paste.mjs); the source is still shown. #}
+    <div id="markdown-error" class="notice notice-danger mb-3" role="alert" hidden>
+        {{ icons.icon("alert") }}
+        <span>The Markdown couldn't be rendered. Check your connection and try again; the source is shown below.</span>
+    </div>
     {# For the paste's creator (this browser has its delete token), when
        opening it would use up a limited view or start its timer. #}
     <section id="owner-prompt" class="panel panel-pad mb-3" aria-labelledby="owner-prompt-title" hidden>
@@ -77,7 +82,7 @@
         <span class="attachment-icon">{{ icons.icon("file") }}</span>
         <div class="min-w-0 flex-grow-1">
             <div id="attachment-name" class="fw-semibold text-truncate"></div>
-            <div id="download-status" class="small text-secondary">Encrypted attachment</div>
+            <div id="download-status" class="small text-secondary" role="status" aria-live="polite">Encrypted attachment</div>
         </div>
         <button type="button" id="download-link" class="btn btn-quiet btn-outline-accent">
             <span class="dl-idle d-inline-flex align-items-center gap-2">{{ icons.icon("download") }} Decrypt &amp; download</span>
@@ -91,7 +96,7 @@
     {{ icons.icon("arrow-up") }}
 </button>
 
-<div class="modal fade" id="password-modal" data-bs-backdrop="static" tabindex="-1"
+<div class="modal fade" id="password-modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
     aria-labelledby="password-modal-title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered link-dialog">
         <div class="modal-content">

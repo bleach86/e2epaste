@@ -27,7 +27,7 @@ const openApi = (id, proof, ip = freshIp()) =>
   api(`/api/open/${id}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Real-IP": ip }, body: JSON.stringify({ proof }) });
 
 // Creates a paste through the real page; returns { url, id, secret, deleteUrl }.
-async function createPaste({ text = "secret text", password = "", burn = false, file = null, syntax = null, title = "", deleteAfterOpen = null } = {}) {
+async function createPaste({ text = "secret text", password = "", burn = false, file = null, syntax = null, title = "", deleteAfterOpen = null, maxViews = null } = {}) {
   const p = await newPage();
   await p.goto(BASE + "/", { waitUntil: "networkidle0" });
   await p.$eval("#paste-area", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, text);
@@ -36,6 +36,7 @@ async function createPaste({ text = "secret text", password = "", burn = false, 
   if (deleteAfterOpen) await p.select("#delete-after-open", String(deleteAfterOpen));
   if (password) await p.type("#paste-password", password);
   if (burn) await p.click('label[for="burn"]');
+  if (maxViews) await p.type("#max-views", String(maxViews));
   if (file) { const input = await p.$("#fileInput"); await input.uploadFile(file); }
   await p.click("#submit-paste");
   await p.waitForSelector("#url-modal.show", { timeout: 20000 });
@@ -162,6 +163,26 @@ const plain = await createPaste({ text: "the quick brown fox" });
   await p.close();
 }
 
+// Enter pressed twice (or Enter and a click) while the first unlock is still
+// in flight must open the paste once, not burn a view per keypress.
+{
+  const twice = await createPaste({ text: "pressed twice", password: "double tap", maxViews: 2 });
+  const p = await newPage();
+  await p.goto(local(twice.url), { waitUntil: "networkidle0" });
+  await openIfAsked(p);
+  await p.waitForSelector("#password-modal.show");
+  await p.type("#password-input", "double tap");
+  await p.keyboard.press("Enter");
+  await p.keyboard.press("Enter");
+  await p.click("#submit-password-btn").catch(() => {});
+  await p.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  check("password: Enter twice decrypts once", (await p.$eval("#view-area", (e) => e.textContent)) === "pressed twice");
+  const data = JSON.parse((await (await api(`/paste/${twice.id}`)).text()).match(/id="page-data">(.*?)<\/script>/s)[1]);
+  check("password: Enter twice uses one view", data.paste.views === 1, data.paste.views);
+  check("password: the page agrees", (await p.$eval("#views", (e) => e.textContent.trim())) === "1 of 2 views");
+  await p.close();
+}
+
 // -------------------------------------------------------- truncated link
 {
   const short = await createPaste({ text: "short link", burn: true });
@@ -208,11 +229,15 @@ const plain = await createPaste({ text: "the quick brown fox" });
   await p.click("#download-link");
   await p.waitForFunction(() => window.__dl.length === 1, { timeout: 20000 });
   check("tickets: the viewer downloads the attachment", Buffer.compare(Buffer.from(await p.evaluate(() => window.__dl[0])), bytes) === 0);
-  // Downloading again: the burned paste and its file were deleted after the
-  // first download.
-  await p.click("#download-link");
-  await p.waitForFunction(() => !document.getElementById("download-link").disabled, { timeout: 10000 });
-  check("tickets: a burned paste's file is deleted after its download", (await p.evaluate(() => window.__dl.length)) === 1 && !(await api(`/paste/${withFile.id}`)).ok);
+  // The burned paste and its file were deleted after the first download, so
+  // the page doesn't offer a second one (a click would only get a 404).
+  check("tickets: a burned paste's file is deleted after its download", !(await api(`/paste/${withFile.id}`)).ok);
+  check("tickets: the page says the last view's download can't be repeated",
+    (await p.$eval("#download-link", (e) => e.disabled)) && /last view/.test(await p.$eval("#download-status", (e) => e.textContent)),
+    await p.$eval("#download-status", (e) => e.textContent));
+  await p.$eval("#download-link", (b) => b.click());
+  await new Promise((r) => setTimeout(r, 500));
+  check("tickets: a forced second click downloads nothing", (await p.evaluate(() => window.__dl.length)) === 1);
   await p.close();
 }
 
