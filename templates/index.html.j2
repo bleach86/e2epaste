@@ -149,7 +149,7 @@
                 <span class="submit-idle d-inline-flex align-items-center gap-2">{{ icons.icon("lock") }} Encrypt &amp;
                     get link</span>
                 <span class="submit-busy d-none align-items-center gap-2"><span class="spinner-border spinner-border-sm"
-                        aria-hidden="true"></span> <span id="submit-status">Encrypting...</span></span>
+                        aria-hidden="true"></span> <span id="submit-status" role="status" aria-live="polite">Encrypting...</span></span>
             </button>
         </aside>
     </div>
@@ -167,7 +167,7 @@
     </ul>
 </div>
 
-<div class="modal fade" id="url-modal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="url-modal-title"
+<div class="modal fade" id="url-modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="url-modal-title"
     aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered link-dialog">
         <div class="modal-content">
@@ -193,6 +193,14 @@
             </div>
 
             <ul id="link-summary" class="chips" aria-label="Paste settings"></ul>
+
+            {# The paste was created but its attachment didn't upload (js/pages/create.mjs). #}
+            <div id="upload-failed" class="notice notice-danger" role="alert" hidden>
+                {{ icons.icon("alert") }}
+                <p class="mb-0">The attachment couldn't be uploaded, so the paste has only the text. Anyone opening it
+                    will see the attachment but won't be able to download it. You can delete the paste with the delete
+                    link below and try again.</p>
+            </div>
 
             <div class="notice notice-plain">
                 {{ icons.icon("info") }}
