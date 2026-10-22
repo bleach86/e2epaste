@@ -18,7 +18,8 @@ import {
   setRemembering,
 } from "../delete_tokens.mjs";
 import { enableEditorKeys } from "../editor_keys.mjs";
-import { AUTO, detectLanguage, languageName } from "../highlight.mjs";
+import qrcode from "qrcode-generator";
+import { AUTO, detectLanguage, hljs, languageName } from "../highlight.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
 import { buildZip, zipEntries, zipFits, zipSize } from "../zip.mjs";
 

@@ -93,6 +93,21 @@
   --bs-code-color: #c4b5fd;
 }
 
+/* No ligatures in the code font: text is shown exactly as it is, so "=="
+   stays two characters and "!=" doesn't turn into "≠". */
+code,
+kbd,
+pre,
+samp,
+textarea,
+input,
+.font-monospace,
+.code-view,
+.tool-preview,
+.jwt-claims dd {
+  font-variant-ligatures: none;
+}
+
 .breadcrumb a {
   text-decoration: none;
 }

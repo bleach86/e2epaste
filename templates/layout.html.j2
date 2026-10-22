@@ -34,10 +34,10 @@
     {% block head %}{% endblock %}
 
     <link rel="preload" href="/public/fonts/metropolis-latin-400.woff2" as="font" type="font/woff2" crossorigin>
-    <link href="/public/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/public/css/atom-one-dark.min.css">
+    <link rel="stylesheet" href="/public/js/dist/vendor/bootstrap.min.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/public/js/dist/vendor/atom-one-dark.min.css?v={{ asset_version }}">
     {# Last, so the theme overrides Bootstrap. #}
-    <link rel="stylesheet" href="/public/css/styles.css?v=2.16">
+    <link rel="stylesheet" href="/public/css/styles.css?v=2.17">
 </head>
 
 <body class="d-flex flex-column min-vh-100">
@@ -63,7 +63,6 @@
     </main>
     {% include "footer" %}
 
-    <script src="/public/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/public/js/dist/common.js?v={{ asset_version }}"></script>
     {% block scripts %}{% endblock %}
 </body>

@@ -15,7 +15,7 @@ import {
   linkHasPassword,
 } from "../crypto.mjs";
 import { deleteTokenFor } from "../delete_tokens.mjs";
-import { AUTO, effectiveLanguage, languageName } from "../highlight.mjs";
+import { AUTO, effectiveLanguage, hljs, languageName } from "../highlight.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
 
 // Details only; the encrypted content comes from /api/open.

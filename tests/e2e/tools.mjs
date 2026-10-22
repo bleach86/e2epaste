@@ -45,6 +45,11 @@ await setValue(p, "#decode-in", "abc$");
 check("base64: decode error shown", /valid Base64/.test(await txt(p, "#decode-error")));
 await setValue(p, "#decode-in", "aMOpbGxvIPCfkY0");
 check("base64: decode clears error", (await val(p, "#decode-out")) === "héllo 👍" && (await txt(p, "#decode-error")) === "");
+await setValue(p, "#decode-in", "aMOpbGxvIPCfkY0&#x3d;");
+check("base64: HTML-escaped input is read, and says so", (await val(p, "#decode-out")) === "héllo 👍"
+  && (await txt(p, "#decode-error")) === "Read escaped symbols: &#x3d; as =.", await txt(p, "#decode-error"));
+check("base64: no ligatures in the code font, so == stays two characters",
+  (await p.$eval("#decode-in", (e) => getComputedStyle(e).fontVariantLigatures)) === "none");
 await p.$eval('[data-copy="encode-out"]', (b) => b.click());
 check("base64: copy", (await p.evaluate(() => navigator.clipboard.readText())) === "aMOpbGxvIPCfkY0=");
 await p.$eval('[data-clear="encode-in"]', (b) => b.click());
