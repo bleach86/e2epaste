@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use redb::{Database, ReadableDatabase, TableDefinition, WriteTransaction};
 
-use crate::paste_db::{DbError, Result, EXPIRY, PASTES, STATS, UPLOAD_TOKENS};
+use crate::paste_db::{DbError, Result, EXPIRY, PASTES, STATS, STAT_PASTES, UPLOAD_TOKENS};
 
 const META: TableDefinition<&str, u64> = TableDefinition::new("meta");
 const SCHEMA_VERSION_KEY: &str = "schema_version";
@@ -154,11 +154,33 @@ pub fn import_sled(sled_dir: &Path, _db_path: &Path) -> Result<()> {
     )))
 }
 
+/// Whether the database at `db_path` has never held a paste: started once
+/// before the old database was copied in next to it. The import can replace
+/// that one without losing anything.
+pub fn never_used(db_path: &Path) -> Result<bool> {
+    use redb::{ReadableTableMetadata, TableError};
+
+    let db = Database::open(db_path)?;
+    let txn = db.begin_read()?;
+    let created = match txn.open_table(STATS) {
+        Ok(stats) => stats.get(STAT_PASTES)?.map_or(0, |v| v.value()),
+        Err(TableError::TableDoesNotExist(_)) => 0,
+        Err(e) => return Err(e.into()),
+    };
+    let stored = match txn.open_table(PASTES) {
+        Ok(pastes) => pastes.len()?,
+        Err(TableError::TableDoesNotExist(_)) => 0,
+        Err(e) => return Err(e.into()),
+    };
+    Ok(created == 0 && stored == 0)
+}
+
 /// Renames an old-version database found next to an existing `db_path`, the
 /// way `import_sled` would have. That happens if the import was interrupted
 /// between its two renames, or if a `paste_db/` was copied in by hand after
-/// the move to redb: either way it isn't imported, since the database is
-/// already there, and it shouldn't be checked again on every start.
+/// the new version had already taken pastes: either way it isn't imported,
+/// since that would replace them, and it shouldn't be checked again on
+/// every start.
 pub fn set_aside_sled(sled_dir: &Path, db_path: &Path) -> Result<()> {
     let backup = backup_path(sled_dir);
     std::fs::rename(sled_dir, &backup).map_err(|e| setup_io("rename", sled_dir, e))?;
@@ -434,6 +456,21 @@ mod tests {
             })
             .count();
         assert_eq!(backups, 2);
+    }
+
+    #[cfg(feature = "sled-import")]
+    #[test]
+    fn imports_over_a_database_that_never_held_a_paste() {
+        let dir = temp_dir();
+        // Started once before the old database was copied in.
+        drop(open(&dir).unwrap());
+        write_old_database(&dir);
+
+        let db = open(&dir).unwrap();
+        assert!(db.get_paste("v3Paste1").is_some());
+        assert_eq!(db.get_site_stats().pastes, 41);
+        assert!(!dir.join("paste_db").exists());
+        assert!(dir.join("paste_db.sled-backup").is_dir());
     }
 
     #[test]

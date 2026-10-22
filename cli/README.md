@@ -99,8 +99,8 @@ What the model can do is limited on purpose:
 - **Attachments** are encrypted and uploaded in 1 MiB chunks, so they're never in memory whole. `get`
   saves them under their own name, stripped of any directories, control and invisible formatting
   characters, and never overwrites a file. If the attachment can't be saved once the paste is open
-  (the view is used by then), `get` still prints the text, exits 0, and says what went wrong on stderr
-  and in `"attachment": {"error": …}` with `--json`.
+  (the view is used by then), `get` still prints the text, says what went wrong on stderr and in
+  `"attachment": {"error": …}` with `--json`, and exits with that error's code rather than 0.
 - **On a terminal, a paste's text is printed without control characters** (escape sequences and the
   like, which a terminal would act on); newlines, tabs and carriage returns stay. Into a pipe or file,
   and with `--json`, the text is exact.

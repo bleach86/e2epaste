@@ -36,7 +36,7 @@ With --json, stdout is one JSON object, for errors too:
   get     {\"id\", \"title\", \"syntax\", \"text\", \"views\", \"max_views\", \"views_left\", \"expires_at\",
            \"last_view\", \"attachment\": {\"name\", \"size\", \"path\", \"error\"?, \"error_code\"?} | null}
           An attachment that can't be saved once the paste is open (the view is used by then)
-          is reported in \"error\", with the text; the exit code is still 0.
+          is reported in \"error\", with the text, and the exit code is that error's.
   info    {\"id\", \"version\", \"created_at\", \"expires_at\", \"views\", \"max_views\", \"views_left\",
            \"delete_after_open_seconds\", \"timer_started\", \"has_attachment\", \"needs_password\"}
   delete  {\"deleted\": true, \"id\"}
@@ -220,7 +220,7 @@ async fn main() -> ExitCode {
     let json = cli.json;
     let quiet = cli.quiet;
     match run(cli).await {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => code,
         Err(e) => {
             if json {
                 println!("{}", e.to_json());
@@ -233,15 +233,16 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn run(cli: Cli) -> Result<(), Error> {
+/// The exit code is 0, except for a paste whose attachment couldn't be saved.
+async fn run(cli: Cli) -> Result<ExitCode, Error> {
     let out = Output {
         json: cli.json,
         quiet: cli.quiet,
     };
     match cli.command.unwrap_or(Command::Create(cli.create)) {
-        Command::Create(args) => create(args, &out).await,
-        Command::Get(args) => get(args, &out).await,
-        Command::Info(args) => info(args, &out).await,
+        Command::Create(args) => create(args, &out).await?,
+        Command::Get(args) => return get(args, &out).await,
+        Command::Info(args) => info(args, &out).await?,
         Command::Delete(args) => {
             let link = DeleteLink::parse(&args.link)?;
             ops::delete(&link).await?;
@@ -249,10 +250,9 @@ async fn run(cli: Cli) -> Result<(), Error> {
                 out.note("Deleted.");
                 String::new()
             });
-            Ok(())
         }
         Command::Mcp(args) => {
-            e2ep::mcp::serve(site(&args.server)?, args.files_dir, args.password_env).await
+            e2ep::mcp::serve(site(&args.server)?, args.files_dir, args.password_env).await?
         }
         Command::Limits(args) => {
             let site = site(&args)?;
@@ -268,9 +268,9 @@ async fn run(cli: Cli) -> Result<(), Error> {
                     limits.format_version
                 )
             });
-            Ok(())
         }
     }
+    Ok(ExitCode::SUCCESS)
 }
 
 struct Output {
@@ -388,7 +388,7 @@ async fn create(args: CreateArgs, out: &Output) -> Result<(), Error> {
     Ok(())
 }
 
-async fn get(args: GetArgs, out: &Output) -> Result<(), Error> {
+async fn get(args: GetArgs, out: &Output) -> Result<ExitCode, Error> {
     let options = ops::GetOptions {
         link: PasteLink::parse(&args.link)?,
         password: read_password(&args.password)?,
@@ -407,7 +407,12 @@ async fn get(args: GetArgs, out: &Output) -> Result<(), Error> {
             got.text.clone()
         }
     });
+    let mut code = ExitCode::SUCCESS;
     if let Some(attachment) = &got.attachment {
+        if let Some(error) = &attachment.error {
+            // Not 0, so a script doesn't go on to look for the file.
+            code = ExitCode::from(error.exit_status());
+        }
         match (&attachment.path, &attachment.error) {
             (Some(path), _) => out.note(&format!("Attachment saved: {}", path.display())),
             // The paste is open by now (the view is used), so this goes
@@ -422,7 +427,7 @@ async fn get(args: GetArgs, out: &Output) -> Result<(), Error> {
     if got.last_view {
         out.note("That was its last view: the paste is gone now.");
     }
-    Ok(())
+    Ok(code)
 }
 
 async fn info(args: InfoArgs, out: &Output) -> Result<(), Error> {

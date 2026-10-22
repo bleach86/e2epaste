@@ -120,6 +120,16 @@ const errors = [];
   const again = await e2ep(["get", url, "--json", "--password-env", "PW", "--attachment-dir", dir], { env: { PW: "web-pw" } });
   check("get: never overwrites a file", again.json?.attachment?.path === path.join(dir, "from-browser (2).bin"));
 
+  // A directory it can't write to: the text is still reported (the view is
+  // used), but the exit code says the attachment wasn't saved.
+  const locked = fs.mkdtempSync(path.join(work, "locked-"));
+  fs.chmodSync(locked, 0o500);
+  const unsaved = await e2ep(["get", url, "--json", "--password-env", "PW", "--attachment-dir", locked], { env: { PW: "web-pw" } });
+  check("get: an attachment it can't save -> exit 1, with the text",
+    unsaved.code === 1 && unsaved.json?.text === "print('hello')\n" && unsaved.json.attachment?.path === null && unsaved.json.attachment?.error_code === "error" && fs.readdirSync(locked).length === 0,
+    unsaved.code + " " + unsaved.stdout + unsaved.stderr);
+  fs.chmodSync(locked, 0o700);
+
   const plain = await e2ep(["get", url, "--password-env", "PW", "--no-attachment"], { env: { PW: "web-pw" } });
   check("get: stdout is exactly the text", plain.code === 0 && plain.stdout === "print('hello')\n", JSON.stringify(plain.stdout));
 }
