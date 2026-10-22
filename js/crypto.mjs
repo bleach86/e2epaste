@@ -22,7 +22,7 @@
 // Each part of a paste (text, title, file name, file) is encrypted with its
 // own IV; see deriveIv.
 
-import { deflate, inflate } from "pako";
+import { deflate, Inflate } from "pako";
 
 export const PASTE_VERSION = 4;
 
@@ -274,25 +274,92 @@ export function encryptText(text, key, iv) {
   return encryptBytes(new TextEncoder().encode(text), key, iv);
 }
 
+// --- Inflating, within a limit --------------------------------------------
+//
+// The server can only check a paste's encrypted size, not what it inflates
+// to: a megabyte of deflated zeros comes out as a gigabyte, in every browser
+// that opens it. So nothing is inflated without a limit on the output, and a
+// part that passes it is refused, not shown.
+
+// Thrown when a part inflates to more than the site allows. The viewing page
+// tells it from a wrong key by `kind`.
+export class TooLargeError extends Error {
+  constructor(maxBytes) {
+    super("The paste is larger than this site allows");
+    this.kind = "too-large";
+    this.maxBytes = maxBytes;
+  }
+}
+
+// Titles and file names are short; this is far above what the create page
+// sends (64 characters, 255 bytes), and all a bomb in one is allowed.
+export const SMALL_PART_BYTES = 64 * 1024;
+
+// Room above the site's text limit for a paste made before the limit was
+// lowered, or whose creator counted characters rather than bytes.
+export const TEXT_SLACK_BYTES = 64 * 1024;
+
+// The most a site can set max_file_mib to (src/config.rs), for pre-v4
+// attachments on a site that has since turned attachments off.
+export const FILE_BYTES_CEILING = 4096 * 1024 * 1024;
+
+// Inflates `data` (zlib), giving up as soon as the output passes `maxBytes`.
+// Throws TooLargeError then, or an Error for a damaged stream.
+export function inflateCapped(data, maxBytes) {
+  const inflater = new Inflate();
+  const chunks = [];
+  let total = 0;
+  // pako hands out each output buffer as it fills, before going on, so the
+  // count is checked long before a bomb finishes.
+  inflater.onData = (chunk) => {
+    total += chunk.length;
+    if (total > maxBytes) {
+      throw new TooLargeError(maxBytes);
+    }
+    chunks.push(chunk);
+  };
+  // Nothing to glue at the end: the chunks are joined below.
+  inflater.onEnd = () => {};
+  inflater.push(data, true);
+  if (inflater.err) {
+    throw new Error(inflater.msg);
+  }
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
 // Pastes created before compression was added are not deflated, so fall
-// back to the raw bytes if inflate fails.
-function maybeInflate(data) {
+// back to the raw bytes if inflate fails. Only on a damaged stream: one
+// that's too large stays refused.
+function maybeInflate(data, maxBytes) {
   const bytes = new Uint8Array(data);
   try {
-    return inflate(bytes);
+    return inflateCapped(bytes, maxBytes);
   } catch (e) {
+    if (e instanceof TooLargeError) {
+      throw e;
+    }
     return bytes;
   }
 }
 
-// Throws if the key or IV is wrong.
-export async function decryptBytes(encrypted, key, iv) {
+// Throws if the key or IV is wrong, or if the content inflates to more than
+// `maxBytes` (TooLargeError).
+export async function decryptBytes(encrypted, key, iv, maxBytes = SMALL_PART_BYTES) {
   const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
-  return maybeInflate(decrypted);
+  return maybeInflate(decrypted, maxBytes);
 }
 
-export async function decryptText(encrypted, key, iv) {
-  return new TextDecoder().decode(await decryptBytes(encrypted, key, iv));
+export async function decryptText(encrypted, key, iv, maxBytes = SMALL_PART_BYTES) {
+  return new TextDecoder().decode(await decryptBytes(encrypted, key, iv, maxBytes));
 }
 
 // --- v4 padding ---------------------------------------------------------------
@@ -572,23 +639,26 @@ export async function getPasteSecrets(paste, linkHash, hasPassword, password) {
 }
 
 // Decrypts one part of a paste: "text", "title", "file-name" or "file".
+// `maxBytes` is the most it may inflate to (see inflateCapped): the site's
+// text or file limit for those, and SMALL_PART_BYTES, the default, for the
+// title and file name. Throws TooLargeError past it.
 // Attachments on v1 pastes may predate per-part IVs and use the paste IV, so
 // retry with it.
-export async function decryptPart(secrets, label, encrypted) {
+export async function decryptPart(secrets, label, encrypted, { maxBytes = SMALL_PART_BYTES } = {}) {
   if (secrets.version >= 4) {
     const iv = label === "text" ? secrets.iv : await deriveIv(secrets.iv, label);
     const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, secrets.key, encrypted);
-    return inflate(unpadPart(new Uint8Array(plain)));
+    return inflateCapped(unpadPart(new Uint8Array(plain)), maxBytes);
   }
   if (label === "text") {
-    return decryptBytes(encrypted, secrets.key, secrets.iv);
+    return decryptBytes(encrypted, secrets.key, secrets.iv, maxBytes);
   }
   try {
-    return await decryptBytes(encrypted, secrets.key, await deriveIv(secrets.iv, label));
+    return await decryptBytes(encrypted, secrets.key, await deriveIv(secrets.iv, label), maxBytes);
   } catch (e) {
-    if (secrets.version >= 2) {
+    if (secrets.version >= 2 || e instanceof TooLargeError) {
       throw e;
     }
-    return decryptBytes(encrypted, secrets.key, secrets.iv);
+    return decryptBytes(encrypted, secrets.key, secrets.iv, maxBytes);
   }
 }

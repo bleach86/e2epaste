@@ -26,7 +26,8 @@ pub enum Error {
         retry_after: u64,
     },
     /// The site won't take it: too large, storage full, attachments off, or
-    /// invalid. Exit 7.
+    /// invalid. Also a paste that decompresses to more than the site allows,
+    /// which `get` refuses to inflate. Exit 7.
     Refused(String),
     /// The network, or a server error. Worth retrying later. Exit 8.
     Network(String),
