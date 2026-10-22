@@ -432,7 +432,7 @@ async fn info(args: InfoArgs, out: &Output) -> Result<(), Error> {
     let views_left = info.max_views.map(|max| max.saturating_sub(info.views));
     out.result(report::info(&paste), || {
         let mut lines = vec![
-            format!("Created: {}", iso_time(info.timestamp.max(0) as u64 * 1000)),
+            format!("Created: {}", iso_time(report::created_ms(info.timestamp))),
             format!(
                 "Expires: {}",
                 info.expires.map_or("never".to_string(), iso_time)

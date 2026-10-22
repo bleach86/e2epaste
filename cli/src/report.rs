@@ -54,7 +54,7 @@ pub fn info(paste: &PasteInfo) -> Value {
     json!({
         "id": info.id,
         "version": info.version,
-        "created_at": iso_time(info.timestamp.max(0) as u64 * 1000),
+        "created_at": iso_time(created_ms(info.timestamp)),
         "expires_at": info.expires.map(iso_time),
         "views": info.views,
         "max_views": info.max_views,
@@ -70,6 +70,12 @@ pub fn limits(limits: &Limits, server: &str) -> Value {
     let mut value = serde_json::to_value(limits).unwrap_or_default();
     value["server"] = json!(server);
     value
+}
+
+/// A paste's creation time in milliseconds, from the seconds the server
+/// sends (which aren't trusted to be sensible).
+pub fn created_ms(timestamp_seconds: i64) -> u64 {
+    (timestamp_seconds.max(0) as u64).saturating_mul(1000)
 }
 
 pub fn now_ms() -> u64 {
