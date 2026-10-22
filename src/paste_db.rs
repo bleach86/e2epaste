@@ -158,8 +158,12 @@ impl PasteDB {
     /// to date. If there's no database yet but there is one from an older
     /// version in `legacy_sled_dir`, that's imported first.
     pub fn open(db_path: &Path, legacy_sled_dir: &Path, file_dir: PathBuf) -> Result<Self> {
-        if !db_path.exists() && legacy_sled_dir.exists() {
-            migrate::import_sled(legacy_sled_dir, db_path)?;
+        if legacy_sled_dir.exists() {
+            if db_path.exists() {
+                migrate::set_aside_sled(legacy_sled_dir, db_path)?;
+            } else {
+                migrate::import_sled(legacy_sled_dir, db_path)?;
+            }
         }
 
         let db = Database::create(db_path)?;

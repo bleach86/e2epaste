@@ -138,9 +138,11 @@ variable named `ROCKET_` plus the setting in capitals, such as `ROCKET_SITE_URL`
 
 For the limits, `0` turns a limit off.
 
-`static_dir` and `template_dir` are relative to the working directory, so run the server from the
-repository directory or set them to absolute paths. The server prints the site URL and directories it's
-using when it starts, and warns if `site_url` is still `localhost` in a release build.
+`static_dir` is relative to the working directory, and `template_dir` to `Rocket.toml` when it's set
+there (to the working directory when set with `ROCKET_TEMPLATE_DIR`), so run the server from the
+repository directory or set them to absolute paths. The server checks both exist, prints the site URL and
+directories it's using when it starts, and warns if `site_url` is still `localhost` in a release build, or
+if it listens beyond this machine while trusting `ip_header` (see [Limits](#limits)).
 
 ### Limits
 

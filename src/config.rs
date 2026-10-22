@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rocket::figment::value::magic::RelativePathBuf;
 use rocket::figment::Figment;
 use rocket::http::uri::Absolute;
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,12 @@ pub struct AppConfig {
     /// Served at /public. Must contain the webpack bundles in `js/dist/`.
     #[serde(default = "default_static_dir")]
     pub static_dir: PathBuf,
+    /// The page templates. rocket_dyn_templates reads this setting itself;
+    /// it's here only to check the directory exists before the server
+    /// starts, since otherwise every page is a 500. When set in Rocket.toml,
+    /// it's relative to that file.
+    #[serde(default = "default_template_dir")]
+    pub template_dir: RelativePathBuf,
 
     // What one paste can hold (see PasteLimits).
     /// Largest paste text, in KiB of UTF-8.
@@ -84,6 +91,14 @@ fn default_data_dir() -> PathBuf {
 fn default_static_dir() -> PathBuf {
     PathBuf::from("static")
 }
+
+fn default_template_dir() -> RelativePathBuf {
+    RelativePathBuf::from("templates")
+}
+
+/// The most any setting in MiB can be: a settings value is multiplied by
+/// MIB, which must not overflow.
+const MAX_MIB_SETTING: u64 = 1 << 40;
 
 fn default_max_paste_kib() -> u64 {
     1024
@@ -187,11 +202,33 @@ impl AppConfig {
             }
         }
 
+        for (name, value) in [
+            ("upload_mib_per_hour", config.upload_mib_per_hour),
+            ("min_free_disk_mib", config.min_free_disk_mib),
+            (
+                "max_attachment_storage_mib",
+                config.max_attachment_storage_mib,
+            ),
+        ] {
+            if value > MAX_MIB_SETTING {
+                return Err(format!(
+                    "{name} is {value}; it must be at most {MAX_MIB_SETTING} (or 0 for no limit)"
+                ));
+            }
+        }
+
         if !config.static_dir.join("js/dist").is_dir() {
             return Err(format!(
                 "static_dir {:?} has no js/dist/ (the webpack bundles). Set static_dir to the \
                  project's static/ directory, or build the bundles with `cargo build`.",
                 config.static_dir
+            ));
+        }
+        let templates = config.template_dir.relative();
+        if !templates.join("layout.html.j2").is_file() {
+            return Err(format!(
+                "template_dir {templates:?} has no layout.html.j2. Set template_dir to the \
+                 project's templates/ directory."
             ));
         }
         Ok(config)
@@ -316,8 +353,12 @@ fn normalize_site_url(raw: &str) -> Result<String, String> {
     if !matches!(parsed.scheme(), "http" | "https") {
         return invalid("must start with https:// or http://");
     }
-    if parsed.authority().is_none_or(|a| a.host().is_empty()) {
+    let Some(authority) = parsed.authority().filter(|a| !a.host().is_empty()) else {
         return invalid("has no host name");
+    };
+    // It's printed into every page, the sitemap and robots.txt.
+    if authority.user_info().is_some() {
+        return invalid("can't have a user name or password");
     }
     // Pages link to /public/... and /s/..., so the site must be at the root.
     if !parsed.path().is_empty() || parsed.query().is_some() {
@@ -400,6 +441,28 @@ mod tests {
         assert!(limits.max_request_bytes() < 2 * MIB);
         let no_files = PasteLimits::new(8 * 1024, None);
         assert!(no_files.max_stored_file.is_none() && no_files.max_file_label.is_none());
+    }
+
+    #[test]
+    fn site_url_is_a_bare_origin() {
+        assert_eq!(
+            normalize_site_url("https://paste.example.com/").unwrap(),
+            "https://paste.example.com"
+        );
+        assert_eq!(
+            normalize_site_url("http://localhost:8001").unwrap(),
+            "http://localhost:8001"
+        );
+        for bad in [
+            "paste.example.com",
+            "ftp://paste.example.com",
+            "https://paste.example.com/pastes",
+            "https://paste.example.com?x=1",
+            "https://user:secret@paste.example.com",
+            "https://",
+        ] {
+            assert!(normalize_site_url(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

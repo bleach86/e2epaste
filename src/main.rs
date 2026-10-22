@@ -106,7 +106,7 @@ async fn upload(
     client: ClientIp,
     raw_paste: Json<IncomingPaste>,
 ) -> Result<Json<IncomingPasteRes>, ApiError> {
-    let paste: IncomingPaste = raw_paste.clone().into_inner();
+    let paste: IncomingPaste = raw_paste.into_inner();
     let now: DateTime<Utc> = Utc::now();
     let limits = config.paste_limits();
     let expires = paste
@@ -164,11 +164,7 @@ async fn upload(
             Ok(false) => paste_data.id = PasteId::new(ID_LENGTH),
             Err(e) => {
                 eprintln!("Error saving paste: {e}");
-                return Ok(Json(IncomingPasteRes {
-                    id: None,
-                    upload_token: None,
-                    delete_token: None,
-                }));
+                return Err(Status::InternalServerError.into());
             }
         }
     }
@@ -325,11 +321,12 @@ async fn upload_attachment(
 }
 
 #[get("/paste/<id>")]
-async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
+async fn retrieve(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> (Status, Template) {
+    let id = id.to_string();
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     let now: DateTime<Utc> = chrono::Utc::now();
 
-    let paste_data: PasteData = match db.get_paste(id) {
+    let paste_data: PasteData = match db.get_paste(&id) {
         Some(paste_data) => paste_data,
         None => {
             return paste_not_found(site_stats, now.year());
@@ -337,7 +334,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: &str) -> (Status, Template) {
     };
 
     if paste_data.expired() {
-        if let Err(e) = db.delete_paste(id).await {
+        if let Err(e) = db.delete_paste(&id).await {
             eprintln!("Error deleting paste: {e}");
         }
         return paste_not_found(site_stats, now.year());
@@ -640,6 +637,19 @@ async fn rocket() -> _ {
     let config = AppConfig::from_figment(rocket.figment()).unwrap_or_else(|e| exit_with(&e));
     for warning in config.warnings() {
         eprintln!("Warning: {warning}");
+    }
+    // The per-IP limits key on the address in ip_header, which Rocket
+    // trusts from anyone. Listening beyond this machine is only safe when
+    // every request still comes through the proxy that sets the header.
+    if let Ok(server) = rocket::Config::try_from(rocket.figment()) {
+        if let Some(header) = server.ip_header.filter(|_| !server.address.is_loopback()) {
+            eprintln!(
+                "Warning: listening on {} with ip_header set. Make sure only the reverse proxy \
+                 can reach this port (publish it on 127.0.0.1 in Docker): a client that reaches \
+                 it directly can pick its own {header} and dodge every per-IP limit.",
+                server.address
+            );
+        }
     }
     // New pastes are one JSON request; size its limit to max_paste_kib.
     let paste_limits = config.paste_limits();

@@ -7,9 +7,7 @@
 //! the previous version. To change the schema, append a step and bump
 //! SCHEMA_VERSION. Never edit a step that has been released.
 
-use std::path::Path;
-#[cfg(feature = "sled-import")]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use redb::{Database, ReadableDatabase, TableDefinition, WriteTransaction};
 
@@ -156,8 +154,22 @@ pub fn import_sled(sled_dir: &Path, _db_path: &Path) -> Result<()> {
     )))
 }
 
+/// Renames an old-version database found next to an existing `db_path`, the
+/// way `import_sled` would have. That happens if the import was interrupted
+/// between its two renames, or if a `paste_db/` was copied in by hand after
+/// the move to redb: either way it isn't imported, since the database is
+/// already there, and it shouldn't be checked again on every start.
+pub fn set_aside_sled(sled_dir: &Path, db_path: &Path) -> Result<()> {
+    let backup = backup_path(sled_dir);
+    std::fs::rename(sled_dir, &backup).map_err(|e| setup_io("rename", sled_dir, e))?;
+    println!(
+        "Found an old-version database in {sled_dir:?} next to {db_path:?}. It wasn't imported, \
+         as the database is already there; it was kept as {backup:?}."
+    );
+    Ok(())
+}
+
 /// `paste_db.sled-backup` next to `sled_dir`, or a dated name if that's taken.
-#[cfg(feature = "sled-import")]
 fn backup_path(sled_dir: &Path) -> PathBuf {
     let backup = sled_dir.with_file_name("paste_db.sled-backup");
     if !backup.exists() {
@@ -167,7 +179,6 @@ fn backup_path(sled_dir: &Path) -> PathBuf {
     sled_dir.with_file_name(format!("paste_db.sled-backup-{stamp}"))
 }
 
-#[cfg(feature = "sled-import")]
 fn setup_io(action: &str, path: &Path, e: std::io::Error) -> DbError {
     DbError::Setup(format!("can't {action} {path:?}: {e}"))
 }
@@ -423,5 +434,29 @@ mod tests {
             })
             .count();
         assert_eq!(backups, 2);
+    }
+
+    #[test]
+    fn sets_aside_a_leftover_old_database() {
+        let dir = temp_dir();
+        // As if the import had been interrupted after promoting the new
+        // database but before renaming the old one.
+        let db = open(&dir).unwrap();
+        db.create_paste(
+            &crate::paste_db::tests::sample_paste("kept1234", None, None),
+            None,
+        )
+        .unwrap();
+        drop(db);
+        std::fs::create_dir(dir.join("paste_db")).unwrap();
+        std::fs::write(dir.join("paste_db/db"), b"old").unwrap();
+
+        let db = open(&dir).unwrap();
+        assert!(
+            db.get_paste("kept1234").is_some(),
+            "the new database is kept"
+        );
+        assert!(!dir.join("paste_db").exists());
+        assert!(dir.join("paste_db.sled-backup/db").is_file());
     }
 }
