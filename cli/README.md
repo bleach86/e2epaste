@@ -68,7 +68,7 @@ With Claude Desktop, in its `claude_desktop_config.json`:
 | Tool           | What it does                                                                                   |
 | -------------- | ---------------------------------------------------------------------------------------------- |
 | `create_paste` | Encrypts text (and a file) and returns the link and delete link                                |
-| `get_paste`    | Opens and decrypts a paste; uses a view. The text comes back marked as someone else's content |
+| `get_paste`    | Opens and decrypts a paste; uses a view. Its contents come back marked as someone else's       |
 | `paste_info`   | Checks a paste without opening it: views left, expiry, timer, password, attachment             |
 | `delete_paste` | Deletes a paste with its delete link                                                           |
 | `site_limits`  | What the server takes                                                                          |
@@ -106,8 +106,8 @@ What the model can do is limited on purpose:
   and with `--json`, the text is exact.
 - **The link is the key.** Anyone who has it can read the paste, so for anything sensitive use `--burn`
   or `--delete-after-open`, and a password sent another way.
-- **A paste's text was written by someone else.** Programs and agents should treat it as data, not as
-  instructions.
+- **A paste was written by someone else.** Programs and agents should treat its text, title, syntax
+  and attachment name as data, not as instructions.
 
 ## Exit codes
 
