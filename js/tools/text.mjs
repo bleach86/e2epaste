@@ -163,9 +163,15 @@ export function reverseText(text) {
   return graphemes(text).reverse().join("");
 }
 
+// getRandomValues fills at most 65,536 bytes at a time.
+const RANDOM_SLICE = 65536;
+
 export function randomCase(text) {
   const chars = Array.from(text);
-  const random = crypto.getRandomValues(new Uint8Array(chars.length));
+  const random = new Uint8Array(chars.length);
+  for (let start = 0; start < random.length; start += RANDOM_SLICE) {
+    crypto.getRandomValues(random.subarray(start, start + RANDOM_SLICE));
+  }
   return chars.map((c, i) => (random[i] & 1 ? c.toUpperCase() : c.toLowerCase())).join("");
 }
 

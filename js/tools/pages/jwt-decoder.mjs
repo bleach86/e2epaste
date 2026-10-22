@@ -46,8 +46,13 @@ function showClaims(payload) {
     dt.textContent = `${label} (${claim})`;
     const dd = document.createElement("dd");
     if (TIME_CLAIMS.has(claim) && typeof value === "number") {
+      // Dates only go to about the year 275760; a bigger number (or NaN
+      // from a huge one) would make the formatter throw.
       const ms = value * 1000;
-      dd.textContent = `${readable.format(new Date(ms))} (${relativeTime(ms, Date.now())})`;
+      const date = new Date(ms);
+      dd.textContent = Number.isFinite(date.getTime())
+        ? `${readable.format(date)} (${relativeTime(ms, Date.now())})`
+        : `${value} (invalid: not a date)`;
     } else {
       dd.textContent = typeof value === "string" ? value : JSON.stringify(value);
     }
@@ -80,9 +85,11 @@ function decode() {
   const alg = String(token.header.alg ?? "missing");
   chip(`Algorithm: ${alg}`, alg === "none" ? "warn" : "");
   const { status, expires, notBefore } = tokenTimes(token.payload, Date.now());
-  if (status === "expired") chip(`Expired ${relativeTime(expires, Date.now())}`, "warn");
-  if (status === "valid") chip(`Expires ${relativeTime(expires, Date.now())}`, "ok");
-  if (status === "not-yet") chip(`Not valid until ${relativeTime(notBefore, Date.now())}`, "warn");
+  // Same guard as the claims list: "1e400" parses as Infinity.
+  const when = (ms) => (Number.isFinite(ms) ? relativeTime(ms, Date.now()) : "at an invalid time");
+  if (status === "expired") chip(`Expired ${when(expires)}`, "warn");
+  if (status === "valid") chip(`Expires ${when(expires)}`, "ok");
+  if (status === "not-yet") chip(`Not valid until ${when(notBefore)}`, "warn");
   if (status === "no-expiry") chip("Never expires");
 
   const kind = keyKind(token.header.alg);
