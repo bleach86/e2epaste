@@ -11,15 +11,20 @@ import {
   decodeDetails,
   decryptFile,
   decryptPart,
+  FILE_BYTES_CEILING,
   getPasteSecrets,
   linkHasPassword,
+  TEXT_SLACK_BYTES,
+  TooLargeError,
 } from "../crypto.mjs";
 import { deleteTokenFor } from "../delete_tokens.mjs";
 import { AUTO, effectiveLanguage, hljs, languageName } from "../highlight.mjs";
 import { cryptoAvailable, readPageData } from "../ui.mjs";
 
-// Details only; the encrypted content comes from /api/open.
-const { paste } = readPageData();
+// Details only; the encrypted content comes from /api/open. The limits
+// (max_paste_bytes, max_file_bytes) bound what the parts may inflate to: the
+// server only checked their encrypted sizes.
+const { paste, limits } = readPageData();
 const linkHash = window.location.hash.substring(1);
 // v4 links say whether there's a password, so the server doesn't know;
 // older pastes told the server.
@@ -169,7 +174,8 @@ function waitText(seconds) {
   return seconds < 90 ? `${seconds} seconds` : `${minutes} minutes`;
 }
 
-// Throws an OpenError, or another error if the link or password is wrong.
+// Throws an OpenError, a TooLargeError for content that inflates to more
+// than the site allows, or another error if the link or password is wrong.
 async function decrypt(password) {
   let secrets;
   if (paste.version >= 3) {
@@ -184,7 +190,18 @@ async function decrypt(password) {
     secrets = await getPasteSecrets({ ...paste, key_fragment: opened.key_fragment }, linkHash, hasPassword, password);
   }
 
-  const text = new TextDecoder().decode(await decryptPart(secrets, "text", base64ToArrayBuffer(opened.content)));
+  // The text and file name are decrypted before anything is shown: a part
+  // that inflates to more than the site allows throws TooLargeError, and the
+  // page shows that alone rather than a paste with a piece missing.
+  const text = new TextDecoder().decode(
+    await decryptPart(secrets, "text", base64ToArrayBuffer(opened.content), {
+      maxBytes: limits.max_paste_bytes + TEXT_SLACK_BYTES,
+    }),
+  );
+  if (opened.file_name) {
+    const nameBytes = await decryptPart(secrets, "file-name", base64ToArrayBuffer(opened.file_name));
+    fileName = new TextDecoder().decode(nameBytes);
+  }
   pasteSecrets = secrets;
 
   // v3 titles are encrypted, so the server leaves the heading as a
@@ -210,9 +227,7 @@ async function decrypt(password) {
   }
   showText(text, syntax);
 
-  if (opened.file_name) {
-    const nameBytes = await decryptPart(secrets, "file-name", base64ToArrayBuffer(opened.file_name));
-    fileName = new TextDecoder().decode(nameBytes);
+  if (fileName !== null) {
     document.getElementById("attachment-name").textContent = fileName;
     document.getElementById("attachment-section").hidden = false;
   }
@@ -238,6 +253,10 @@ async function decrypt(password) {
 
 // For errors other than a wrong link or password.
 function showOpenError(error) {
+  if (error instanceof TooLargeError) {
+    document.getElementById("too-large-error").hidden = false;
+    return;
+  }
   const messages = {
     "not-found": "This paste doesn't exist any more. It may have expired, been deleted, or reached its view limit.",
     "rate-limited": `Too many failed attempts to open pastes from your network. Please try again in ${waitText(
@@ -268,7 +287,7 @@ async function decryptWithPassword() {
   try {
     await decrypt(passwordInput.value.trim());
   } catch (e) {
-    if (e instanceof OpenError && e.kind === "not-found") {
+    if ((e instanceof OpenError && e.kind === "not-found") || e instanceof TooLargeError) {
       hidePasswordModal();
       showOpenError(e);
       return;
@@ -378,14 +397,23 @@ attachmentButton.addEventListener("click", async () => {
       });
     } else {
       setAttachmentBusy(true, "Decrypting...");
-      const decrypted = await decryptPart(pasteSecrets, "file", await res.arrayBuffer());
+      // Pre-v4 attachments are deflated and come whole. A site that has
+      // since turned attachments off still serves old ones.
+      const decrypted = await decryptPart(pasteSecrets, "file", await res.arrayBuffer(), {
+        maxBytes: limits.max_file_bytes ?? FILE_BYTES_CEILING,
+      });
       file = new Blob([decrypted], { type: "application/octet-stream" });
     }
     saveBlob(file, fileName);
     setAttachmentBusy(false, "Encrypted attachment");
   } catch (e) {
     console.error(e);
-    setAttachmentBusy(false, "Download failed. Please try again.");
+    setAttachmentBusy(
+      false,
+      e instanceof TooLargeError
+        ? "The attachment is larger than this site allows, so it wasn't saved."
+        : "Download failed. Please try again.",
+    );
   }
 });
 
@@ -477,7 +505,7 @@ function start() {
   }
   decrypt("").catch((e) => {
     console.error("Failed to open paste", e);
-    if (e instanceof OpenError && e.kind !== "wrong-key") {
+    if ((e instanceof OpenError && e.kind !== "wrong-key") || e instanceof TooLargeError) {
       showOpenError(e);
     } else {
       document.getElementById("decrypt-error").hidden = false;
