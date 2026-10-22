@@ -34,11 +34,18 @@ pub fn got(got: &GotPaste) -> Value {
         "views_left": got.max_views.map(|max| max.saturating_sub(got.views)),
         "expires_at": got.expires.map(iso_time),
         "last_view": got.last_view,
-        "attachment": got.attachment.as_ref().map(|a| json!({
-            "name": a.name,
-            "size": a.size,
-            "path": a.path.as_ref().map(|p| p.display().to_string()),
-        })),
+        "attachment": got.attachment.as_ref().map(|a| {
+            let mut value = json!({
+                "name": a.name,
+                "size": a.size,
+                "path": a.path.as_ref().map(|p| p.display().to_string()),
+            });
+            if let Some(error) = &a.error {
+                value["error"] = json!(error.to_string());
+                value["error_code"] = json!(error.code());
+            }
+            value
+        }),
     })
 }
 

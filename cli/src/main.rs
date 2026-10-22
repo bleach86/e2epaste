@@ -32,7 +32,9 @@ With --json, stdout is one JSON object, for errors too:
   create  {\"url\", \"delete_url\", \"id\", \"expires_at\", \"max_views\", \"delete_after_open_seconds\",
            \"password\", \"attachment\": {\"name\", \"size\"} | null}
   get     {\"id\", \"title\", \"syntax\", \"text\", \"views\", \"max_views\", \"views_left\", \"expires_at\",
-           \"last_view\", \"attachment\": {\"name\", \"size\", \"path\"} | null}
+           \"last_view\", \"attachment\": {\"name\", \"size\", \"path\", \"error\"?, \"error_code\"?} | null}
+          An attachment that can't be saved once the paste is open (the view is used by then)
+          is reported in \"error\", with the text; the exit code is still 0.
   info    {\"id\", \"version\", \"created_at\", \"expires_at\", \"views\", \"max_views\", \"views_left\",
            \"delete_after_open_seconds\", \"timer_started\", \"has_attachment\", \"needs_password\"}
   delete  {\"deleted\": true, \"id\"}
@@ -398,9 +400,15 @@ async fn get(args: GetArgs, out: &Output) -> Result<(), Error> {
 
     out.result(report::got(&got), || got.text.clone());
     if let Some(attachment) = &got.attachment {
-        match &attachment.path {
-            Some(path) => out.note(&format!("Attachment saved: {}", path.display())),
-            None => out.note(&format!("Attachment not saved: {}", attachment.name)),
+        match (&attachment.path, &attachment.error) {
+            (Some(path), _) => out.note(&format!("Attachment saved: {}", path.display())),
+            // The paste is open by now (the view is used), so this goes
+            // with the text rather than instead of it, and isn't quieted.
+            (None, Some(error)) => eprintln!(
+                "e2ep: the attachment {} wasn't saved: {error}",
+                attachment.name
+            ),
+            (None, None) => out.note(&format!("Attachment not saved: {}", attachment.name)),
         }
     }
     if got.last_view {

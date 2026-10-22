@@ -229,8 +229,12 @@ pub struct GotPaste {
 pub struct SavedAttachment {
     pub name: String,
     pub size: Option<u64>,
-    /// Where it was saved; `None` with --no-attachment.
+    /// Where it was saved; `None` with --no-attachment, or when it failed.
     pub path: Option<PathBuf>,
+    /// Why it wasn't saved, when it should have been. The paste's text is
+    /// still reported: the view is used by then, and may have been the
+    /// last.
+    pub error: Option<Error>,
 }
 
 pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste, Error> {
@@ -269,9 +273,19 @@ pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste
             .map_err(|_| Error::Network("the site sent a damaged paste".into()))?;
         secrets.decrypt_part(version, part, &bytes)
     };
+    // The view is used now, perhaps the last one, so from here on only the
+    // text itself can stop the paste from being reported: a title or
+    // attachment name that won't decrypt falls back to nothing (as the
+    // site's page does), and an attachment that can't be saved is reported
+    // with the text rather than instead of it.
     let text = String::from_utf8_lossy(&decrypt(Part::Text, &opened.content)?).into_owned();
     let (title, syntax) = if version >= 4 {
-        let details = Details::decode(&decrypt(Part::Title, &opened.title)?);
+        let details = decrypt(Part::Title, &opened.title)
+            .map(|bytes| Details::decode(&bytes))
+            .unwrap_or_else(|_| Details {
+                title: String::new(),
+                syntax: "auto".into(),
+            });
         (details.title, details.syntax)
     } else {
         let title = decrypt(Part::Title, &opened.title).unwrap_or_default();
@@ -284,24 +298,43 @@ pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste
     let attachment = match &opened.file_name {
         None => None,
         Some(encrypted_name) => {
-            let name =
-                String::from_utf8_lossy(&decrypt(Part::FileName, encrypted_name)?).into_owned();
+            let name = decrypt(Part::FileName, encrypted_name)
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .unwrap_or_else(|_| "attachment".into());
             match (&options.attachment_dir, &opened.download_ticket) {
                 (Some(dir), Some(ticket)) if !options.skip_attachment => {
-                    let (path, size) = download(
+                    let saved = download(
                         &api, &secrets, version, &link.id, ticket, dir, &name, progress,
                     )
-                    .await?;
-                    Some(SavedAttachment {
-                        name,
-                        size: Some(size),
-                        path: Some(path),
+                    .await;
+                    Some(match saved {
+                        Ok((path, size)) => SavedAttachment {
+                            name,
+                            size: Some(size),
+                            path: Some(path),
+                            error: None,
+                        },
+                        Err(error) => SavedAttachment {
+                            name,
+                            size: None,
+                            path: None,
+                            error: Some(error),
+                        },
                     })
                 }
+                (Some(_), None) if !options.skip_attachment => Some(SavedAttachment {
+                    name,
+                    size: None,
+                    path: None,
+                    error: Some(Error::Network(
+                        "the site didn't send a download ticket for the attachment".into(),
+                    )),
+                }),
                 _ => Some(SavedAttachment {
                     name,
                     size: None,
                     path: None,
+                    error: None,
                 }),
             }
         }
