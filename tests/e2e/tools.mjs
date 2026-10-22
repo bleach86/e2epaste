@@ -17,7 +17,10 @@ async function open(path) {
   p.errors = [];
   await watch(p, p.errors);
   p.on("console", (m) => m.type() === "error" && p.errors.push(m.text()));
-  p.on("requestfailed", (r) => p.errors.push("request failed " + r.url()));
+  // A cancelled request isn't a failure: stopping the hash workers (Clear,
+  // a new file) cancels any script they were still loading.
+  p.on("requestfailed", (r) => r.failure()?.errorText !== "net::ERR_ABORTED"
+    && p.errors.push(`request failed ${r.url()}: ${r.failure()?.errorText}`));
   const res = await p.goto(BASE + path, { waitUntil: "networkidle0" });
   p.status = res.status();
   return p;

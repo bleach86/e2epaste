@@ -34,7 +34,7 @@ uploaded, and the key never reaches the server, so the server only ever stores d
 decrypting on your machine in the same format as the site's pages:
 
 ```sh
-cat error.log | e2ep --server https://paste.example.com --burn
+cat error.log | e2ep --burn                          # to e2epaste.xyz; --server for another site
 e2ep get 'https://paste.example.com/s/Ab3dE5gH#…' --attachment-dir .
 ```
 
