@@ -2,8 +2,7 @@
 // it's typed; a file is read a piece at a time, with progress.
 import { ALGORITHMS, findMatch, formatDigest, hashBytes, parseDigest } from "../hashes.mjs";
 import { hashFileInParallel } from "../hash-parallel.mjs";
-import { bindCopyAndClear } from "../common.mjs";
-import { showCopiedPopover } from "../../ui.mjs";
+import { bindCopy, bindCopyAndClear } from "../common.mjs";
 
 const tool = document.getElementById("hash-tool");
 const textInput = document.getElementById("hash-text");
@@ -14,6 +13,7 @@ const compareInput = document.getElementById("hash-compare");
 const compareResult = document.getElementById("hash-compare-result");
 const results = document.getElementById("hash-results");
 const progress = document.getElementById("hash-progress");
+const hashError = document.getElementById("hash-error");
 const algorithmsBox = document.getElementById("hash-algorithms");
 const encoder = new TextEncoder();
 
@@ -71,10 +71,7 @@ function showResults() {
     label.textContent = keyed ? `HMAC-${a.name}` : a.name;
     output.value = formatDigest(digests[a.id], formatSelect.value);
     copy.append(document.querySelector("#copy-icon svg").cloneNode(true));
-    copy.addEventListener("click", () => {
-      navigator.clipboard.writeText(output.value);
-      showCopiedPopover(copy);
-    });
+    bindCopy(copy, () => output.value);
     results.append(row);
   }
   compare();
@@ -104,6 +101,7 @@ async function run() {
   running?.abort();
   running = null;
   progress.hidden = true;
+  hashError.hidden = true;
   if (mode() === "text") {
     digests = textInput.value === "" ? {} : hashBytes(encoder.encode(textInput.value), chosen(), key());
     showResults();
@@ -130,7 +128,15 @@ async function run() {
     });
   } catch (e) {
     if (job.signal.aborted) return;
-    throw e;
+    // Reading the file can fail (it was moved or changed since it was
+    // chosen, or the worker didn't start). Say so and leave the page usable,
+    // rather than a progress bar that never finishes.
+    console.error("Hashing the file failed", e);
+    progress.hidden = true;
+    running = null;
+    hashError.textContent = `The file couldn't be hashed: ${e.message || e}. Choose it again to retry.`;
+    hashError.hidden = false;
+    return;
   }
   progress.hidden = true;
   running = null;

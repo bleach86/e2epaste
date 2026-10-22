@@ -16,7 +16,7 @@ import {
 } from "../crypto.mjs";
 import { deleteTokenFor } from "../delete_tokens.mjs";
 import { AUTO, effectiveLanguage, hljs, languageName } from "../highlight.mjs";
-import { cryptoAvailable, readPageData } from "../ui.mjs";
+import { copyText, cryptoAvailable, readPageData, showCopyFailed } from "../ui.mjs";
 
 // Details only; the encrypted content comes from /api/open.
 const { paste } = readPageData();
@@ -89,8 +89,12 @@ function showText(text, syntax) {
       ? `${languageName(pasteLanguage)} (detected)`
       : "Plain text";
   } else if (paste.version >= 4) {
-    // The server only knows v4 pastes as "auto".
-    document.getElementById("language-name").textContent = languageName(syntax);
+    // The server only knows v4 pastes as "auto". The decrypted name is only
+    // shown if it's a language this page knows: anything else is shown as
+    // plain text, which is how it's highlighted.
+    document.getElementById("language-name").textContent = hljs.getLanguage(syntax)
+      ? languageName(syntax)
+      : "Plain text";
   }
 
   if (pasteLanguage === "markdown") {
@@ -98,7 +102,7 @@ function showText(text, syntax) {
     // Rendered by default when the creator chose Markdown; a guess might be
     // wrong, so then it starts as source.
     if (syntax === "markdown") {
-      showMarkdown("rendered");
+      switchMarkdown("rendered");
     }
   }
 }
@@ -132,15 +136,31 @@ async function showMarkdown(view) {
   }
 }
 
+// showMarkdown, but a failure (say, the Markdown chunk not loading on a
+// flaky connection) says so and leaves the source showing, rather than a
+// toggle that does nothing.
+function switchMarkdown(view) {
+  const error = document.getElementById("markdown-error");
+  error.hidden = true;
+  showMarkdown(view).catch((e) => {
+    console.error("Failed to render Markdown", e);
+    error.hidden = false;
+    for (const button of markdownToggle.querySelectorAll("button")) {
+      button.setAttribute("aria-pressed", String(button.dataset.view === "source"));
+    }
+  });
+}
+
 markdownToggle.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-view]");
   if (button) {
-    showMarkdown(button.dataset.view);
+    switchMarkdown(button.dataset.view);
   }
 });
 
 // Why /api/open refused: "wrong-key" (link or password), "not-found",
-// "rate-limited" (with `retryAfter` seconds) or "failed".
+// "rate-limited" (with `retryAfter` seconds), "network" (no answer at all)
+// or "failed".
 class OpenError extends Error {
   constructor(kind, retryAfter = null) {
     super(`Opening the paste failed: ${kind}`);
@@ -150,11 +170,18 @@ class OpenError extends Error {
 }
 
 async function requestOpen(proof) {
-  const response = await fetch(`/api/open/${paste.id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ proof: proof ?? null }),
-  });
+  let response;
+  try {
+    response = await fetch(`/api/open/${paste.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proof: proof ?? null }),
+    });
+  } catch {
+    // fetch only throws when there was no response (offline, DNS, a blocked
+    // request): nothing to do with the link, so don't blame the link.
+    throw new OpenError("network");
+  }
   if (response.ok) {
     return response.json();
   }
@@ -243,6 +270,7 @@ function showOpenError(error) {
     "rate-limited": `Too many failed attempts to open pastes from your network. Please try again in ${waitText(
       error.retryAfter ?? 60,
     )}.`,
+    network: "The paste couldn't be fetched. Check your connection and reload the page.",
   };
   document.getElementById("open-error-text").textContent =
     messages[error.kind] ?? "The paste couldn't be opened. Please try again.";
@@ -251,8 +279,17 @@ function showOpenError(error) {
 
 // --- Password prompt --------------------------------------------------------
 
+// Whether an unlock is in progress. The button is disabled meanwhile, but
+// Enter in the field isn't, and two attempts at once would both open the
+// paste (using two views) before either knew the other had.
+let unlocking = false;
+
 function setUnlocking(busy) {
+  unlocking = busy;
   passwordSubmit.disabled = busy;
+  // Read-only rather than disabled, so the field keeps focus and a wrong
+  // password can be selected for retyping.
+  passwordInput.readOnly = busy;
   passwordSubmit.querySelector(".unlock-idle").classList.toggle("d-none", busy);
   passwordSubmit.querySelector(".unlock-busy").classList.toggle("d-none", !busy);
   passwordSubmit.querySelector(".unlock-busy").classList.toggle("d-inline-flex", busy);
@@ -261,6 +298,9 @@ function setUnlocking(busy) {
 const WRONG_PASSWORD = "That password didn't work. Check it and try again.";
 
 async function decryptWithPassword() {
+  if (unlocking) {
+    return;
+  }
   // The server rejects a wrong password for v3 pastes (the access proof
   // doesn't match); for older ones it simply fails to decrypt.
   passwordError.hidden = true;
@@ -268,6 +308,7 @@ async function decryptWithPassword() {
   try {
     await decrypt(passwordInput.value.trim());
   } catch (e) {
+    setUnlocking(false);
     if (e instanceof OpenError && e.kind === "not-found") {
       hidePasswordModal();
       showOpenError(e);
@@ -276,14 +317,15 @@ async function decryptWithPassword() {
     passwordError.textContent =
       e instanceof OpenError && e.kind === "rate-limited"
         ? `Too many wrong attempts. Please try again in ${waitText(e.retryAfter ?? 60)}.`
-        : WRONG_PASSWORD;
+        : e instanceof OpenError && e.kind === "network"
+          ? "The paste couldn't be fetched. Check your connection and try again."
+          : WRONG_PASSWORD;
     passwordError.hidden = false;
     passwordInput.select();
     return;
-  } finally {
-    setUnlocking(false);
   }
 
+  setUnlocking(false);
   hidePasswordModal();
 }
 
@@ -317,7 +359,12 @@ document.getElementById("show-pass-button").addEventListener("click", togglePass
 // --- Actions ----------------------------------------------------------------
 
 copyButton.addEventListener("click", async () => {
-  await navigator.clipboard.writeText(pasteText);
+  // The browser can refuse (no clipboard permission, or the page lost focus
+  // while decrypting): then the button mustn't claim it copied.
+  if (!(await copyText(pasteText))) {
+    showCopyFailed(copyButton);
+    return;
+  }
   copyButton.querySelector(".copy-idle").classList.add("d-none");
   copyButton.querySelector(".copy-done").classList.replace("d-none", "d-inline-flex");
   setTimeout(() => {
@@ -357,7 +404,15 @@ function setAttachmentBusy(busy, status) {
   downloadStatus.textContent = status;
 }
 
+// Whether the attachment has been downloaded on the paste's last view. The
+// server deletes the paste once that download finishes, so another attempt
+// would only get a 404.
+let lastDownloadDone = false;
+
 attachmentButton.addEventListener("click", async () => {
+  if (lastDownloadDone) {
+    return;
+  }
   setAttachmentBusy(true, "Downloading encrypted file...");
   try {
     // The ticket came with this view, from /api/open.
@@ -365,7 +420,9 @@ attachmentButton.addEventListener("click", async () => {
       headers: { "X-Download-Ticket": opened.download_ticket },
     });
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      const error = new Error(`HTTP ${res.status}`);
+      error.status = res.status;
+      throw error;
     }
     let file;
     if (paste.version >= 4) {
@@ -382,10 +439,24 @@ attachmentButton.addEventListener("click", async () => {
       file = new Blob([decrypted], { type: "application/octet-stream" });
     }
     saveBlob(file, fileName);
-    setAttachmentBusy(false, "Encrypted attachment");
+    if (opened.last_view) {
+      lastDownloadDone = true;
+      setAttachmentBusy(false, "Downloaded. This was the paste's last view, so it can't be downloaded again.");
+      attachmentButton.disabled = true;
+    } else {
+      setAttachmentBusy(false, "Encrypted attachment");
+    }
   } catch (e) {
     console.error(e);
-    setAttachmentBusy(false, "Download failed. Please try again.");
+    // On the last view a 404 means the paste has already gone: the first
+    // download finished (the file may have been saved even if the page
+    // didn't hear) and the server deleted it.
+    setAttachmentBusy(
+      false,
+      opened.last_view && e.status === 404
+        ? "Download failed: this was the paste's last view, and it has been deleted."
+        : "Download failed. Please try again.",
+    );
   }
 });
 

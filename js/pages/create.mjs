@@ -20,7 +20,12 @@ import {
 import { enableEditorKeys } from "../editor_keys.mjs";
 import qrcode from "qrcode-generator";
 import { AUTO, detectLanguage, hljs, languageName } from "../highlight.mjs";
-import { cryptoAvailable, readPageData } from "../ui.mjs";
+import {
+  copyText,
+  cryptoAvailable,
+  readPageData,
+  showCopyFailed,
+} from "../ui.mjs";
 import { buildZip, zipEntries, zipFits, zipSize } from "../zip.mjs";
 
 // The site's limits (max_paste_kib, max_file_mib, allow_files), before
@@ -603,8 +608,21 @@ async function createPaste() {
   if (remembered) {
     rememberDeleteToken(data.id, data.delete_token, lifetime);
   }
+  // The paste exists from here on, whatever happens to the attachment: a
+  // failed upload leaves the text paste in place (with an attachment that
+  // can't be downloaded), so the link is shown either way, with the
+  // problem spelled out. A refused upload (a limit) is an error of its own.
+  let uploadFailed = null;
   if (file) {
-    await uploadFile(file, key, iv, data.id, data.upload_token);
+    try {
+      await uploadFile(file, key, iv, data.id, data.upload_token);
+    } catch (e) {
+      if (e instanceof RefusedError) {
+        throw e;
+      }
+      console.error("Uploading the attachment failed", e);
+      uploadFailed = e;
+    }
   }
 
   // Hand out /s/ (short for /share/) links: link-preview bots can fetch that
@@ -622,6 +640,7 @@ async function createPaste() {
         deleteAfterOpenSelect.selectedOptions[0].dataset.chip,
       password: password !== "",
       attachment: Boolean(file),
+      uploadFailed: Boolean(uploadFailed),
       remembered,
     },
   );
@@ -670,7 +689,6 @@ function chip(icon, text, warn = false) {
 function showLink(url, deleteUrl, settings) {
   document.getElementById("paste-url").value = url;
   document.getElementById("delete-url").value = deleteUrl;
-  urlModalEl.querySelector(".delete-details").open = false;
   document.getElementById("delete-remembered").hidden = !settings.remembered;
 
   const chips = [chip("clock", `Expires in ${settings.expiry}`)];
@@ -688,9 +706,16 @@ function showLink(url, deleteUrl, settings) {
     chips.push(chip("lock", "Password protected"));
   }
   if (settings.attachment) {
-    chips.push(chip("paperclip", "Encrypted attachment"));
+    chips.push(
+      settings.uploadFailed
+        ? chip("paperclip", "Attachment not uploaded", true)
+        : chip("paperclip", "Encrypted attachment"),
+    );
   }
   document.getElementById("link-summary").replaceChildren(...chips);
+  document.getElementById("upload-failed").hidden = !settings.uploadFailed;
+  // Point at the delete link, since that's the way out.
+  urlModalEl.querySelector(".delete-details").open = Boolean(settings.uploadFailed);
 
   document.getElementById("link-tip").textContent = settings.password
     ? "Send the password a different way from the link, for example the link by email and the password by text. A lost link or password can't be recovered."
@@ -722,7 +747,11 @@ for (const [button, field] of [
   [copyDeleteButton, "delete-url"],
 ]) {
   button.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(document.getElementById(field).value);
+    // Only say "Copied" if it was; the field can still be selected by hand.
+    if (!(await copyText(document.getElementById(field).value))) {
+      showCopyFailed(button);
+      return;
+    }
     setCopied(button, true);
     setTimeout(() => setCopied(button, false), 2000);
   });
