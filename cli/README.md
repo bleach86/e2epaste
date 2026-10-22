@@ -111,7 +111,7 @@ What the model can do is limited on purpose:
 | 4    | `wrong_key`         | Wrong or incomplete link, wrong password, or wrong delete link            |
 | 5    | `password_required` | The paste needs a password                                                |
 | 6    | `rate_limited`      | One of the site's limits; `retry_after` says when to try again            |
-| 7    | `refused`           | Too large, storage full, attachments turned off, or invalid               |
+| 7    | `refused`           | Too large (also a paste that decompresses past the site's limit), storage full, attachments turned off, or invalid |
 | 8    | `network`           | Network or server error; worth retrying later                             |
 | 9    | `unsupported`       | A site or paste format this version can't use                             |
 
