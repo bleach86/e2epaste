@@ -1,11 +1,12 @@
 // Security and privacy: response headers, access proofs, server-side view
-// counting, burn after reading, download tickets, the unlock rate limit,
-// delete links and the admin API.
+// counting, decompression bombs, burn after reading, download tickets, the
+// unlock rate limit, delete links and the admin API.
 // Server settings (tests/run-e2e.mjs): unlock_attempts_per_hour = 8 and
 // admin_token = ADMIN_TOKEN.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as C from "../../js/crypto.mjs";
 import { BASE, check, finish, launch, local, openIfAsked, watch } from "./lib.mjs";
 
 const ADMIN = process.env.ADMIN_TOKEN;
@@ -159,6 +160,37 @@ const plain = await createPaste({ text: "the quick brown fox" });
   await p.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
   check("password: right one decrypts", (await p.$eval("#view-area", (e) => e.textContent)) === "pw text");
   check("password: the wrong attempt used no view", (await p.$eval("#views", (e) => e.textContent.trim())) === "1 view");
+  await p.close();
+}
+
+// ---------------------------------------------------- decompression bomb
+// The server only sees padded, encrypted sizes, so a valid v4 paste can hold
+// a few KiB that inflate to far more than the site's 1 MiB text limit. The
+// viewer must refuse it (js/crypto.mjs inflateCapped) rather than build a
+// 64 MiB page.
+{
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const secret = C.generateLinkSecret();
+  const { key, accessProof } = await C.deriveV3Secrets(secret, iv);
+  const b64 = (bytes) => C.arrayBufferToBase64(bytes);
+  const body = { content: b64(await C.encryptPart(key, iv, "text", new Uint8Array(64 * 1048576))), iv: Array.from(iv),
+    expires_in: 3600, max_views: null, key_fragment: "", has_password: false, version: 4, syntax: "auto", file_name: null,
+    title: b64(await C.encryptPart(key, iv, "title", C.encodeDetails("Bomb", "plaintext"))), access_hash: await C.accessHash(accessProof) };
+  // Deflate manages about 1000:1 on zeros: under 100 KiB for 64 MiB.
+  check("bomb: the stored paste is small", body.content.length < 128 * 1024, body.content.length);
+  const res = await api("/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json", "X-Real-IP": freshIp() }, body: JSON.stringify(body) });
+  const { id } = await res.json();
+  check("bomb: the server can't tell and accepts it", res.status === 200 && Boolean(id), res.status);
+
+  const p = await newPage();
+  const started = Date.now();
+  await p.goto(`${BASE}/s/${id}#${secret}`, { waitUntil: "networkidle0" });
+  await p.waitForFunction(() => !document.getElementById("too-large-error").hidden || !document.getElementById("decrypted-notice").hidden || !document.getElementById("decrypt-error").hidden, { timeout: 20000 });
+  check("bomb: the viewer shows the too-large error", !(await p.$eval("#too-large-error", (e) => e.hidden)));
+  check("bomb: not the generic link error", await p.$eval("#decrypt-error", (e) => e.hidden));
+  check("bomb: nothing is shown", (await p.$eval("#view-area", (e) => e.textContent)) === "" && (await p.$eval("#decrypted-notice", (e) => e.hidden)));
+  check("bomb: refused quickly", Date.now() - started < 10000, `${Date.now() - started} ms`);
+  check("bomb: the error names the site's limit", (await p.$eval("#too-large-error", (e) => e.textContent)).includes("1 MB"));
   await p.close();
 }
 
