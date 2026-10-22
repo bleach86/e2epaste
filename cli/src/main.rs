@@ -111,6 +111,12 @@ struct McpArgs {
     /// Without it, the agent can't use attachments.
     #[arg(long, value_name = "DIR")]
     files_dir: Option<PathBuf>,
+
+    /// An environment variable the agent may name as a paste's password
+    /// (repeatable). It can't name any other, so no other secret in the
+    /// environment can be used. Without it, the agent can't use passwords.
+    #[arg(long, value_name = "VAR")]
+    password_env: Vec<String>,
 }
 
 #[derive(Args)]
@@ -241,7 +247,9 @@ async fn run(cli: Cli) -> Result<(), Error> {
             });
             Ok(())
         }
-        Command::Mcp(args) => e2ep::mcp::serve(site(&args.server)?, args.files_dir).await,
+        Command::Mcp(args) => {
+            e2ep::mcp::serve(site(&args.server)?, args.files_dir, args.password_env).await
+        }
         Command::Limits(args) => {
             let site = site(&args)?;
             let limits = ops::limits(site.clone()).await?;

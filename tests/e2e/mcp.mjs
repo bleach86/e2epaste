@@ -2,7 +2,8 @@
 // stdout the way an MCP client (Claude Code, Claude Desktop) does, against a
 // real server. Checks the tools, what the model is and isn't allowed to do
 // (only --server for new pastes, only --files-dir for files, passwords by
-// name), and that its pastes and the browser's are the same format.
+// name and only from --password-env variables), and that its pastes and the
+// browser's are the same format.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -61,7 +62,7 @@ const viewsOf = async (id) => JSON.parse((await (await fetch(`${BASE}/paste/${id
 const browser = await launch();
 const errors = [];
 
-const mcp = await startMcp(["--server", BASE, "--files-dir", filesDir], { E2EP_TEST_PW: "mcp-pw" });
+const mcp = await startMcp(["--server", BASE, "--files-dir", filesDir, "--password-env", "E2EP_TEST_PW"], { E2EP_TEST_PW: "mcp-pw", E2EP_OTHER_SECRET: "not-for-the-model" });
 
 // ---------------------------------------------------------------- the tools
 {
@@ -139,7 +140,15 @@ const mcp = await startMcp(["--server", BASE, "--files-dir", filesDir], { E2EP_T
   const symlink = await mcp.call("create_paste", { text: "x", attachment: "sneaky.bin" });
   check("files: a symlink out of it is refused", symlink.error && symlink.data.error === "usage");
   const unsetPw = await mcp.call("create_paste", { text: "x", password_env: "NOT_SET_ANYWHERE" });
-  check("passwords: an unset variable is an error", unsetPw.error && /isn't set/.test(unsetPw.data.message));
+  check("passwords: an unset variable is an error", unsetPw.error && unsetPw.data.error === "usage" && /isn't set/.test(unsetPw.data.message));
+  // A variable that is set, but wasn't allowed with --password-env: refused,
+  // with the same message as an unset one, so the model can't tell them apart.
+  const unlistedPw = await mcp.call("create_paste", { text: "x", password_env: "E2EP_OTHER_SECRET" });
+  check("passwords: a variable not allowed with --password-env is refused", unlistedPw.error && unlistedPw.data.error === "usage", JSON.stringify(unlistedPw.data));
+  check("passwords: an unlisted variable looks the same as an unset one",
+    unlistedPw.data.message.replace(/E2EP_OTHER_SECRET/g, "VAR") === unsetPw.data.message.replace(/NOT_SET_ANYWHERE/g, "VAR"), unlistedPw.data.message + " | " + unsetPw.data.message);
+  const unlistedGet = await mcp.call("get_paste", { url: "http://127.0.0.1:1/s/abc#x", password_env: "E2EP_OTHER_SECRET" });
+  check("passwords: get_paste refuses an unlisted variable too", unlistedGet.error && unlistedGet.data.error === "usage" && /password-env/.test(unlistedGet.data.message), JSON.stringify(unlistedGet.data));
 
   // Started without --server or --files-dir. (Nothing is created here: that
   // would go to the live site.)
