@@ -109,5 +109,47 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: e2epaste:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Start the image the way docker-compose.yml does (read-only root, no
+      # capabilities, a throwaway /data) and check that it serves pages.
+      - name: Smoke test
+        run: |
+          data=$(mktemp -d)
+          chmod 777 "$data"
+          docker run -d --name e2epaste \
+            --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 127.0.0.1:8001:8001 \
+            -e ROCKET_SITE_URL=http://localhost:8001 \
+            -v "$data":/data \
+            e2epaste:ci
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8001/api/limits; then break; fi
+            if [ "$i" = 30 ]; then
+              echo "::error::The server didn't come up"
+              docker logs e2epaste
+              exit 1
+            fi
+            sleep 1
+          done
+          curl -fsS -o /dev/null http://127.0.0.1:8001/
+          curl -fsS http://127.0.0.1:8001/api/limits
+          echo
+          # The image's own HEALTHCHECK must pass too.
+          for i in $(seq 1 45); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' e2epaste)
+            if [ "$status" = healthy ]; then break; fi
+            if [ "$i" = 45 ]; then
+              echo "::error::Health check status is '$status', not healthy"
+              exit 1
+            fi
+            sleep 2
+          done
+      - name: Server logs
+        if: always()
+        run: docker logs e2epaste 2>&1 || true
+      - name: Stop the server
+        if: always()
+        run: docker rm -f e2epaste > /dev/null 2>&1 || true
