@@ -86,7 +86,7 @@ impl IncomingPaste {
     pub fn check(&self, now_ms: u64, limits: &PasteLimits) -> Result<u64, &'static str> {
         if !test_legacy_pastes() {
             if self.version != CURRENT_VERSION {
-                return Err("only the current paste format (version 3) can be created");
+                return Err("only the current paste format (version 4) can be created");
             }
             if !self
                 .access_hash
