@@ -12,7 +12,14 @@ use crate::error::Error;
 /// The paste format this client makes; the server must take it.
 pub const FORMAT_VERSION: u32 = e2epaste_format::FORMAT_VERSION;
 
+/// The whole of a small JSON request, body included.
 const TIMEOUT: Duration = Duration::from_secs(60);
+/// For a request that moves an attachment (a 1 MiB chunk up, or the whole
+/// file down), which can take longer than that on a slow connection: a
+/// limit on each wait for the connection instead, so only a stalled
+/// transfer gives up. For an upload the one wait is for the answer, which
+/// comes after the whole chunk is sent, so this allows for a slow one.
+const READ_TIMEOUT: Duration = Duration::from_secs(180);
 const TRIES: u32 = 4;
 
 pub struct Api {
@@ -91,6 +98,7 @@ impl Api {
         let http = reqwest::Client::builder()
             .user_agent(concat!("e2ep/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(20))
+            .read_timeout(READ_TIMEOUT)
             .build()
             .map_err(|e| Error::Other(format!("can't start the HTTP client: {e}")))?;
         Ok(Api { http, site })
@@ -108,15 +116,23 @@ impl Api {
     /// network errors and server errors (5xx); creating, opening and
     /// deleting aren't, since the first try may have worked (a second paste,
     /// a second view used, or "not found"). Refusals are returned as errors.
+    ///
+    /// `size` says how long the request may take: a small JSON call has a
+    /// limit on the whole thing, an attachment transfer only on each wait.
     async fn send(
         &self,
         what: Refusing,
+        size: Size,
         repeatable: bool,
         build: impl Fn() -> reqwest::RequestBuilder,
     ) -> Result<Response, Error> {
         let mut attempt = 1;
         loop {
-            let result = build().timeout(TIMEOUT).send().await;
+            let request = match size {
+                Size::Small => build().timeout(TIMEOUT),
+                Size::Large => build(),
+            };
+            let result = request.send().await;
             let retry = repeatable
                 && match &result {
                     Err(_) => true,
@@ -139,7 +155,7 @@ impl Api {
 
     pub async fn limits(&self) -> Result<Limits, Error> {
         let response = self
-            .send(Refusing::Site, true, || {
+            .send(Refusing::Site, Size::Small, true, || {
                 self.http.get(self.url("api/limits"))
             })
             .await
@@ -162,7 +178,7 @@ impl Api {
 
     pub async fn create(&self, paste: &NewPaste) -> Result<Created, Error> {
         let response = self
-            .send(Refusing::Paste, false, || {
+            .send(Refusing::Paste, Size::Small, false, || {
                 self.http.post(self.url("api/submit_paste")).json(paste)
             })
             .await?;
@@ -178,7 +194,7 @@ impl Api {
         chunk: Vec<u8>,
     ) -> Result<(), Error> {
         let url = self.url(&format!("api/upload-attachment/{id}/{index}?last={last}"));
-        self.send(Refusing::Attachment, true, || {
+        self.send(Refusing::Attachment, Size::Large, true, || {
             self.http
                 .post(url.clone())
                 .header("Content-Type", "application/octet-stream")
@@ -191,7 +207,7 @@ impl Api {
 
     pub async fn info(&self, id: &str) -> Result<Info, Error> {
         let response = self
-            .send(Refusing::Paste, true, || {
+            .send(Refusing::Paste, Size::Small, true, || {
                 self.http.get(self.url(&format!("api/info/{id}")))
             })
             .await?;
@@ -201,7 +217,7 @@ impl Api {
     pub async fn open(&self, id: &str, proof: Option<&str>) -> Result<Opened, Error> {
         let body = serde_json::json!({ "proof": proof });
         let response = self
-            .send(Refusing::Open, false, || {
+            .send(Refusing::Open, Size::Small, false, || {
                 self.http
                     .post(self.url(&format!("api/open/{id}")))
                     .json(&body)
@@ -211,7 +227,7 @@ impl Api {
     }
 
     pub async fn download(&self, id: &str, ticket: &str) -> Result<Response, Error> {
-        self.send(Refusing::Paste, true, || {
+        self.send(Refusing::Paste, Size::Large, true, || {
             self.http
                 .get(self.url(&format!("api/download-attachment/{id}")))
                 .header("X-Download-Ticket", ticket)
@@ -220,7 +236,7 @@ impl Api {
     }
 
     pub async fn delete(&self, id: &str, token: &str) -> Result<(), Error> {
-        self.send(Refusing::Delete, false, || {
+        self.send(Refusing::Delete, Size::Small, false, || {
             self.http
                 .post(self.url(&format!("api/delete/{id}")))
                 .header("X-Delete-Token", token)
@@ -228,6 +244,16 @@ impl Api {
         .await?;
         Ok(())
     }
+}
+
+/// How much a request moves, which decides its timeout.
+#[derive(Clone, Copy)]
+enum Size {
+    /// A JSON call: all of it within `TIMEOUT`.
+    Small,
+    /// An attachment chunk or download: no limit on the whole, only
+    /// `READ_TIMEOUT` on each wait.
+    Large,
 }
 
 /// What a request was for, to say what a 403 or 413 means.
