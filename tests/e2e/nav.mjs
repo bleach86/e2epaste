@@ -22,9 +22,10 @@ await p.goto(BASE + "/", { waitUntil: "networkidle0" });
 await p.click(".navbar .dropdown-toggle");
 await new Promise((r) => setTimeout(r, 300));
 const links = await p.$$eval(".tools-menu a", (els) => els.map((e) => [e.textContent.trim(), e.getAttribute("href")]));
-check("menu lists 2 hub headings + 9 tools", links.length === 11, links.length);
+check("menu lists 4 hub headings + 15 tools", links.length === 19, links.length);
 const groups = await p.$$eval(".tools-menu-group", (g) => g.map((x) => x.getBoundingClientRect()).map((r) => [Math.round(r.left), Math.round(r.top)]));
-check("desktop: groups side by side", groups.length === 2 && groups[0][1] === groups[1][1] && groups[1][0] > groups[0][0], JSON.stringify(groups));
+check("desktop: groups side by side", groups.length === 4 && groups.every((g, i) => g[1] === groups[0][1] && (i === 0 || g[0] > groups[i - 1][0])),
+  JSON.stringify(groups));
 await p.screenshot({ path: artifact("nav-desktop.png"), clip: { x: 0, y: 0, width: 1200, height: 420 } });
 let bad = [];
 for (const [, href] of links) { const r = await fetch(BASE + href); if (r.status !== 200) bad.push(href + " " + r.status); }

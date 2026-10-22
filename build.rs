@@ -2,11 +2,14 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::process::Command;
+use std::time::SystemTime;
 
 const DIST_DIR: &str = "static/js/dist";
 
 // Installs node_modules and runs webpack so `cargo build` / `cargo run`
-// produce the bundles in static/js/dist. Set SKIP_NPM_BUILD=1 to skip.
+// produce the bundles in static/js/dist. Set SKIP_NPM_BUILD=1 to skip, as
+// .vscode/settings.json does for rust-analyzer: two builds at once clash over
+// node_modules, which `npm ci` deletes and reinstalls.
 fn main() {
     for path in [
         "package.json",
@@ -21,7 +24,9 @@ fn main() {
     if std::env::var_os("SKIP_NPM_BUILD").is_some() {
         println!("cargo:warning=SKIP_NPM_BUILD set, skipping npm install and webpack");
     } else {
-        npm(&["ci", "--no-audit", "--no-fund"]);
+        if !node_modules_current() {
+            npm(&["ci", "--no-audit", "--no-fund"]);
+        }
         npm(&["run", "build"]);
     }
 
@@ -31,6 +36,20 @@ fn main() {
         "cargo:rustc-env=ASSET_VERSION={:x}",
         hash_dir(Path::new(DIST_DIR))
     );
+}
+
+// Whether node_modules was installed from the current package-lock.json:
+// npm writes node_modules/.package-lock.json on every install.
+fn node_modules_current() -> bool {
+    let modified =
+        |path: &str| -> Option<SystemTime> { std::fs::metadata(path).ok()?.modified().ok() };
+    match (
+        modified("node_modules/.package-lock.json"),
+        modified("package-lock.json"),
+    ) {
+        (Some(installed), Some(lock)) => installed >= lock,
+        _ => false,
+    }
 }
 
 fn npm(args: &[&str]) {

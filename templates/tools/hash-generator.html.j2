@@ -1,0 +1,101 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{# js/tools/pages/hash-generator.mjs builds the algorithm list and results.
+   On a variant's page (e.g. SHA-256 Hash Generator), its algorithm comes
+   first. #}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" id="hash-tool" data-first="{{ variant.from if variant else '' }}"
+    aria-label="Hash generator">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div class="seg hash-mode flex-grow-1" role="radiogroup" aria-label="What to hash">
+            <input type="radio" class="btn-check" name="hash-mode" id="mode-text" value="text" checked>
+            <label class="seg-btn" for="mode-text">Text</label>
+            <input type="radio" class="btn-check" name="hash-mode" id="mode-file" value="file">
+            <label class="seg-btn gap-2" for="mode-file">{{ icons.icon("file") }} File</label>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm" id="hash-clear">{{ icons.icon("eraser") }} Clear</button>
+    </div>
+
+    <div id="hash-text-box" class="mt-3">
+        <label for="hash-text" class="visually-hidden">Text to hash</label>
+        <textarea id="hash-text" class="form-control tool-area" rows="5" spellcheck="false"
+            placeholder="Type or paste text. It's hashed as UTF-8."></textarea>
+    </div>
+    <div id="hash-file-box" class="mt-3" hidden>
+        <input type="file" id="hash-file" class="visually-hidden">
+        <label for="hash-file" class="hash-drop" id="hash-drop">
+            {{ icons.icon("file") }}
+            <span id="hash-file-name">Choose a file, or drop it here</span>
+            <span id="hash-file-size" class="small text-secondary">Any size: it's read in pieces and never uploaded.</span>
+        </label>
+        <div class="progress mt-2" id="hash-progress" role="progressbar" aria-label="Hashing" aria-valuemin="0"
+            aria-valuemax="100" hidden>
+            <div class="progress-bar"></div>
+        </div>
+    </div>
+
+    <fieldset class="mt-3">
+        <legend class="small text-secondary mb-1">Algorithms</legend>
+        <div id="hash-algorithms" class="d-flex flex-wrap gap-3"></div>
+    </fieldset>
+    <div class="row g-2 mt-2">
+        <div class="col-md">
+            <label for="hash-key" class="small text-secondary">HMAC key (optional)</label>
+            <input id="hash-key" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
+                placeholder="Leave empty for plain hashes" data-1p-ignore data-lpignore="true" data-bwignore="true"
+                data-form-type="other">
+        </div>
+        <div class="col-md-auto">
+            <label for="hash-format" class="small text-secondary">Output</label>
+            <select id="hash-format" class="form-select">
+                <option value="hex" selected>hex (lower case)</option>
+                <option value="HEX">HEX (upper case)</option>
+                <option value="base64">Base64</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="hash-results" class="mt-4 d-flex flex-column gap-2" aria-live="polite"></div>
+    {# Cloned into each result's copy button. #}
+    <span id="copy-icon" hidden>{{ icons.icon("copy") }}</span>
+
+    <div class="mt-4">
+        <label for="hash-compare" class="small text-secondary">Compare with a published checksum (optional)</label>
+        <input id="hash-compare" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
+            placeholder="Paste the expected hash to see if it matches">
+        <p id="hash-compare-result" class="small mt-2 mb-0" role="status"></p>
+    </div>
+</section>
+{% set variants_heading = "By algorithm" %}
+{% include "tool_variants" %}
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What is a hash?</h2>
+<p>A hash function turns any amount of data into a short, fixed-size fingerprint. The same input always gives the
+    same hash, the smallest change gives a completely different one, and you can't work back from a hash to the
+    data. That makes hashes useful for checking that a file arrived intact, spotting duplicates, and storing
+    fingerprints of data without the data itself.</p>
+
+<h2 class="h4">Checking a download</h2>
+<p>Many downloads publish a SHA-256 checksum next to the file. Choose the downloaded file here, paste the
+    published checksum into "Compare", and you'll see whether they match. The file is read in your browser,
+    a piece at a time, so even very large files work and nothing is uploaded.</p>
+
+<h2 class="h4">Which algorithm?</h2>
+<p><strong>SHA-256</strong> is the usual choice today, with SHA-512 and the SHA-3 family as strong alternatives.
+    <strong>BLAKE3</strong> is a modern, very fast design. <strong>MD5</strong> and <strong>SHA-1</strong> are
+    broken for security: people can make two different inputs with the same hash. They're still fine for
+    spotting accidental corruption, and still widely published, so they're here for checking checksums.</p>
+
+<h2 class="h4">HMAC</h2>
+<p>An HMAC is a hash mixed with a secret key, used to check that a message came from someone who knows the key,
+    for example to verify webhook signatures. Enter the key to get HMACs instead of plain hashes. BLAKE3 has its
+    own keyed mode instead, so it's left out when there's a key.</p>
+
+<h2 class="h4">Hashes and passwords</h2>
+<p>Don't store passwords as plain hashes like these: they're fast to compute, so they're fast to guess. Password
+    storage needs a deliberately slow function such as Argon2, scrypt or bcrypt.</p>
+{% endblock %}

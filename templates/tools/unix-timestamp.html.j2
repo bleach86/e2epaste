@@ -1,0 +1,104 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{# js/tools/pages/unix-timestamp.mjs #}
+
+{% macro output(id, label) %}
+<div class="row g-2 align-items-center">
+    <div class="col-md-4 col-lg-3"><label for="{{ id }}" class="num-label pt-0">{{ label | safe }}</label></div>
+    <div class="col"><input id="{{ id }}" class="form-control font-monospace" type="text" readonly></div>
+    <div class="col-auto">
+        <button type="button" class="btn btn-quiet" data-copy="{{ id }}" aria-label="Copy">{{ icons.icon("copy") }}</button>
+    </div>
+</div>
+{% endmacro %}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" aria-labelledby="now-heading">
+    <h2 class="h6 fw-semibold mb-3" id="now-heading">The current Unix time</h2>
+    <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+            <label for="now-s" class="visually-hidden">Seconds</label>
+            <input id="now-s" class="form-control font-monospace now-time" type="text" readonly size="12">
+            <button type="button" class="btn btn-quiet" data-copy="now-s" aria-label="Copy seconds">{{ icons.icon("copy") }}</button>
+            <span class="small text-secondary">seconds</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label for="now-ms" class="visually-hidden">Milliseconds</label>
+            <input id="now-ms" class="form-control font-monospace" type="text" readonly size="15">
+            <button type="button" class="btn btn-quiet" data-copy="now-ms" aria-label="Copy milliseconds">{{ icons.icon("copy") }}</button>
+            <span class="small text-secondary">milliseconds</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel panel-pad tool-panel" aria-labelledby="convert-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <h2 class="h5 fw-semibold mb-1" id="convert-heading">Convert</h2>
+            <p class="small text-secondary mb-0">Type a timestamp to see its date, or a date to see its timestamp.</p>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm" id="ts-clear">{{ icons.icon("eraser") }} Clear</button>
+    </div>
+    <div class="row g-2 mt-2 align-items-start">
+        <div class="col-md">
+            <label for="ts-in" class="visually-hidden">Timestamp or date</label>
+            <input id="ts-in" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
+                placeholder="1700000000, or 2026-10-21T14:30:00Z" aria-describedby="ts-error ts-note">
+            <div id="ts-error" class="small text-warn mt-1" role="status"></div>
+            <div id="ts-note" class="small text-secondary mt-1" role="status"></div>
+        </div>
+        <div class="col-auto">
+            <label for="ts-unit" class="visually-hidden">Timestamp unit</label>
+            <select id="ts-unit" class="form-select">
+                <option value="auto" selected>Unit: guess</option>
+                <option value="s">Seconds</option>
+                <option value="ms">Milliseconds</option>
+                <option value="us">Microseconds</option>
+                <option value="ns">Nanoseconds</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-quiet" id="ts-now">{{ icons.icon("clock") }} Now</button>
+        </div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+        <label for="ts-pick" class="small text-secondary">Or pick a date and time (in your time zone):</label>
+        <input id="ts-pick" class="form-control form-control-sm w-auto" type="datetime-local" step="1">
+    </div>
+
+    <div class="mt-4 d-flex flex-column gap-2" id="ts-results">
+        {{ output("out-s", "Unix time (seconds)") }}
+        {{ output("out-ms", "Unix time (milliseconds)") }}
+        {{ output("out-iso", "ISO 8601, UTC") }}
+        {{ output("out-local-iso", "ISO 8601, your time zone") }}
+        {{ output("out-local", "Your time zone (<span id=\"tz-name\"></span>)") }}
+        {{ output("out-http", "HTTP / RFC 7231 date") }}
+        {{ output("out-rel", "Relative") }}
+    </div>
+</section>
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What is a Unix timestamp?</h2>
+<p>A Unix timestamp (also called epoch time or POSIX time) is the number of seconds since
+    <strong>1 January 1970, 00:00:00 UTC</strong>, which is called the Unix epoch. It's the same everywhere in the
+    world at the same moment, with no time zones or daylight saving to get wrong, which is why computers use it
+    to store and compare times. Dates before 1970 are negative numbers.</p>
+
+<h2 class="h4">Seconds, milliseconds, microseconds and nanoseconds</h2>
+<p>Unix tools and most databases count seconds (<code>1700000000</code>, 10 digits for today's dates).
+    JavaScript and Java count milliseconds (<code>1700000000000</code>, 13 digits), and some systems use
+    microseconds (16 digits) or nanoseconds (19 digits). This converter guesses the unit from the number's size;
+    pick one yourself if the guess is wrong.</p>
+
+<h2 class="h4">Dates you can type</h2>
+<p>ISO 8601 dates such as <code>2026-10-21T14:30:00Z</code> or <code>2026-10-21T16:30:00+02:00</code> work best.
+    Dates in email format, such as <code>Wed, 21 Oct 2026 14:30:00 GMT</code>, work too. Without a time zone, a
+    date and time is read as your local time, while a date alone (<code>2026-10-21</code>) is read as midnight UTC.</p>
+
+<h2 class="h4">The year 2038 problem</h2>
+<p>Older systems store Unix time in a signed 32-bit number, which runs out at <code>2147483647</code>: 19 January
+    2038, 03:14:07 UTC. One second later it wraps around to 1901. Most systems now use 64 bits, which lasts for
+    billions of years.</p>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "tool_layout" %}
+{% import "icons" as icons %}
+
+{# js/tools/pages/jwt-decoder.mjs #}
+
+{% block tool %}
+<section class="panel panel-pad tool-panel" aria-labelledby="jwt-heading">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <h2 class="h5 fw-semibold mb-1" id="jwt-heading">Token</h2>
+            <p class="small text-secondary mb-0">Paste a JWT. A <code>Bearer</code> prefix and line breaks are fine.</p>
+        </div>
+        <button type="button" class="btn btn-quiet btn-sm" id="jwt-clear">{{ icons.icon("eraser") }} Clear</button>
+    </div>
+    <label for="jwt-in" class="visually-hidden">JSON Web Token</label>
+    <textarea id="jwt-in" class="form-control tool-area mt-3 jwt-in" rows="4" spellcheck="false" autocomplete="off"
+        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature"
+        aria-describedby="jwt-error"></textarea>
+    <div id="jwt-error" class="small text-warn mt-1" role="status"></div>
+    <div id="jwt-summary" class="chips mt-2" role="status"></div>
+</section>
+
+<div id="jwt-decoded" hidden>
+    <div class="row g-3 mt-0">
+        <div class="col-lg-5">
+            <section class="panel panel-pad" aria-labelledby="jwt-header-heading">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2 class="h6 fw-semibold mb-0" id="jwt-header-heading">Header</h2>
+                    <button type="button" class="btn btn-quiet btn-sm" data-copy="jwt-header" aria-label="Copy header">{{ icons.icon("copy") }}</button>
+                </div>
+                <textarea id="jwt-header" class="form-control tool-area jwt-json mt-2" rows="4" readonly aria-label="Header JSON"></textarea>
+            </section>
+        </div>
+        <div class="col-lg-7">
+            <section class="panel panel-pad" aria-labelledby="jwt-payload-heading">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2 class="h6 fw-semibold mb-0" id="jwt-payload-heading">Payload (claims)</h2>
+                    <button type="button" class="btn btn-quiet btn-sm" data-copy="jwt-payload" aria-label="Copy payload">{{ icons.icon("copy") }}</button>
+                </div>
+                <textarea id="jwt-payload" class="form-control tool-area jwt-json mt-2" rows="4" readonly aria-label="Payload JSON"></textarea>
+                <dl id="jwt-claims" class="jwt-claims mt-3 mb-0"></dl>
+            </section>
+        </div>
+    </div>
+
+    <section class="panel panel-pad tool-panel mt-3" aria-labelledby="jwt-verify-heading">
+        <h2 class="h5 fw-semibold mb-1" id="jwt-verify-heading">Check the signature</h2>
+        <p class="small text-secondary mb-3" id="jwt-key-help"></p>
+        <div id="jwt-secret-box">
+            <label for="jwt-secret" class="visually-hidden">Secret</label>
+            <input id="jwt-secret" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
+                placeholder="The shared secret" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other">
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="jwt-secret-b64">
+                <label class="form-check-label small" for="jwt-secret-b64">The secret is base64-encoded</label>
+            </div>
+        </div>
+        <div id="jwt-public-box">
+            <label for="jwt-public" class="visually-hidden">Public key</label>
+            <textarea id="jwt-public" class="form-control tool-area" rows="5" spellcheck="false" autocomplete="off"
+                placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----&#10;&#10;or a JWK, or a JWKS ({&quot;keys&quot;: [...]})"></textarea>
+        </div>
+        <p id="jwt-verify-result" class="jwt-verify mt-3 mb-0" role="status"></p>
+    </section>
+</div>
+{% endblock %}
+
+{% block about %}
+<h2 class="h4">What is a JWT?</h2>
+<p>A JSON Web Token (JWT, said "jot") is a small, signed message that says who someone is and what they're
+    allowed to do, used for logins and API access. It's three parts separated by dots: a <strong>header</strong>
+    saying how it's signed, a <strong>payload</strong> of claims, and a <strong>signature</strong>. The header and
+    payload are only base64url-encoded, not encrypted: anyone who has the token can read them, which is all this
+    decoder does.</p>
+
+<h2 class="h4">Is it safe to paste a token here?</h2>
+<p>A token is often a live login: whoever has it can act as you until it expires. This page decodes and checks
+    it entirely in your browser, and never sends it anywhere, but be careful with any site that does. When
+    you're done, tokens you've shared can usually be revoked by logging out.</p>
+
+<h2 class="h4">The standard claims</h2>
+<p><code>iss</code> is who issued the token, <code>sub</code> who it's about, and <code>aud</code> who it's for.
+    <code>exp</code>, <code>nbf</code> and <code>iat</code> are when it expires, when it starts being valid and
+    when it was issued, as Unix timestamps; this page shows them as dates. <code>jti</code> is a unique ID for the
+    token.</p>
+
+<h2 class="h4">Checking the signature</h2>
+<p>A signature proves the token wasn't changed since it was signed. Tokens signed with <code>HS256</code>,
+    <code>HS384</code> or <code>HS512</code> use a shared secret: enter it to check. The others (<code>RS</code>,
+    <code>PS</code>, <code>ES</code> and <code>EdDSA</code>) are checked with the issuer's public key, as a PEM
+    block or a JWK. Many issuers publish theirs as a JWKS at an address ending in
+    <code>/.well-known/jwks.json</code>; paste the whole set and the key the token names is used. A token with
+    <code>"alg": "none"</code> isn't signed at all.</p>
+{% endblock %}

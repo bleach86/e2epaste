@@ -1,6 +1,7 @@
 // Language auto-detection, and safe Markdown rendering against hostile
 // pastes: scripts, event handlers, javascript: links, tracking images and
 // attempts to borrow the site's styles.
+import hljs from "highlight.js/lib/common";
 import { SAMPLES } from "../fixtures/language_samples.mjs";
 import { artifact, BASE, check, finish, launch, local, watch } from "./lib.mjs";
 
@@ -33,7 +34,9 @@ for (const [label, text] of Object.entries(SAMPLES)) {
     return m ? m[1] : null;
   });
   const want = label.startsWith("plain:") ? null : label;
-  const names = await c.evaluate((langs, display) => langs.map((l) => (l ? display[l] ?? hljs.getLanguage(l).name : null)), [want, ...(expected[want] ?? [])], DISPLAY);
+  // Names as the page shows them: its own (DISPLAY), else highlight.js's,
+  // from the same npm package the page bundles.
+  const names = [want, ...(expected[want] ?? [])].map((l) => (l ? DISPLAY[l] ?? hljs.getLanguage(l).name : null));
   const good = want === null ? guess === null : names.includes(guess);
   if (good) right++;
   check(`detect ${label}: ${guess ?? "plain text"}`, good, option);

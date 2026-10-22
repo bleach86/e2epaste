@@ -93,6 +93,21 @@
   --bs-code-color: #c4b5fd;
 }
 
+/* No ligatures in the code font: text is shown exactly as it is, so "=="
+   stays two characters and "!=" doesn't turn into "≠". */
+code,
+kbd,
+pre,
+samp,
+textarea,
+input,
+.font-monospace,
+.code-view,
+.tool-preview,
+.jwt-claims dd {
+  font-variant-ligatures: none;
+}
+
 .breadcrumb a {
   text-decoration: none;
 }
@@ -445,6 +460,11 @@ html {
   color: var(--e2e-warn);
 }
 
+.chip-ok {
+  border-color: var(--e2e-accent-tint-border);
+  color: var(--e2e-accent);
+}
+
 /* A tinted note, e.g. "Decrypted in your browser". */
 .notice {
   display: flex;
@@ -569,9 +589,37 @@ html {
 }
 
 .create-editor {
+  position: relative;
   flex: 999 1 600px;
   min-width: 0;
   overflow: hidden;
+}
+
+/* While files are dragged over the page */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 2px dashed var(--e2e-accent);
+  border-radius: inherit;
+  background: rgba(16, 38, 42, 0.92); /* --e2e-accent-tint */
+  color: var(--e2e-accent);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.drop-overlay[hidden] {
+  display: none;
+}
+
+.drop-overlay .icon {
+  width: 28px;
+  height: 28px;
 }
 
 .create-options {
@@ -1355,6 +1403,129 @@ html {
 
 .tool-area[readonly] {
   background: #11151b;
+}
+
+/* Number base converter: one-line fields that grow for long numbers
+   (js/tools/pages/number-base.mjs sets the height). */
+.num-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.num-label {
+  font-weight: 600;
+  padding-top: 7px;
+}
+
+.tool-area.num-field {
+  min-height: 0;
+  resize: none;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+/* Byte size converter */
+.bytes-in {
+  font-size: 18px;
+}
+
+.bytes-headline {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--e2e-accent);
+  overflow-wrap: anywhere;
+}
+
+.bytes-unit {
+  flex: none;
+  width: 3rem;
+  font-weight: 600;
+}
+
+.bytes-row.is-target input {
+  border-color: var(--e2e-accent);
+  color: var(--e2e-accent);
+}
+
+.now-time {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Security tools */
+.seg-2,
+.hash-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 20rem;
+}
+
+.count-input {
+  width: 6rem;
+}
+
+.hash-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 16px;
+  border: 2px dashed var(--e2e-border);
+  border-radius: var(--e2e-radius-sm);
+  text-align: center;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.hash-drop:hover {
+  border-color: var(--e2e-accent);
+}
+
+.hash-drop .icon {
+  width: 24px;
+  height: 24px;
+  color: var(--e2e-accent);
+}
+
+#hash-results .is-match input {
+  border-color: var(--e2e-accent);
+  color: var(--e2e-accent);
+}
+
+.tool-area.jwt-in {
+  min-height: 0;
+  word-break: break-all;
+}
+
+.tool-area.jwt-json {
+  min-height: 0;
+}
+
+.jwt-claims {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  font-size: 14px;
+}
+
+.jwt-claims dt {
+  font-weight: 600;
+  color: var(--e2e-text-soft);
+}
+
+.jwt-claims dd {
+  margin: 0;
+  font-family: var(--bs-font-monospace);
+  overflow-wrap: anywhere;
+}
+
+.jwt-verify {
+  font-weight: 600;
+}
+
+.num-links .list-inline-item {
+  margin: 0 1rem 0.25rem 0;
 }
 
 .tool-preview {

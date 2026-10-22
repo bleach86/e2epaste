@@ -43,10 +43,31 @@ export function base64Encode(text) {
 }
 
 // Accepts standard and URL-safe Base64, whitespace and missing padding.
+// Base64's symbols as they look when copied from an HTML page's source
+// (&#x2f;) or a URL (%2F).
+const ESCAPED_SYMBOLS = [
+  [/&#x2b;|&#43;|&plus;|%2b/gi, "+"],
+  [/&#x2f;|&#47;|&sol;|%2f/gi, "/"],
+  [/&#x3d;|&#61;|&equals;|%3d/gi, "="],
+];
+
 export function base64Decode(input) {
-  let b64 = input.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  let b64 = input.replace(/\s+/g, "");
+  const unescaped = new Set();
+  for (const [pattern, symbol] of ESCAPED_SYMBOLS) {
+    b64 = b64.replace(pattern, (escaped) => {
+      unescaped.add(`${escaped} as ${symbol}`);
+      return symbol;
+    });
+  }
+  b64 = b64.replace(/-/g, "+").replace(/_/g, "/");
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) {
-    throw new Error("This isn't valid Base64: it contains characters Base64 doesn't use.");
+    const bad = b64.match(/[^A-Za-z0-9+/=]/)?.[0];
+    throw new Error(
+      bad
+        ? `This isn't valid Base64: "${bad}" isn't a Base64 character.`
+        : "This isn't valid Base64: \"=\" can only be at the end.",
+    );
   }
   b64 = b64.replace(/=+$/, "");
   if (b64.length % 4 === 1) {
@@ -55,7 +76,13 @@ export function base64Decode(input) {
   b64 += "=".repeat((4 - (b64.length % 4)) % 4);
 
   const binary = atob(b64);
-  return decodeUtf8(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+  const result = decodeUtf8(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+  if (unescaped.size === 0) {
+    return result;
+  }
+  // Say what was read differently, with any warning about the text itself.
+  const note = `Read escaped symbols: ${[...unescaped].join(", ")}.`;
+  return typeof result === "string" ? { text: result, warning: note } : { text: result.text, warning: `${note} ${result.warning}` };
 }
 
 // --- Hex --------------------------------------------------------------------

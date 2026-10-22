@@ -126,8 +126,9 @@
         <div class="accordion">
             {% call faq("limits", "How large can a paste be?") %}
             <p class="mb-0">Text can be up to {{ limits.max_paste_label }}{% if limits.max_file_label %}, and you can
-                attach one file of up to {{ limits.max_file_label }}{% else %}. This site doesn't accept
-                attachments{% endif %}.</p>
+                attach files of up to {{ limits.max_file_label }} in all{% else %}. This site doesn't accept
+                attachments{% endif %}.{% if limits.max_file_label %} Several files are zipped in your browser and sent
+                as one .zip; the files inside keep their names but not their dates.{% endif %}</p>
             {% endcall %}
 
             {% call faq("expiry", "How do expiry and view limits work?") %}
@@ -165,9 +166,11 @@
             {% endcall %}
 
             {% call faq("tools", "What are the tools?") %}
-            <p class="mb-0">Free <a href="/tools/password">password tools</a> and
-                <a href="/tools/strings">text tools</a>, such as a password generator, a strength checker, Base64 and
-                hex converters and a character counter. Like pastes, they run entirely in your browser.</p>
+            <p class="mb-0">Free <a href="/tools/password">password</a>, <a href="/tools/strings">text</a>,
+                <a href="/tools/numbers">number</a> and <a href="/tools/security">security</a> tools, such as a
+                password generator, Base64 and hex converters, a number base converter, a Unix timestamp converter,
+                a JWT decoder, a hash generator and a UUID generator. Like pastes, they run entirely in your browser,
+                so what you enter in them never leaves your device.</p>
             {% endcall %}
         </div>
     </section>

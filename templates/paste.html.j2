@@ -107,8 +107,8 @@
             <div>
                 <label for="password-input" class="field-label">Password</label>
                 <div class="input-group">
-                    <input type="password" class="form-control" id="password-input" autocomplete="off"
-                        spellcheck="false" aria-describedby="password-error">
+                    <input type="password" class="form-control" id="password-input" autocomplete="new-password"
+                        spellcheck="false" aria-describedby="password-error" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other">
                     <button class="btn btn-quiet" type="button" id="show-pass-button" aria-label="Show password"
                         aria-pressed="false">
                         <span class="pw-show d-inline-flex">{{ icons.icon("eye") }}</span>
@@ -137,6 +137,5 @@
 
 {% block scripts %}
 <script type="application/json" id="page-data">{{ {"paste": paste} | tojson }}</script>
-<script src="/public/js/highlight.min.js"></script>
 <script src="/public/js/dist/paste.js?v={{ asset_version }}"></script>
 {% endblock %}

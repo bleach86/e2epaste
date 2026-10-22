@@ -1,10 +1,13 @@
-// Guessing a paste's language for syntax highlighting ("Auto-detect"), with
-// the highlight.js loaded by the page (static/js/highlight.min.js, the
-// global `hljs`).
+// Syntax highlighting with highlight.js (its "common" set of 36 languages),
+// and guessing a paste's language for it ("Auto-detect").
 //
 // The guess is made in the browser, by the creator's page while typing and
 // again by each viewer's page after decrypting. The server stores only
 // "auto", so it doesn't learn what kind of content a paste holds.
+
+import hljs from "highlight.js/lib/common";
+
+export { hljs };
 
 export const AUTO = "auto";
 

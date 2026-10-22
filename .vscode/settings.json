@@ -1,0 +1,8 @@
+{
+  // rust-analyzer checks the Rust code in the background; it doesn't need the
+  // browser bundles, and building them at the same time as `cargo build`
+  // makes the two clash over node_modules (see build.rs).
+  "rust-analyzer.cargo.extraEnv": {
+    "SKIP_NPM_BUILD": "1"
+  }
+}

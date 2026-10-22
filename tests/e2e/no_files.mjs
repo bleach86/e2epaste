@@ -1,6 +1,6 @@
 // A site with attachments turned off (tests/run-e2e.mjs: allow_files =
 // false): no attach button, the FAQ says so, and the server refuses them.
-import { BASE, check, finish, launch, watch } from "./lib.mjs";
+import { BASE, check, drag, finish, launch, watch } from "./lib.mjs";
 
 const browser = await launch();
 const errors = [];
@@ -12,6 +12,14 @@ await p.goto(BASE + "/", { waitUntil: "networkidle0" });
 check("create page: no attach button", (await p.$("#fileInput")) === null && (await p.$(".file-pick")) === null);
 const foot = await p.$eval(".panel-foot", (e) => e.textContent.replace(/\s+/g, " "));
 check("create page: limits don't mention files", foot.includes("Up to 1 MB of text") && !foot.includes("file"), foot);
+
+const notes = [{ name: "notes.txt", text: "dropped in" }];
+await drag(p, "dragenter", "#paste-area", notes);
+check("create page: dragging a file in says files aren't taken",
+  /doesn't take files/.test(await p.$eval("#drop-overlay", (e) => (e.hidden ? "" : e.textContent))));
+const caught = await drag(p, "drop", "#paste-area", notes);
+check("create page: a dropped file is caught, not opened or attached",
+  caught && (await p.$eval("#drop-overlay", (e) => e.hidden)) && (await p.$eval("#paste-area", (e) => e.value)) === "");
 
 await p.$eval("#paste-area", (el) => { el.value = "no files here"; el.dispatchEvent(new Event("input")); });
 await p.click("#submit-paste");

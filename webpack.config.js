@@ -12,6 +12,35 @@ const toolEntries = Object.fromEntries(
     .map((file) => [`tools/${path.basename(file, ".mjs")}`, `./js/tools/pages/${file}`]),
 );
 
+// Stylesheets from npm packages, copied into the output as they are
+// (layout.html.j2 links them from /public/js/dist/vendor/), with Bootstrap's
+// source map, which its stylesheet names.
+const VENDOR_FILES = {
+  "vendor/bootstrap.min.css": "node_modules/bootstrap/dist/css/bootstrap.min.css",
+  "vendor/bootstrap.min.css.map": "node_modules/bootstrap/dist/css/bootstrap.min.css.map",
+  "vendor/atom-one-dark.min.css": "node_modules/highlight.js/styles/atom-one-dark.min.css",
+};
+
+class CopyVendorFiles {
+  apply(compiler) {
+    const { Compilation, sources } = compiler.webpack;
+    compiler.hooks.thisCompilation.tap("CopyVendorFiles", (compilation) => {
+      compilation.hooks.processAssets.tap(
+        { name: "CopyVendorFiles", stage: Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL },
+        () => {
+          for (const [to, from] of Object.entries(VENDOR_FILES)) {
+            const file = path.resolve(__dirname, from);
+            compilation.fileDependencies.add(file);
+            // Already minified: the minifier leaves them (and their licence
+            // headers) as they are.
+            compilation.emitAsset(to, new sources.RawSource(fs.readFileSync(file)), { minimized: true });
+          }
+        },
+      );
+    });
+  }
+}
+
 // One bundle per page, plus `common` which layout.html.j2 loads everywhere.
 // Templates reference them as /public/js/dist/<name>.js?v={{ asset_version }}.
 module.exports = {
@@ -43,17 +72,18 @@ module.exports = {
   // main.rs serves to browsers that accept them. Skipped for small files and
   // when compression saves less than 20%.
   plugins: [
+    new CopyVendorFiles(),
     new CompressionPlugin({
       filename: "[path][base].br",
       algorithm: "brotliCompress",
-      test: /\.js$/,
+      test: /\.(js|css)$/,
       compressionOptions: { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } },
       threshold: 1024,
     }),
     new CompressionPlugin({
       filename: "[path][base].gz",
       algorithm: "gzip",
-      test: /\.js$/,
+      test: /\.(js|css)$/,
       compressionOptions: { level: 9 },
       threshold: 1024,
     }),

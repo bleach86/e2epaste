@@ -1,6 +1,12 @@
-// Loaded on every page by layout.html.j2, after Bootstrap.
+// Loaded on every page by layout.html.j2, before the page's own script.
 
+import * as bootstrap from "bootstrap";
 import { cryptoAvailable } from "./ui.mjs";
+
+// Bootstrap's components, for the pages' scripts as the global `bootstrap`.
+// It's loaded only here, so a page has one copy: a second would set up its
+// own handlers, and menus and dialogs would toggle twice.
+window.bootstrap = bootstrap;
 
 // Banner from layout.html.j2 for pages loaded over plain HTTP, where the
 // browser has no Web Crypto API and nothing can be encrypted or decrypted.
