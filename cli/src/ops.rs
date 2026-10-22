@@ -66,8 +66,8 @@ pub struct CreatedPaste {
 
 pub async fn create(options: CreateOptions, progress: Progress<'_>) -> Result<CreatedPaste, Error> {
     let api = Api::new(options.site.clone())?;
-    let limits = api.limits().await?;
 
+    // What's being pasted is checked before asking the site anything.
     let attachment = match &options.attachment {
         None => None,
         Some(path) => {
@@ -86,6 +86,8 @@ pub async fn create(options: CreateOptions, progress: Progress<'_>) -> Result<Cr
             "nothing to paste: give text on stdin or a FILE, or --attach a file".into(),
         ));
     }
+
+    let limits = api.limits().await?;
     let text_bytes = options.text.len() as u64;
     if text_bytes > limits.max_paste_bytes {
         return Err(Error::Refused(format!(
@@ -229,8 +231,12 @@ pub struct GotPaste {
 pub struct SavedAttachment {
     pub name: String,
     pub size: Option<u64>,
-    /// Where it was saved; `None` with --no-attachment.
+    /// Where it was saved; `None` with --no-attachment, or when it failed.
     pub path: Option<PathBuf>,
+    /// Why it wasn't saved, when it should have been. The paste's text is
+    /// still reported: the view is used by then, and may have been the
+    /// last.
+    pub error: Option<Error>,
 }
 
 pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste, Error> {
@@ -269,9 +275,19 @@ pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste
             .map_err(|_| Error::Network("the site sent a damaged paste".into()))?;
         secrets.decrypt_part(version, part, &bytes)
     };
+    // The view is used now, perhaps the last one, so from here on only the
+    // text itself can stop the paste from being reported: a title or
+    // attachment name that won't decrypt falls back to nothing (as the
+    // site's page does), and an attachment that can't be saved is reported
+    // with the text rather than instead of it.
     let text = String::from_utf8_lossy(&decrypt(Part::Text, &opened.content)?).into_owned();
     let (title, syntax) = if version >= 4 {
-        let details = Details::decode(&decrypt(Part::Title, &opened.title)?);
+        let details = decrypt(Part::Title, &opened.title)
+            .map(|bytes| Details::decode(&bytes))
+            .unwrap_or_else(|_| Details {
+                title: String::new(),
+                syntax: "auto".into(),
+            });
         (details.title, details.syntax)
     } else {
         let title = decrypt(Part::Title, &opened.title).unwrap_or_default();
@@ -284,24 +300,43 @@ pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste
     let attachment = match &opened.file_name {
         None => None,
         Some(encrypted_name) => {
-            let name =
-                String::from_utf8_lossy(&decrypt(Part::FileName, encrypted_name)?).into_owned();
+            let name = decrypt(Part::FileName, encrypted_name)
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .unwrap_or_else(|_| "attachment".into());
             match (&options.attachment_dir, &opened.download_ticket) {
                 (Some(dir), Some(ticket)) if !options.skip_attachment => {
-                    let (path, size) = download(
+                    let saved = download(
                         &api, &secrets, version, &link.id, ticket, dir, &name, progress,
                     )
-                    .await?;
-                    Some(SavedAttachment {
-                        name,
-                        size: Some(size),
-                        path: Some(path),
+                    .await;
+                    Some(match saved {
+                        Ok((path, size)) => SavedAttachment {
+                            name,
+                            size: Some(size),
+                            path: Some(path),
+                            error: None,
+                        },
+                        Err(error) => SavedAttachment {
+                            name,
+                            size: None,
+                            path: None,
+                            error: Some(error),
+                        },
                     })
                 }
+                (Some(_), None) if !options.skip_attachment => Some(SavedAttachment {
+                    name,
+                    size: None,
+                    path: None,
+                    error: Some(Error::Network(
+                        "the site didn't send a download ticket for the attachment".into(),
+                    )),
+                }),
                 _ => Some(SavedAttachment {
                     name,
                     size: None,
                     path: None,
+                    error: None,
                 }),
             }
         }
@@ -346,13 +381,15 @@ async fn download(
 ) -> Result<(PathBuf, u64), Error> {
     let response = api.download(id, ticket).await?;
     let total = response.content_length();
+    let write_error = |e: std::io::Error| Error::Other(format!("can't save the attachment: {e}"));
+
+    // Decrypted into a temporary file first, so a download that fails or is
+    // cut short never leaves half a file under the attachment's name.
     let partial = dir.join(format!(
         ".e2ep-{}.part",
         hex::encode(rand::random::<[u8; 8]>())
     ));
-    let write_error = |e: std::io::Error| Error::Other(format!("can't save the attachment: {e}"));
-    let file = std::fs::File::create(&partial).map_err(write_error)?;
-
+    let file = create_private(&partial).map_err(write_error)?;
     let result: Result<u64, Error> = async {
         if version >= 4 {
             // Decrypted chunk by chunk as it arrives, straight to the file.
@@ -385,48 +422,95 @@ async fn download(
     }
     .await;
 
-    let size = match result {
-        Ok(size) => size,
-        Err(e) => {
-            let _ = std::fs::remove_file(&partial);
-            return Err(e);
+    // Then into a file that didn't exist a moment ago. Creating it is what
+    // claims the name, so nothing that appeared in the meantime is replaced
+    // (a rename would replace it).
+    let result = result.and_then(|size| {
+        let (path, mut file) = create_unused(dir, &safe_file_name(name)).map_err(write_error)?;
+        let copied = std::fs::File::open(&partial)
+            .and_then(|mut partial| std::io::copy(&mut partial, &mut file))
+            .and_then(|_| file.flush());
+        if let Err(e) = copied {
+            let _ = std::fs::remove_file(&path);
+            return Err(write_error(e));
         }
-    };
-    let path = unused_path(dir, &safe_file_name(name));
-    std::fs::rename(&partial, &path).map_err(|e| {
-        let _ = std::fs::remove_file(&partial);
-        write_error(e)
-    })?;
-    Ok((path, size))
+        Ok((path, size))
+    });
+    let _ = std::fs::remove_file(&partial);
+    result
 }
 
-/// The name without any directories or control characters, so a paste
-/// can't write outside the chosen directory.
+/// Creates `path`, which mustn't exist yet, readable only by this user
+/// where that's a thing (Unix).
+fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
+}
+
+/// Creates `dir/name`, or `dir/name (2).ext` and so on if that's taken,
+/// whichever is free first. The file is created in the same step as the
+/// check, so two downloads at once can't end up in the same file.
+fn create_unused(dir: &Path, name: &str) -> std::io::Result<(PathBuf, std::fs::File)> {
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
+        _ => (name, String::new()),
+    };
+    let mut n = 1u32;
+    loop {
+        let path = if n == 1 {
+            dir.join(name)
+        } else {
+            dir.join(format!("{stem} ({n}){ext}"))
+        };
+        match create_private(&path) {
+            Ok(file) => return Ok((path, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// The name without any directories, control characters or invisible
+/// formatting characters (direction overrides and the like, which can
+/// disguise an extension), cut to 200 bytes, so a paste can't write outside
+/// the chosen directory or pass one kind of file off as another.
 fn safe_file_name(name: &str) -> String {
+    const MAX_BYTES: usize = 200;
+    // Unicode format characters (category Cf) that matter in a file name:
+    // zero-width spaces and joiners, direction marks and overrides, the
+    // isolates, the byte order mark and the Arabic letter mark.
+    let invisible = |c: char| {
+        matches!(
+            c,
+            '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2066}'..='\u{2069}'
+                | '\u{FEFF}'
+                | '\u{061C}'
+        )
+    };
     let base = name.rsplit(['/', '\\']).next().unwrap_or("");
-    let clean: String = base.chars().filter(|c| !c.is_control()).take(200).collect();
+    let mut clean = String::new();
+    for c in base.chars().filter(|c| !c.is_control() && !invisible(*c)) {
+        // Windows won't take a colon (it names a stream).
+        let c = if cfg!(windows) && c == ':' { '_' } else { c };
+        if clean.len() + c.len_utf8() > MAX_BYTES {
+            break;
+        }
+        clean.push(c);
+    }
     let clean = clean.trim().trim_start_matches('.').to_string();
     if clean.is_empty() {
         "attachment".into()
     } else {
         clean
     }
-}
-
-/// `dir/name`, or `dir/name (2).ext` and so on if that's taken.
-fn unused_path(dir: &Path, name: &str) -> PathBuf {
-    let first = dir.join(name);
-    if !first.exists() {
-        return first;
-    }
-    let (stem, ext) = match name.rsplit_once('.') {
-        Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
-        _ => (name, String::new()),
-    };
-    (2..)
-        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
-        .find(|path| !path.exists())
-        .expect("some number is free")
 }
 
 // --- info, delete, limits --------------------------------------------------------
@@ -474,18 +558,61 @@ mod tests {
     }
 
     #[test]
+    fn file_names_lose_invisible_characters() {
+        // A right-to-left override makes "invoice\u{202E}fdp.exe" look like
+        // "invoiceexe.pdf".
+        assert_eq!(safe_file_name("invoice\u{202E}fdp.exe"), "invoicefdp.exe");
+        assert_eq!(
+            safe_file_name("\u{FEFF}a\u{200B}b\u{200D}c\u{2066}d\u{2069}e\u{061C}.txt"),
+            "abcde.txt"
+        );
+        // Other non-ASCII stays.
+        assert_eq!(safe_file_name("résumé.pdf"), "résumé.pdf");
+        assert_eq!(safe_file_name("名前.txt"), "名前.txt");
+    }
+
+    #[test]
+    fn file_names_are_cut_to_200_bytes_at_a_character() {
+        assert_eq!(safe_file_name(&"x".repeat(250)).len(), 200);
+        // 3 bytes each: 66 fit (198 bytes), the 67th doesn't.
+        let cut = safe_file_name(&"名".repeat(100));
+        assert_eq!(cut.chars().count(), 66);
+        assert_eq!(cut.len(), 198);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn file_names_have_no_colons_on_windows() {
+        assert_eq!(safe_file_name("a:b.txt"), "a_b.txt");
+    }
+
+    #[test]
     fn never_overwrites() {
         let dir = std::env::temp_dir().join(format!(
             "e2ep-test-{}",
             hex::encode(rand::random::<[u8; 6]>())
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        assert_eq!(unused_path(&dir, "a.txt"), dir.join("a.txt"));
-        std::fs::write(dir.join("a.txt"), "x").unwrap();
-        assert_eq!(unused_path(&dir, "a.txt"), dir.join("a (2).txt"));
-        std::fs::write(dir.join("a (2).txt"), "x").unwrap();
-        assert_eq!(unused_path(&dir, "a.txt"), dir.join("a (3).txt"));
-        assert_eq!(unused_path(&dir, "noext"), dir.join("noext"));
+        let (first, mut file) = create_unused(&dir, "a.txt").unwrap();
+        assert_eq!(first, dir.join("a.txt"));
+        file.write_all(b"x").unwrap();
+        drop(file);
+        let (second, _) = create_unused(&dir, "a.txt").unwrap();
+        assert_eq!(second, dir.join("a (2).txt"));
+        let (third, _) = create_unused(&dir, "a.txt").unwrap();
+        assert_eq!(third, dir.join("a (3).txt"));
+        // The first file is untouched.
+        assert_eq!(std::fs::read_to_string(&first).unwrap(), "x");
+        let (noext, _) = create_unused(&dir, "noext").unwrap();
+        assert_eq!(noext, dir.join("noext"));
+        let (noext2, _) = create_unused(&dir, "noext").unwrap();
+        assert_eq!(noext2, dir.join("noext (2)"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&first).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

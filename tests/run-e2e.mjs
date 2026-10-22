@@ -77,8 +77,11 @@ if (suites.length === 0) {
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "e2epaste-e2e-"));
 const results = [];
+// Each suite's server gets its own port, from E2E_PORT_BASE (so two checkouts
+// can run the suites at once) or 18765.
+const portBase = Number(process.env.E2E_PORT_BASE) || 18765;
 for (const [i, suite] of suites.entries()) {
-  results.push(await runSuite(suite, 18765 + i));
+  results.push(await runSuite(suite, portBase + i));
 }
 
 console.log("\n" + results.map((r) => `${r.passed ? "ok  " : "FAIL"}  ${r.file} (${r.seconds}s)`).join("\n"));
