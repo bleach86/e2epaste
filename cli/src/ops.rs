@@ -436,22 +436,34 @@ async fn download(
     }
     .await;
 
-    // Then into a file that didn't exist a moment ago. Creating it is what
-    // claims the name, so nothing that appeared in the meantime is replaced
-    // (a rename would replace it).
+    // Then under a name that didn't exist a moment ago. Linking (or creating)
+    // it is what claims the name, so nothing that appeared in the meantime
+    // is replaced (a rename would replace it).
     let result = result.and_then(|size| {
-        let (path, mut file) = create_unused(dir, &safe_file_name(name)).map_err(write_error)?;
-        let copied = std::fs::File::open(&partial)
-            .and_then(|mut partial| std::io::copy(&mut partial, &mut file))
-            .and_then(|_| file.flush());
-        if let Err(e) = copied {
-            let _ = std::fs::remove_file(&path);
-            return Err(write_error(e));
-        }
+        let path = link_unused(&partial, dir, &safe_file_name(name)).map_err(write_error)?;
         Ok((path, size))
     });
     let _ = std::fs::remove_file(&partial);
     result
+}
+
+/// Gives the finished `partial` its name in `dir`: a hard link, so a large
+/// attachment isn't written twice, or a copy where the file system can't
+/// link.
+fn link_unused(partial: &Path, dir: &Path, name: &str) -> std::io::Result<PathBuf> {
+    if let Ok(path) = claim_unused(dir, name, |path| std::fs::hard_link(partial, path)) {
+        return Ok(path);
+    }
+    // Not on this file system (FAT, some network shares): a copy instead.
+    let (path, mut file) = create_unused(dir, name)?;
+    let copied = std::fs::File::open(partial)
+        .and_then(|mut partial| std::io::copy(&mut partial, &mut file))
+        .and_then(|_| file.flush());
+    if let Err(e) = copied {
+        let _ = std::fs::remove_file(&path);
+        return Err(e);
+    }
+    Ok(path)
 }
 
 /// Creates `path`, which mustn't exist yet, readable only by this user
@@ -471,6 +483,21 @@ fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
 /// whichever is free first. The file is created in the same step as the
 /// check, so two downloads at once can't end up in the same file.
 fn create_unused(dir: &Path, name: &str) -> std::io::Result<(PathBuf, std::fs::File)> {
+    let mut file = None;
+    let path = claim_unused(dir, name, |path| {
+        file = Some(create_private(path)?);
+        Ok(())
+    })?;
+    Ok((path, file.expect("claimed")))
+}
+
+/// Tries `claim` on `dir/name`, then `dir/name (2).ext` and so on while it
+/// fails because the name is taken, and returns the path it worked for.
+fn claim_unused(
+    dir: &Path,
+    name: &str,
+    mut claim: impl FnMut(&Path) -> std::io::Result<()>,
+) -> std::io::Result<PathBuf> {
     let (stem, ext) = match name.rsplit_once('.') {
         Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
         _ => (name, String::new()),
@@ -482,8 +509,8 @@ fn create_unused(dir: &Path, name: &str) -> std::io::Result<(PathBuf, std::fs::F
         } else {
             dir.join(format!("{stem} ({n}){ext}"))
         };
-        match create_private(&path) {
-            Ok(file) => return Ok((path, file)),
+        match claim(&path) {
+            Ok(()) => return Ok(path),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
             Err(e) => return Err(e),
         }
