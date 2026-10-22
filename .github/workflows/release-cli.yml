@@ -94,6 +94,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # For the build provenance attestation.
+      id-token: write
+      attestations: write
     steps:
       - name: Download the builds
         env:
@@ -104,6 +107,15 @@ jobs:
           mkdir dist
           find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec mv {} dist/ \;
           cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # Signed SLSA provenance linking each archive to this workflow run.
+      # Verify a download with: gh attestation verify <file> --repo <owner>/e2epaste
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
