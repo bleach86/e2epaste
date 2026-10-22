@@ -51,7 +51,7 @@ Exit codes (error codes):
   4  wrong_key        wrong or incomplete link, wrong password, or wrong delete link
   5  password_required
   6  rate_limited     wait retry_after seconds
-  7  refused          too large, storage full, attachments off, or invalid
+  7  refused          too large (or decompresses past the site's limit), storage full, attachments off, or invalid
   8  network          network or server error; worth retrying later
   9  unsupported      an older server or paste format
 

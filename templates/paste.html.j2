@@ -16,6 +16,13 @@
         <span>This paste couldn't be decrypted. Check that you have the complete link, including everything after
             the <code>#</code>.</span>
     </div>
+    {# Content that inflates to more than the site allows (js/crypto.mjs
+       inflateCapped). #}
+    <div id="too-large-error" class="notice notice-danger mb-3" role="alert" hidden>
+        {{ icons.icon("alert") }}
+        <span>This paste is larger than this site allows, so it wasn't shown. Its text comes to more than
+            {{ limits.max_paste_label }} once decompressed.</span>
+    </div>
     <div id="open-error" class="notice notice-danger mb-3" role="alert" hidden>
         {{ icons.icon("alert") }}
         <span id="open-error-text"></span>
@@ -141,6 +148,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="application/json" id="page-data">{{ {"paste": paste} | tojson }}</script>
+{# The size limits bound what a part may decompress to (js/crypto.mjs
+   inflateCapped): the server only sees the encrypted sizes. #}
+<script type="application/json" id="page-data">{{ {"paste": paste, "limits": {"max_paste_bytes": limits.max_paste_bytes, "max_file_bytes": limits.max_file_bytes}} | tojson }}</script>
 <script src="/public/js/dist/paste.js?v={{ asset_version }}"></script>
 {% endblock %}

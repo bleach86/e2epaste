@@ -212,12 +212,15 @@ impl Secrets {
         Ok(self.encrypt_raw(&self.part_iv(part), &plain))
     }
 
-    /// Decrypts a part of a paste in `version`'s format.
+    /// Decrypts a part of a paste in `version`'s format. `max_bytes` is
+    /// the most it may inflate to (see `inflate`): the site's text or file
+    /// limit for those, `SMALL_PART_BYTES` for the title and file name.
     pub fn decrypt_part(
         &self,
         version: u32,
         part: Part,
         encrypted: &[u8],
+        max_bytes: u64,
     ) -> Result<Vec<u8>, Error> {
         let plain = self.decrypt_raw(&self.part_iv(part), encrypted)?;
         if version >= 4 {
@@ -228,11 +231,42 @@ impl Secrets {
                 .ok_or_else(damaged)?;
             let len = u32::from_be_bytes(len_bytes) as usize;
             let data = plain.get(4..4 + len).ok_or_else(damaged)?;
-            return inflate(data).map_err(|_| damaged());
+            return match inflate(data, max_bytes) {
+                Ok(out) => Ok(out),
+                Err(Inflated::TooLarge) => Err(too_large(part, max_bytes)),
+                Err(Inflated::Damaged) => Err(damaged()),
+            };
         }
-        // v3: deflated, except pastes from before compression existed.
-        Ok(inflate(&plain).unwrap_or(plain))
+        // v3: deflated, except pastes from before compression existed, whose
+        // bytes aren't a zlib stream and are taken as they are. Only a
+        // damaged stream falls back: one that's too large stays refused.
+        match inflate(&plain, max_bytes) {
+            Ok(out) => Ok(out),
+            Err(Inflated::TooLarge) => Err(too_large(part, max_bytes)),
+            Err(Inflated::Damaged) => Ok(plain),
+        }
     }
+}
+
+/// The most a title or file name may inflate to: far above what the create
+/// page sends (64 characters, 255 bytes), and all a bomb in one is allowed.
+pub const SMALL_PART_BYTES: u64 = 64 * 1024;
+
+/// Room above the site's text limit for a paste made before the limit was
+/// lowered, or whose creator counted characters rather than bytes.
+pub const TEXT_SLACK_BYTES: u64 = 64 * 1024;
+
+/// The most a site can set max_file_mib to (the server's src/config.rs),
+/// for pre-v4 attachments on a site that has since turned attachments off.
+pub const FILE_BYTES_CEILING: u64 = 4096 * 1024 * 1024;
+
+/// The site never meant to hold anything this large, so it's refused the
+/// way the site refuses a paste that's too big to send (exit 7, `refused`).
+fn too_large(part: Part, max_bytes: u64) -> Error {
+    Error::Refused(format!(
+        "the paste's {} decompresses to more than {max_bytes} bytes, over the site's limit",
+        part.label()
+    ))
 }
 
 fn deflate(data: &[u8]) -> Vec<u8> {
@@ -241,9 +275,27 @@ fn deflate(data: &[u8]) -> Vec<u8> {
     encoder.finish().expect("writing to a Vec")
 }
 
-fn inflate(data: &[u8]) -> std::io::Result<Vec<u8>> {
+/// Why `inflate` stopped: the output passed the limit, or the stream isn't
+/// valid zlib.
+#[derive(Debug, PartialEq, Eq)]
+enum Inflated {
+    TooLarge,
+    Damaged,
+}
+
+/// Inflates `data` (zlib), reading no more than `max_bytes` of output. The
+/// server only checks a paste's encrypted size, so a megabyte of deflated
+/// zeros would otherwise come out as a gigabyte, in memory, on every `get`.
+fn inflate(data: &[u8], max_bytes: u64) -> Result<Vec<u8>, Inflated> {
+    // One byte past the limit says whether the stream had more to give.
     let mut out = Vec::new();
-    ZlibDecoder::new(data).read_to_end(&mut out)?;
+    ZlibDecoder::new(data)
+        .take(max_bytes.saturating_add(1))
+        .read_to_end(&mut out)
+        .map_err(|_| Inflated::Damaged)?;
+    if out.len() as u64 > max_bytes {
+        return Err(Inflated::TooLarge);
+    }
     Ok(out)
 }
 
@@ -443,7 +495,9 @@ mod tests {
         let text = secrets.encrypt_part(Part::Text, b"hello").unwrap();
         assert_eq!(text.len(), 4096 + 16);
         assert_eq!(
-            secrets.decrypt_part(4, Part::Text, &text).unwrap(),
+            secrets
+                .decrypt_part(4, Part::Text, &text, TEXT_SLACK_BYTES)
+                .unwrap(),
             b"hello"
         );
         let details = Details {
@@ -454,7 +508,11 @@ mod tests {
             .encrypt_part(Part::Title, &details.encode())
             .unwrap();
         assert_eq!(title.len(), 512 + 16);
-        let back = Details::decode(&secrets.decrypt_part(4, Part::Title, &title).unwrap());
+        let back = Details::decode(
+            &secrets
+                .decrypt_part(4, Part::Title, &title, SMALL_PART_BYTES)
+                .unwrap(),
+        );
         assert_eq!((back.title.as_str(), back.syntax.as_str()), ("T", "rust"));
     }
 
@@ -465,7 +523,72 @@ mod tests {
         let b = derive_secrets(&link, &[1; 12], Some("other")).unwrap();
         assert_ne!(a.access_proof, b.access_proof);
         let encrypted = a.encrypt_part(Part::Text, b"x").unwrap();
-        assert!(b.decrypt_part(4, Part::Text, &encrypted).is_err());
+        assert!(b
+            .decrypt_part(4, Part::Text, &encrypted, TEXT_SLACK_BYTES)
+            .is_err());
+    }
+
+    #[test]
+    fn decompression_is_capped() {
+        const MIB: u64 = 1 << 20;
+        let secrets = derive_secrets(&new_link_secret(false), &[5; 12], None).unwrap();
+        let refused = |result: Result<Vec<u8>, Error>| matches!(result, Err(Error::Refused(message)) if message.contains("decompresses"));
+
+        // 4 MiB of zeros deflate to a few KiB and must not come back out.
+        let zeros = vec![0u8; 4 * MIB as usize];
+        let bomb = secrets.encrypt_part(Part::Text, &zeros).unwrap();
+        assert!(bomb.len() < 16 * 1024, "{}", bomb.len());
+        assert!(refused(secrets.decrypt_part(4, Part::Text, &bomb, MIB)));
+        assert!(refused(secrets.decrypt_part(
+            4,
+            Part::Text,
+            &bomb,
+            4 * MIB - 1
+        )));
+        assert_eq!(
+            secrets.decrypt_part(4, Part::Text, &bomb, 4 * MIB).unwrap(),
+            zeros,
+            "room for exactly its size"
+        );
+
+        // A normal paste passes the same cap.
+        let text = "fn main() {\n    println!(\"hi\");\n}\n".repeat(2000);
+        let part = secrets.encrypt_part(Part::Text, text.as_bytes()).unwrap();
+        assert_eq!(
+            secrets.decrypt_part(4, Part::Text, &part, MIB).unwrap(),
+            text.as_bytes()
+        );
+        let bomb = secrets
+            .encrypt_part(Part::Title, &vec![0u8; 200 * 1024])
+            .unwrap();
+        assert!(refused(secrets.decrypt_part(
+            4,
+            Part::Title,
+            &bomb,
+            SMALL_PART_BYTES
+        )));
+
+        // v3: deflated, except pastes from before compression, which still
+        // open; a bomb isn't handed back as raw bytes.
+        let v3 = |plain: &[u8]| secrets.encrypt_raw(&secrets.part_iv(Part::Text), plain);
+        assert!(refused(secrets.decrypt_part(
+            3,
+            Part::Text,
+            &v3(&deflate(&zeros)),
+            MIB
+        )));
+        assert_eq!(
+            secrets
+                .decrypt_part(3, Part::Text, &v3(&deflate(b"v3 text")), MIB)
+                .unwrap(),
+            b"v3 text"
+        );
+        assert_eq!(
+            secrets
+                .decrypt_part(3, Part::Text, &v3(b"plain old text"), MIB)
+                .unwrap(),
+            b"plain old text"
+        );
     }
 
     fn encrypt_file(secrets: &Secrets, file: &[u8]) -> Vec<Vec<u8>> {

@@ -266,23 +266,32 @@ pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste
     }
     let password = options.password.as_deref().filter(|_| needs_password);
     let secrets = crypto::derive_secrets(&link.secret, &info.iv, password)?;
+    // The site's limits bound what the parts may decompress to: the server
+    // only checked their encrypted sizes. Fetched before opening, so a site
+    // that can't say uses no view.
+    let limits = api.limits().await?;
+    let max_text = limits
+        .max_paste_bytes
+        .saturating_add(crypto::TEXT_SLACK_BYTES);
 
     let opened = api.open(&link.id, Some(&secrets.access_proof)).await?;
     let version = info.version;
-    let decrypt = |part, base64: &str| -> Result<Vec<u8>, Error> {
+    let decrypt = |part, base64: &str, max_bytes| -> Result<Vec<u8>, Error> {
         let bytes = STANDARD
             .decode(base64)
             .map_err(|_| Error::Network("the site sent a damaged paste".into()))?;
-        secrets.decrypt_part(version, part, &bytes)
+        secrets.decrypt_part(version, part, &bytes, max_bytes)
     };
     // The view is used now, perhaps the last one, so from here on only the
     // text itself can stop the paste from being reported: a title or
     // attachment name that won't decrypt falls back to nothing (as the
     // site's page does), and an attachment that can't be saved is reported
     // with the text rather than instead of it.
-    let text = String::from_utf8_lossy(&decrypt(Part::Text, &opened.content)?).into_owned();
+    let small = crypto::SMALL_PART_BYTES;
+    let text =
+        String::from_utf8_lossy(&decrypt(Part::Text, &opened.content, max_text)?).into_owned();
     let (title, syntax) = if version >= 4 {
-        let details = decrypt(Part::Title, &opened.title)
+        let details = decrypt(Part::Title, &opened.title, small)
             .map(|bytes| Details::decode(&bytes))
             .unwrap_or_else(|_| Details {
                 title: String::new(),
@@ -290,7 +299,7 @@ pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste
             });
         (details.title, details.syntax)
     } else {
-        let title = decrypt(Part::Title, &opened.title).unwrap_or_default();
+        let title = decrypt(Part::Title, &opened.title, small).unwrap_or_default();
         (
             String::from_utf8_lossy(&title).into_owned(),
             info.syntax.clone(),
@@ -300,13 +309,16 @@ pub async fn get(options: GetOptions, progress: Progress<'_>) -> Result<GotPaste
     let attachment = match &opened.file_name {
         None => None,
         Some(encrypted_name) => {
-            let name = decrypt(Part::FileName, encrypted_name)
+            let name = decrypt(Part::FileName, encrypted_name, small)
                 .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
                 .unwrap_or_else(|_| "attachment".into());
             match (&options.attachment_dir, &opened.download_ticket) {
                 (Some(dir), Some(ticket)) if !options.skip_attachment => {
+                    // A site that has since turned attachments off still
+                    // serves old ones.
+                    let max_file = limits.max_file_bytes.unwrap_or(crypto::FILE_BYTES_CEILING);
                     let saved = download(
-                        &api, &secrets, version, &link.id, ticket, dir, &name, progress,
+                        &api, &secrets, version, max_file, &link.id, ticket, dir, &name, progress,
                     )
                     .await;
                     Some(match saved {
@@ -367,12 +379,14 @@ fn needs_password(info: &Info, secret: &str) -> bool {
 
 /// Downloads and decrypts the attachment into `dir`, under its own name
 /// made safe (no paths), without overwriting anything. Returns where it went
-/// and its size.
+/// and its size. `max_bytes` is the most a pre-v4 attachment, which is
+/// deflated, may decompress to.
 #[allow(clippy::too_many_arguments)]
 async fn download(
     api: &Api,
     secrets: &Secrets,
     version: u32,
+    max_bytes: u64,
     id: &str,
     ticket: &str,
     dir: &Path,
@@ -414,7 +428,7 @@ async fn download(
                 .bytes()
                 .await
                 .map_err(|e| Error::Network(format!("the download failed: {e}")))?;
-            let plain = secrets.decrypt_part(version, Part::File, &bytes)?;
+            let plain = secrets.decrypt_part(version, Part::File, &bytes, max_bytes)?;
             let mut file = file;
             file.write_all(&plain).map_err(write_error)?;
             Ok(plain.len() as u64)

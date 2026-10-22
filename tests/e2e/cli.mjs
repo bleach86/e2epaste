@@ -208,6 +208,22 @@ const errors = [];
   check("v3: opens with e2ep", got.code === 0 && got.json.text === "fn v3() {}" && got.json.title === "v3 title" && got.json.syntax === "rust", got.stdout + got.stderr);
 }
 
+// ---------------------------------------------------- decompression bomb
+{
+  // A valid v4 paste whose few KiB inflate to 64 MiB, far over the site's
+  // 1 MiB text limit, which the server can't see. e2ep must refuse it.
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const secret = C.generateLinkSecret();
+  const { key, accessProof } = await C.deriveV3Secrets(secret, iv);
+  const body = { version: 4, key_fragment: "", iv: Array.from(iv), has_password: false, syntax: "auto",
+    content: C.arrayBufferToBase64(await C.encryptPart(key, iv, "text", new Uint8Array(64 * 1048576))),
+    title: C.arrayBufferToBase64(await C.encryptPart(key, iv, "title", C.encodeDetails("Bomb", "plaintext"))),
+    expires_in: 3600, max_views: null, file_name: null, access_hash: await C.accessHash(accessProof) };
+  const { id } = await (await fetch(BASE + "/api/submit_paste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
+  const got = await e2ep(["get", `${BASE}/s/${id}#${secret}`, "--json"]);
+  check("bomb: refused with exit 7", got.code === 7 && got.json?.error === "refused" && /decompresses/.test(got.json?.message), got.stdout + got.stderr);
+}
+
 check("no page errors or CSP violations", errors.length === 0, errors.join("\n"));
 await browser.close();
 fs.rmSync(work, { recursive: true, force: true });
