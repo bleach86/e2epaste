@@ -17,27 +17,26 @@ Download a build for Linux, macOS or Windows from the
 cargo install --git https://github.com/bleach86/e2epaste e2ep
 ```
 
-e2ep needs a site running e2ePaste with paste format 4 or later (`e2ep limits` says if it can't use
-one).
+New pastes go to [e2epaste.xyz](https://e2epaste.xyz) unless you name another site running e2ePaste
+(paste format 4 or later; `e2ep limits` says if it can't use one).
 
 ## Use
 
 ```sh
-export E2EPASTE_SERVER=https://paste.example.com     # or pass --server
-
 cat error.log | e2ep                                   # prints the link
 e2ep notes.md --title Notes --expire 1h --burn
 e2ep --attach backup.tar.gz --password-env PASTE_PW    # a file, with a password
 e2ep --delete-after-open 10m < secret.txt              # gone 10 minutes after it's first opened
 
-e2ep info 'https://paste.example.com/s/Ab3dE5gH#…'     # look without opening (no view used)
-e2ep get  'https://paste.example.com/s/Ab3dE5gH#…'     # print the text (uses one view)
+e2ep info 'https://e2epaste.xyz/s/Ab3dE5gH#…'          # look without opening (no view used)
+e2ep get  'https://e2epaste.xyz/s/Ab3dE5gH#…'          # print the text (uses one view)
 e2ep get  '…' --attachment-dir ~/Downloads             # and save its attachment
-e2ep delete 'https://paste.example.com/delete/Ab3dE5gH#…'
+e2ep delete 'https://e2epaste.xyz/delete/Ab3dE5gH#…'
 e2ep limits
 ```
 
-`get`, `info` and `delete` use the site in the link. `e2ep --help` lists every option, the JSON each
+To use another e2ePaste site, pass `--server https://paste.example.com` or set `E2EPASTE_SERVER`.
+`get`, `info` and `delete` use the site in the link, whichever it is. `e2ep --help` lists every option, the JSON each
 command prints, and the exit codes.
 
 ## Use it from AI agents (MCP)
@@ -49,7 +48,7 @@ to it over stdin and stdout; there's no port, and pastes are still encrypted and
 With Claude Code:
 
 ```sh
-claude mcp add e2ep -- e2ep mcp --server https://paste.example.com --files-dir ~/e2ep-files
+claude mcp add e2ep -- e2ep mcp --files-dir ~/e2ep-files
 ```
 
 With Claude Desktop, in its `claude_desktop_config.json`:
@@ -59,7 +58,7 @@ With Claude Desktop, in its `claude_desktop_config.json`:
   "mcpServers": {
     "e2ep": {
       "command": "e2ep",
-      "args": ["mcp", "--server", "https://paste.example.com", "--files-dir", "/home/you/e2ep-files"]
+      "args": ["mcp", "--files-dir", "/home/you/e2ep-files"]
     }
   }
 }
@@ -75,8 +74,9 @@ With Claude Desktop, in its `claude_desktop_config.json`:
 
 What the model can do is limited on purpose:
 
-- **New pastes only go to `--server`.** A prompt can't send your content to another site. Reading a
-  link works for any site, since the site is in the link.
+- **New pastes only go to one site:** e2epaste.xyz, or the one you start it with (`--server`). A prompt
+  can't send your content anywhere else. Reading a link works for any site, since the site is in the
+  link.
 - **Files only from `--files-dir`.** Attachments are read from and saved to that directory, and
   nowhere else (paths and symlinks out of it are refused). Without it, there are no attachments.
 - **Passwords are named, not passed.** Tools take `password_env`, the name of an environment variable

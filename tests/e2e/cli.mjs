@@ -157,14 +157,18 @@ const errors = [];
   check("errors: a link without its secret -> exit 4", noFragment.code === 4 && noFragment.json?.error === "wrong_key");
   const notALink = await e2ep(["get", "hello", "--json"]);
   check("errors: not a link -> exit 2, usage", notALink.code === 2 && notALink.json?.error === "usage");
-  const noServer = await e2ep(["--json"], { input: "x", env: { E2EPASTE_SERVER: "" } });
-  check("errors: no server -> exit 2 with a hint", noServer.code === 2 && /--server/.test(noServer.json?.message ?? ""), noServer.stdout + noServer.stderr);
+  // Without --server, new pastes go to e2epaste.xyz. A proxy that refuses
+  // every connection keeps the test from reaching the live site.
+  const noProxy = { HTTPS_PROXY: "http://127.0.0.1:1", HTTP_PROXY: "http://127.0.0.1:1", NO_PROXY: "" };
+  const byDefault = await e2ep(["limits", "--json"], { env: { E2EPASTE_SERVER: "", ...noProxy } });
+  check("default: no server set -> e2epaste.xyz", byDefault.code === 8 && /https:\/\/e2epaste\.xyz\//.test(byDefault.json?.message ?? ""), byDefault.stdout);
   const nothing = await e2ep(["--json"], { input: "" });
   check("errors: nothing to paste -> exit 2", nothing.code === 2);
   const unreachable = await e2ep(["--json", "--server", "http://127.0.0.1:1"], { input: "x" });
   check("errors: an unreachable site -> exit 8, network", unreachable.code === 8 && unreachable.json?.error === "network", unreachable.stdout);
   const help = await e2ep(["--help"]);
   check("help: documents the exit codes and JSON", help.code === 0 && /Exit codes/.test(help.stdout) && /password_required/.test(help.stdout));
+  check("help: says where new pastes go", /New pastes go to https:\/\/e2epaste\.xyz/.test(help.stdout));
 }
 
 // ------------------------------------------------------- hints for agents

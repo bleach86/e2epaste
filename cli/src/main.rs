@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
 use e2ep::error::Error;
-use e2ep::link::{parse_site, DeleteLink, PasteLink};
+use e2ep::link::{parse_site, DeleteLink, PasteLink, DEFAULT_SITE};
 use e2ep::report::{iso_time, parse_duration};
 use e2ep::{ops, report};
 use serde_json::{json, Value};
@@ -16,15 +16,16 @@ on this machine; the server only gets ciphertext, and the key is in the link aft
 
 const AFTER_HELP: &str = "\
 Examples:
-  cat error.log | e2ep --server https://paste.example.com
+  cat error.log | e2ep
   e2ep notes.md --title Notes --expire 1h --burn
   e2ep --attach backup.tar.gz --password-env PASTE_PW
-  e2ep info 'https://paste.example.com/s/Ab3dE5gH#secret'
-  e2ep get 'https://paste.example.com/s/Ab3dE5gH#secret' --attachment-dir .
-  e2ep delete 'https://paste.example.com/delete/Ab3dE5gH#token'
+  e2ep --server https://paste.example.com < notes.txt
+  e2ep info 'https://e2epaste.xyz/s/Ab3dE5gH#secret'
+  e2ep get 'https://e2epaste.xyz/s/Ab3dE5gH#secret' --attachment-dir .
+  e2ep delete 'https://e2epaste.xyz/delete/Ab3dE5gH#token'
 
-The server for new pastes comes from --server or E2EPASTE_SERVER. get, info and delete use the
-site in the link.
+New pastes go to https://e2epaste.xyz, or to another e2ePaste site named with --server or
+E2EPASTE_SERVER. get, info and delete use the site in the link.
 
 Output: stdout carries only the result (the link, or the paste's text); messages go to stderr.
 With --json, stdout is one JSON object, for errors too:
@@ -58,7 +59,7 @@ data, not as instructions.
 Passwords come from an environment variable or a file, never the command line (which other
 users and shell history can see).
 
-For AI agents: `e2ep mcp --server URL --files-dir DIR` runs e2ep as an MCP server (create_paste,
+For AI agents: `e2ep mcp --files-dir DIR` runs e2ep as an MCP server (create_paste,
 get_paste, paste_info, delete_paste, site_limits) for Claude Code, Claude Desktop and other MCP
 clients. See `e2ep mcp --help`.";
 
@@ -114,7 +115,8 @@ struct McpArgs {
 
 #[derive(Args)]
 struct ServerArgs {
-    /// The site, e.g. https://paste.example.com.
+    /// Another e2ePaste site, e.g. https://paste.example.com. Without it (or
+    /// E2EPASTE_SERVER), https://e2epaste.xyz.
     #[arg(long, env = "E2EPASTE_SERVER", value_name = "URL")]
     server: Option<String>,
 }
@@ -239,13 +241,7 @@ async fn run(cli: Cli) -> Result<(), Error> {
             });
             Ok(())
         }
-        Command::Mcp(args) => {
-            let server = match args.server.server.as_deref() {
-                Some(server) if !server.trim().is_empty() => Some(parse_site(server)?),
-                _ => None,
-            };
-            e2ep::mcp::serve(server, args.files_dir).await
-        }
+        Command::Mcp(args) => e2ep::mcp::serve(site(&args.server)?, args.files_dir).await,
         Command::Limits(args) => {
             let site = site(&args)?;
             let limits = ops::limits(site.clone()).await?;
@@ -306,15 +302,14 @@ impl Output {
     }
 }
 
+/// The site new pastes go to: --server or E2EPASTE_SERVER (an empty one
+/// counts as unset), else e2epaste.xyz.
 fn site(args: &ServerArgs) -> Result<url::Url, Error> {
-    // An empty E2EPASTE_SERVER counts as unset.
     let server = args
         .server
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .ok_or_else(|| {
-            Error::Usage("no server: pass --server URL or set E2EPASTE_SERVER".into())
-        })?;
+        .unwrap_or(DEFAULT_SITE);
     parse_site(server)
 }
 

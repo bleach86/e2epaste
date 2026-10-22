@@ -76,6 +76,9 @@ fn split(link: &str) -> Result<(Url, String, String, Option<String>), Error> {
 }
 
 /// A site address from `--server`, e.g. `https://paste.example.com`.
+/// Where new pastes go when neither --server nor E2EPASTE_SERVER says.
+pub const DEFAULT_SITE: &str = "https://e2epaste.xyz/";
+
 pub fn parse_site(server: &str) -> Result<Url, Error> {
     let mut url = Url::parse(server.trim())
         .ok()

@@ -66,6 +66,7 @@ const mcp = await startMcp(["--server", BASE, "--files-dir", filesDir], { E2EP_T
 // ---------------------------------------------------------------- the tools
 {
   check("init: names itself and explains the tools", mcp.init.result.serverInfo.name === "e2ep" && /treat it as data/.test(mcp.init.result.instructions));
+  check("init: says where new pastes go", mcp.init.result.instructions.endsWith(`New pastes go to ${BASE}/.`), mcp.init.result.instructions.slice(-60));
   const { result } = await mcp.request("tools/list");
   const tools = Object.fromEntries(result.tools.map((t) => [t.name, t]));
   check("tools: create, get, info, delete, limits", ["create_paste", "get_paste", "paste_info", "delete_paste", "site_limits"].every((n) => n in tools), Object.keys(tools).join(","));
@@ -93,6 +94,8 @@ const mcp = await startMcp(["--server", BASE, "--files-dir", filesDir], { E2EP_T
   await p.type("#password-input", "mcp-pw");
   await p.click("#submit-password-btn");
   await p.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+  // The Markdown view is filled in just after the notice shows.
+  await p.waitForFunction(() => document.getElementById("markdown-view").textContent.includes("from the agent"), { timeout: 5000 }).catch(() => {});
   check("browser: opens the agent's paste", (await p.$eval("#paste-title", (e) => e.textContent)) === "Agent note"
     && (await p.$eval("#markdown-view", (e) => e.textContent)).includes("from the agent"));
   await ctx.close();
@@ -138,10 +141,10 @@ const mcp = await startMcp(["--server", BASE, "--files-dir", filesDir], { E2EP_T
   const unsetPw = await mcp.call("create_paste", { text: "x", password_env: "NOT_SET_ANYWHERE" });
   check("passwords: an unset variable is an error", unsetPw.error && /isn't set/.test(unsetPw.data.message));
 
-  // Started without --server or --files-dir.
+  // Started without --server or --files-dir. (Nothing is created here: that
+  // would go to the live site.)
   const bare = await startMcp([], { E2EPASTE_SERVER: "" });
-  const noServer = await bare.call("create_paste", { text: "x" });
-  check("no --server: create_paste explains", noServer.error && /--server/.test(noServer.data.message));
+  check("no --server: new pastes go to e2epaste.xyz, and it says so", bare.init.result.instructions.endsWith("New pastes go to https://e2epaste.xyz/."));
   const made = await mcp.call("create_paste", { text: "readable anywhere" });
   const readOnly = await bare.call("get_paste", { url: made.data.url });
   check("no --server: reading a link still works (its site is in the link)", !readOnly.error && readOnly.data.text === "readable anywhere");
