@@ -1,16 +1,24 @@
 // DOM wiring shared by the tool pages.
 
-import { showCopiedPopover } from "../ui.mjs";
+import { copyText, showCopiedPopover, showCopyFailed } from "../ui.mjs";
+
+// Copies `text` when `button` is clicked, and says whether it worked.
+export function bindCopy(button, text) {
+  button.addEventListener("click", async () => {
+    if (await copyText(typeof text === "function" ? text() : text)) {
+      showCopiedPopover(button);
+    } else {
+      showCopyFailed(button);
+    }
+  });
+}
 
 // data-copy="<id>": copy that field's value.
 // data-clear="<id> [<id>...]": empty those fields. An input event is fired on
 // each so whatever depends on them recalculates.
 export function bindCopyAndClear() {
   document.querySelectorAll("[data-copy]").forEach((button) => {
-    button.addEventListener("click", () => {
-      navigator.clipboard.writeText(document.getElementById(button.dataset.copy).value);
-      showCopiedPopover(button);
-    });
+    bindCopy(button, () => document.getElementById(button.dataset.copy).value);
   });
 
   document.querySelectorAll("[data-clear]").forEach((button) => {

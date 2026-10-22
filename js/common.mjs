@@ -23,9 +23,13 @@ if (!cryptoAvailable()) {
 
 // Older versions registered a service worker that did nothing useful (its
 // scope covered no pages). Remove it from browsers that still have it.
-navigator.serviceWorker?.getRegistrations().then((registrations) => {
-  registrations.forEach((registration) => registration.unregister());
-});
+// Some browsers refuse (private windows, storage blocked): nothing to do then.
+navigator.serviceWorker
+  ?.getRegistrations()
+  .then((registrations) => {
+    registrations.forEach((registration) => registration.unregister());
+  })
+  .catch(() => {});
 
 document
   .querySelectorAll('[data-bs-toggle="popover"]')
