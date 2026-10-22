@@ -28,6 +28,8 @@ New pastes go to https://e2epaste.xyz, or to another e2ePaste site named with --
 E2EPASTE_SERVER. get, info and delete use the site in the link.
 
 Output: stdout carries only the result (the link, or the paste's text); messages go to stderr.
+On a terminal, escape and other control characters in a paste's text are removed (except
+newlines, tabs and carriage returns); into a pipe or file, and with --json, the text is exact.
 With --json, stdout is one JSON object, for errors too:
   create  {\"url\", \"delete_url\", \"id\", \"expires_at\", \"max_views\", \"delete_after_open_seconds\",
            \"password\", \"attachment\": {\"name\", \"size\"} | null}
@@ -398,7 +400,13 @@ async fn get(args: GetArgs, out: &Output) -> Result<(), Error> {
     out.end_progress();
     let got = got?;
 
-    out.result(report::got(&got), || got.text.clone());
+    out.result(report::got(&got), || {
+        if std::io::stdout().is_terminal() {
+            terminal_safe(&got.text)
+        } else {
+            got.text.clone()
+        }
+    });
     if let Some(attachment) = &got.attachment {
         match (&attachment.path, &attachment.error) {
             (Some(path), _) => out.note(&format!("Attachment saved: {}", path.display())),
@@ -454,6 +462,21 @@ async fn info(args: InfoArgs, out: &Output) -> Result<(), Error> {
     Ok(())
 }
 
+/// The text without the characters a terminal would act on: escape (which
+/// starts the sequences that move the cursor, change the title or inject
+/// input) and the other C0 and C1 control characters, apart from newline,
+/// tab and carriage return. A paste's text is someone else's, so it gets no
+/// say in what the terminal does.
+fn terminal_safe(text: &str) -> String {
+    text.chars()
+        .filter(|&c| {
+            let c0 = c.is_control() && c < '\u{80}';
+            let c1 = ('\u{80}'..='\u{9F}').contains(&c);
+            !(c0 || c1) || matches!(c, '\n' | '\t' | '\r')
+        })
+        .collect()
+}
+
 fn duration_text(seconds: u64) -> String {
     for (unit, size) in [("day", 86400), ("hour", 3600), ("minute", 60)] {
         if seconds >= size && seconds.is_multiple_of(size) {
@@ -472,6 +495,14 @@ mod tests {
     fn durations() {
         assert_eq!(duration_text(600), "10 minutes");
         assert_eq!(duration_text(86400), "1 day");
+    }
+
+    #[test]
+    fn terminal_output_keeps_only_harmless_controls() {
+        assert_eq!(terminal_safe("a\x1b[31mred\x1b[0m\n"), "a[31mred[0m\n");
+        assert_eq!(terminal_safe("x\x1b]0;title\x07y\t"), "x]0;titley\t");
+        assert_eq!(terminal_safe("a\u{9B}31mb\u{85}c\r\n"), "a31mbc\r\n");
+        assert_eq!(terminal_safe("plain text é 名"), "plain text é 名");
     }
 
     #[test]
