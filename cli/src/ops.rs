@@ -66,8 +66,8 @@ pub struct CreatedPaste {
 
 pub async fn create(options: CreateOptions, progress: Progress<'_>) -> Result<CreatedPaste, Error> {
     let api = Api::new(options.site.clone())?;
-    let limits = api.limits().await?;
 
+    // What's being pasted is checked before asking the site anything.
     let attachment = match &options.attachment {
         None => None,
         Some(path) => {
@@ -86,6 +86,8 @@ pub async fn create(options: CreateOptions, progress: Progress<'_>) -> Result<Cr
             "nothing to paste: give text on stdin or a FILE, or --attach a file".into(),
         ));
     }
+
+    let limits = api.limits().await?;
     let text_bytes = options.text.len() as u64;
     if text_bytes > limits.max_paste_bytes {
         return Err(Error::Refused(format!(
