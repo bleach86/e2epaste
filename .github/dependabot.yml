@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # The actions the workflows use are pinned to commits; Dependabot moves the
+  # pins and the version comments together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # One Cargo.lock for the workspace: server, e2ep and the format crate.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  # The Dockerfile's base images are pinned to digests; this moves them.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  # The site's bundler and browser packages, and the test suite's.
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /tests
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]

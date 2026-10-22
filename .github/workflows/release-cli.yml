@@ -19,7 +19,7 @@ jobs:
     name: Tag matches the version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Compare
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -44,11 +44,12 @@ jobs:
           - { target: aarch64-apple-darwin, os: macos-latest }
           - { target: x86_64-pc-windows-msvc, os: windows-latest }
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
         if: matrix.cross
         with:
           tool: cross
@@ -80,7 +81,7 @@ jobs:
           fi
           rm -r "$name"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2ep-${{ matrix.target }}
           path: dist/*
@@ -93,6 +94,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # For the build provenance attestation.
+      id-token: write
+      attestations: write
     steps:
       - name: Download the builds
         env:
@@ -103,6 +107,15 @@ jobs:
           mkdir dist
           find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec mv {} dist/ \;
           cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # Signed SLSA provenance linking each archive to this workflow run.
+      # Verify a download with: gh attestation verify <file> --repo <owner>/e2epaste
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
