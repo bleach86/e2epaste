@@ -198,7 +198,11 @@ To keep the data in a host directory instead, replace the volume in
 [`docker-compose.yml`](docker-compose.yml) with a bind mount such as `./data:/data`. The container runs as
 user and group 10001, so first run `mkdir data && sudo chown 10001:10001 data`.
 
-Without Compose:
+The container runs with a read-only file system, no capabilities and `no-new-privileges`; the server
+only writes under `/data`. Compose checks `/api/limits` every 30 seconds, so `docker compose ps` shows
+whether the server is healthy.
+
+Without Compose (the hardening flags match `docker-compose.yml`):
 
 ```sh
 docker build -t e2epaste .
@@ -206,8 +210,13 @@ docker run -d --name e2epaste --restart unless-stopped \
   -p 127.0.0.1:8001:8001 \
   -e ROCKET_SITE_URL=https://paste.example.com \
   -v e2epaste-data:/data \
+  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
   e2epaste
 ```
+
+Keep the `127.0.0.1:` in `-p`. The image listens on all interfaces inside the container, so
+`-p 8001:8001` would expose the server to the internet without the proxy: visitors would get plain HTTP
+(no encryption in the browser) and would all share one rate limit.
 
 ### Native
 
