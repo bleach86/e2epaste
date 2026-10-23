@@ -148,6 +148,7 @@ check("md: no requests to other sites", !requests.some((u) => !u.startsWith(BASE
 // Back to the top first: Puppeteer would otherwise click the toggle while
 // it's under the sticky header.
 await m.evaluate(() => scrollTo(0, 0));
+check("md: the source isn't filled in until it's asked for", await m.$eval("#view-area", (e) => e.childNodes.length === 0));
 await m.click('#markdown-toggle [data-view="source"]');
 const sourceState = await m.evaluate(() => ({ codeShown: !document.getElementById("code-view").hidden, hasScriptText: document.getElementById("view-area").textContent.includes("<script>"), start: document.getElementById("view-area").textContent.slice(0, 40) }));
 check("md: Source shows the raw text", sourceState.codeShown && sourceState.hasScriptText, JSON.stringify(sourceState));
@@ -173,6 +174,77 @@ const am = await newPage();
 await am.goto(local(autoMd), { waitUntil: "networkidle0" });
 await am.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
 check("auto md: toggle offered, starts as source", !(await am.$eval("#markdown-toggle", (e) => e.hidden)) && !(await am.$eval("#code-view", (e) => e.hidden)));
+
+// ------------------------------------------------------------- long paste
+// Over 100,000 characters: shown plain in blocks of 200 lines at once, then
+// highlighted in a worker and coloured a block at a time (paste.mjs).
+await am.close();
+await c.bringToFront();
+const filler = Array.from({ length: 198 }, (_, i) => `let a${i} = ${i};`);
+// A comment across the first block boundary (lines 199-202), and one very long line.
+const comment = ["/* starts in block one", "still in block one", "carries on in block two", "ends here */"];
+const longLine = `const long = "${"x".repeat(3000)}";`;
+let body = "";
+while (body.length < 300000) body += "function f(x) {\n  return x * 2; // double\n}\n";
+const longText = [...filler, ...comment, longLine, body].join("\n");
+await c.goto(BASE + "/", { waitUntil: "networkidle0" });
+await c.select("#syntax", "javascript");
+await c.$eval("#paste-area", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, longText);
+await c.click("#submit-paste");
+await c.waitForSelector("#url-modal.show", { timeout: 20000 });
+const longUrl = await c.$eval("#paste-url", (e) => e.value);
+const lp = await newPage();
+await lp.goto(local(longUrl), { waitUntil: "networkidle0" });
+await lp.waitForFunction(() => !document.getElementById("decrypted-notice").hidden, { timeout: 20000 });
+const lines = longText.split("\n").length;
+const shown = await lp.evaluate(() => ({
+  blocks: document.querySelectorAll("#view-area > .code-block").length,
+  same: document.getElementById("view-area").textContent,
+}));
+check("long: shown in blocks of 200 lines", shown.blocks === Math.ceil(lines / 200), `${shown.blocks} blocks for ${lines} lines`);
+check("long: exactly the paste's text", shown.same === longText);
+const coloured = await lp.waitForFunction(
+  () => [...document.querySelectorAll("#view-area > .code-block")].every((b) => b.querySelector("span")),
+  { timeout: 30000 },
+).then(() => true, () => false);
+check("long: every block gets coloured", coloured);
+const boundary = await lp.evaluate(() => {
+  const second = document.querySelectorAll("#view-area > .code-block")[1];
+  const first = second.firstElementChild;
+  return { cls: first?.className, text: first?.textContent.slice(0, 23), same: document.getElementById("view-area").textContent };
+});
+check("long: a comment across blocks is still a comment", boundary.cls === "hljs-comment" && boundary.text === "carries on in block two", JSON.stringify({ cls: boundary.cls, text: boundary.text }));
+check("long: still exactly the text once coloured", boundary.same === longText);
+const layout = await lp.evaluate(() => {
+  const blocks = document.querySelectorAll("#view-area > .code-block");
+  blocks[1].scrollIntoView();
+  const lineHeight = parseFloat(getComputedStyle(blocks[0]).lineHeight);
+  const pre = document.querySelector(".code-body");
+  return {
+    first: blocks[0].getBoundingClientRect().height / lineHeight,
+    second: blocks[1].getBoundingClientRect().height / lineHeight,
+    total: document.getElementById("view-area").getBoundingClientRect().height,
+    gutter: document.getElementById("code-gutter").getBoundingClientRect().height,
+    // Scrolled to its end, the end of the long line is in view.
+    scrolls: (() => {
+      pre.scrollLeft = pre.scrollWidth;
+      const end = blocks[1].getBoundingClientRect().right;
+      return pre.scrollWidth > 3000 * 7 && end <= pre.getBoundingClientRect().right + 20;
+    })(),
+    width: [pre.scrollWidth, blocks[1].getBoundingClientRect().width],
+  };
+});
+check("long: each block is exactly its lines tall", layout.first === 200 && layout.second === 200, JSON.stringify(layout));
+check("long: the text lines up with the line numbers", Math.abs(layout.total + 32 - layout.gutter) < 2, JSON.stringify(layout));
+check("long: a very long line scrolls, not cut off", layout.scrolls, JSON.stringify(layout));
+await lp.evaluate(() => scrollTo(0, 0));
+await lp.click("#wrap-btn");
+const wrapped = await lp.evaluate(() => {
+  const pre = document.querySelector(".code-body");
+  return pre.scrollWidth <= pre.clientWidth + 1;
+});
+check("long: Wrap wraps the long line", wrapped);
+await lp.screenshot({ path: artifact("long_paste.png") });
 
 check("no JS errors or CSP violations", errors.length === 0, JSON.stringify(errors));
 await browser.close();
