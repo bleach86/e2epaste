@@ -21,7 +21,7 @@ e2epaste-format = { path = "crates/e2epaste-format" }
 # No "http2" (a default feature): Rocket only uses HTTP/2 with its own TLS, and
 # the reverse proxy handles TLS here. Leaving it out drops h2 0.3, which has
 # an unfixed advisory (RUSTSEC-2026-0258) on Rocket 0.5's hyper 0.14.
-rocket = { version = "0.5.1", default-features = false, features = ["json"] }
+rocket = { version = "0.5.2", default-features = false, features = ["json"] }
 rocket_dyn_templates = { version = "0.2.0", features = ["minijinja"] }
 # Only for importing data from releases before redb (see src/migrate.rs).
 sled = { version = "0.34.7", features = ["compression"], optional = true }
