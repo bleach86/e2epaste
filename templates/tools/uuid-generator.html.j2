@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between align-items-center gap-3">
         <div>
             <h2 class="h5 fw-semibold mb-1" id="uuid-heading">UUIDs</h2>
-            <p class="small text-secondary mb-0">v4 is fully random. v7 starts with the time, so they sort in the
+            <p class="small text-body-secondary mb-0">v4 is fully random. v7 starts with the time, so they sort in the
                 order they were made.</p>
         </div>
         <button type="button" class="btn btn-quiet btn-sm" id="uuid-again">{{ icons.icon("refresh") }} New</button>
@@ -21,7 +21,7 @@
             <label class="seg-btn" for="uuid-v7">Version 7</label>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <label for="uuid-count" class="small text-secondary">How many</label>
+            <label for="uuid-count" class="small text-body-secondary">How many</label>
             <input id="uuid-count" class="form-control form-control-sm count-input" type="number" min="1" max="1000"
                 value="5">
         </div>
@@ -49,13 +49,13 @@
     <div class="d-flex justify-content-between align-items-center gap-3">
         <div>
             <h2 class="h5 fw-semibold mb-1" id="token-heading">Random tokens</h2>
-            <p class="small text-secondary mb-0">For API keys, secrets and session IDs.</p>
+            <p class="small text-body-secondary mb-0">For API keys, secrets and session IDs.</p>
         </div>
         <button type="button" class="btn btn-quiet btn-sm" id="token-again">{{ icons.icon("refresh") }} New</button>
     </div>
     <div class="num-options mt-3">
         <div class="d-flex align-items-center gap-2">
-            <label for="token-format" class="small text-secondary">Format</label>
+            <label for="token-format" class="small text-body-secondary">Format</label>
             <select id="token-format" class="form-select form-select-sm w-auto">
                 <option value="hex" selected>Hex</option>
                 <option value="base64">Base64</option>
@@ -64,20 +64,20 @@
             </select>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <label for="token-length" class="small text-secondary">Length</label>
+            <label for="token-length" class="small text-body-secondary">Length</label>
             <input id="token-length" class="form-control form-control-sm count-input" type="number" min="1" max="1024"
                 value="32">
-            <span id="token-unit" class="small text-secondary">bytes</span>
+            <span id="token-unit" class="small text-body-secondary">bytes</span>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <label for="token-count" class="small text-secondary">How many</label>
+            <label for="token-count" class="small text-body-secondary">How many</label>
             <input id="token-count" class="form-control form-control-sm count-input" type="number" min="1" max="100"
                 value="1">
         </div>
     </div>
     <label for="token-out" class="visually-hidden">Generated tokens</label>
     <textarea id="token-out" class="form-control tool-area mt-3" rows="3" readonly></textarea>
-    <p id="token-strength" class="small text-secondary mt-2 mb-0" role="status"></p>
+    <p id="token-strength" class="small text-body-secondary mt-2 mb-0" role="status"></p>
     <div class="mt-3">
         <button type="button" class="btn btn-accent" data-copy="token-out">{{ icons.icon("copy") }} Copy</button>
     </div>
@@ -85,7 +85,7 @@
 
 <section class="panel panel-pad tool-panel" aria-labelledby="inspect-heading">
     <h2 class="h5 fw-semibold mb-1" id="inspect-heading">Inspect a UUID</h2>
-    <p class="small text-secondary mb-3">See its version, and when it was made if it says.</p>
+    <p class="small text-body-secondary mb-3">See its version, and when it was made if it says.</p>
     <label for="inspect-in" class="visually-hidden">UUID to inspect</label>
     <input id="inspect-in" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
         placeholder="e.g. 0192f2a4-7c4b-7d3e-9a1f-2b6c8d0e4f51">

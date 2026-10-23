@@ -42,7 +42,7 @@
     aria-label="Number base converter">
     <div class="num-options">
         <div class="d-flex align-items-center gap-2">
-            <label for="bit-width" class="small text-secondary text-nowrap">Bit width</label>
+            <label for="bit-width" class="small text-body-secondary text-nowrap">Bit width</label>
             <select id="bit-width" class="form-select form-select-sm w-auto">
                 <option value="" selected>Any size (− for negatives)</option>
                 {% for w in [8, 16, 32, 64, 128] %}
@@ -71,7 +71,7 @@
         {% for b in bases if b[0] != from and b[0] != to %}{{ field(b[2], b[1], b[3], b[0]) }}{% endfor %}
         {{ field("num-custom", "the chosen base", "Base 36", "custom") }}
     </div>
-    <p id="num-info" class="small text-secondary mt-3 mb-0" role="status"></p>
+    <p id="num-info" class="small text-body-secondary mt-3 mb-0" role="status"></p>
 </section>
 
 {% include "tool_variants" %}

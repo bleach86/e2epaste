@@ -20,7 +20,7 @@
                 {% if limits.max_file_bytes %}
                 {{ icons.icon("paperclip") }}
                 <span>Drop to attach</span>
-                <span class="small text-secondary">One file or several, up to {{ limits.max_file_label }}</span>
+                <span class="small text-body-secondary">One file or several, up to {{ limits.max_file_label }}</span>
                 {% else %}
                 <span>This site doesn't take files</span>
                 {% endif %}
@@ -50,8 +50,8 @@
             <div id="attachment" class="attachment-row" hidden>
                 {{ icons.icon("file") }}
                 <span id="attachment-name" class="text-truncate"></span>
-                <span id="attachment-size" class="text-secondary"></span>
-                <button type="button" id="attachment-remove" class="btn btn-link btn-sm ms-auto p-0 text-secondary"
+                <span id="attachment-size" class="text-body-secondary"></span>
+                <button type="button" id="attachment-remove" class="btn btn-link btn-sm ms-auto p-0 text-body-secondary"
                     aria-label="Remove attachment">{{ icons.icon("x") }}</button>
             </div>
             {% endif %}
@@ -120,7 +120,7 @@
 
             <div>
                 <label for="paste-password" class="field-label">Password <span
-                        class="fw-normal text-secondary">(optional)</span></label>
+                        class="fw-normal text-body-secondary">(optional)</span></label>
                 <div class="input-group">
                     <input type="password" id="paste-password" class="form-control" autocomplete="new-password"
                         spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true"
@@ -175,7 +175,7 @@
                 <span class="dialog-badge">{{ icons.icon("check") }}</span>
                 <div class="flex-grow-1">
                     <h2 id="url-modal-title" class="h5 fw-bold mb-0">Your encrypted link is ready</h2>
-                    <p class="mb-0 small text-secondary">Anyone with this link can read the paste.</p>
+                    <p class="mb-0 small text-body-secondary">Anyone with this link can read the paste.</p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -214,7 +214,7 @@
 
             <details class="qr-details delete-details">
                 <summary>Delete link</summary>
-                <p class="small text-secondary mt-2 mb-2">Opens a page where you can delete the paste before it
+                <p class="small text-body-secondary mt-2 mb-2">Opens a page where you can delete the paste before it
                     expires. Keep it to yourself: anyone with it can delete the paste. It's only shown now<span
                         id="delete-remembered">, but this browser also remembers it, so the paste's page has a Delete
                         button for you here</span>.</p>

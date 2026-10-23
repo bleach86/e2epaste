@@ -6,7 +6,7 @@
     <td><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ name }}</a></td>
     <td>{{ use }}</td>
     <td class="text-nowrap">{{ licence }}</td>
-    <td class="text-secondary small">{{ copyright }}</td>
+    <td class="text-body-secondary small">{{ copyright }}</td>
 </tr>
 {% endmacro %}
 
@@ -15,12 +15,12 @@
     <h1 class="page-title">Open source credits</h1>
     <p class="page-lede">{{ site_name }} is built on open source software. Thank you to everyone who makes and
         maintains these projects.</p>
-    <p class="text-secondary">The code behind this site is open source too, under the MIT licence:
+    <p class="text-body-secondary">The code behind this site is open source too, under the MIT licence:
         <a href="{{ source_url }}" target="_blank" rel="noopener noreferrer">source code</a>.</p>
 
     <section class="mt-5" aria-labelledby="credits-browser">
         <h2 class="h4" id="credits-browser">In your browser</h2>
-        <p class="text-secondary">Sent to your browser as part of the site.</p>
+        <p class="text-body-secondary">Sent to your browser as part of the site.</p>
         <div class="table-responsive panel">
             <table class="table credits-table mb-0">
                 <thead>
@@ -52,7 +52,7 @@
                 </tbody>
             </table>
         </div>
-        <p class="small text-secondary mt-2">"QR Code" is a registered trademark of DENSO WAVE INCORPORATED.</p>
+        <p class="small text-body-secondary mt-2">"QR Code" is a registered trademark of DENSO WAVE INCORPORATED.</p>
     </section>
 
     <section class="mt-5" aria-labelledby="credits-server">
@@ -75,20 +75,20 @@
                 </tbody>
             </table>
         </div>
-        <p class="small text-secondary mt-2">Plus the Rust crates these depend on, listed in the project's
+        <p class="small text-body-secondary mt-2">Plus the Rust crates these depend on, listed in the project's
             <code>Cargo.lock</code>.</p>
     </section>
 
     <section class="mt-5" aria-labelledby="credits-build">
         <h2 class="h4" id="credits-build">Building the site</h2>
-        <p class="text-secondary mb-0">The browser code is bundled with
+        <p class="text-body-secondary mb-0">The browser code is bundled with
             <a href="https://webpack.js.org/" target="_blank" rel="noopener noreferrer">webpack</a>, webpack-cli and
             compression-webpack-plugin (MIT).</p>
     </section>
 
     <section class="mt-5" aria-labelledby="credits-licences">
         <h2 class="h4" id="credits-licences">Licence texts</h2>
-        <p class="text-secondary">The copyright holders for each project are listed above.</p>
+        <p class="text-body-secondary">The copyright holders for each project are listed above.</p>
 
         <details class="licence">
             <summary>MIT License</summary>

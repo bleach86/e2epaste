@@ -28,7 +28,7 @@
         <label for="hash-file" class="hash-drop" id="hash-drop">
             {{ icons.icon("file") }}
             <span id="hash-file-name">Choose a file, or drop it here</span>
-            <span id="hash-file-size" class="small text-secondary">Any size: it's read in pieces and never uploaded.</span>
+            <span id="hash-file-size" class="small text-body-secondary">Any size: it's read in pieces and never uploaded.</span>
         </label>
         <div class="progress mt-2" id="hash-progress" role="progressbar" aria-label="Hashing" aria-valuemin="0"
             aria-valuemax="100" hidden>
@@ -38,18 +38,18 @@
     </div>
 
     <fieldset class="mt-3">
-        <legend class="small text-secondary mb-1">Algorithms</legend>
+        <legend class="small text-body-secondary mb-1">Algorithms</legend>
         <div id="hash-algorithms" class="d-flex flex-wrap gap-3"></div>
     </fieldset>
     <div class="row g-2 mt-2">
         <div class="col-md">
-            <label for="hash-key" class="small text-secondary">HMAC key (optional)</label>
+            <label for="hash-key" class="small text-body-secondary">HMAC key (optional)</label>
             <input id="hash-key" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
                 placeholder="Leave empty for plain hashes" data-1p-ignore data-lpignore="true" data-bwignore="true"
                 data-form-type="other">
         </div>
         <div class="col-md-auto">
-            <label for="hash-format" class="small text-secondary">Output</label>
+            <label for="hash-format" class="small text-body-secondary">Output</label>
             <select id="hash-format" class="form-select">
                 <option value="hex" selected>hex (lower case)</option>
                 <option value="HEX">HEX (upper case)</option>
@@ -63,7 +63,7 @@
     <span id="copy-icon" hidden>{{ icons.icon("copy") }}</span>
 
     <div class="mt-4">
-        <label for="hash-compare" class="small text-secondary">Compare with a published checksum (optional)</label>
+        <label for="hash-compare" class="small text-body-secondary">Compare with a published checksum (optional)</label>
         <input id="hash-compare" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
             placeholder="Paste the expected hash to see if it matches">
         <p id="hash-compare-result" class="small mt-2 mb-0" role="status"></p>
