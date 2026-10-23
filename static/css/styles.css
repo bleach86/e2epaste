@@ -945,10 +945,27 @@ html {
 }
 
 .code-body code {
+  display: block;
   font: inherit;
   white-space: pre;
   padding: 0 !important;
   color: var(--e2e-text);
+}
+
+/* A long paste's blocks of lines (paste.mjs): not laid out while off screen.
+   content-visibility also clips each block to its box, so a block is as
+   wide as its longest line, or a long line would be cut off; and a block
+   doesn't count towards the scroll width, so the text as a whole is made
+   as wide as its longest line (--longest-line, set by paste.mjs). */
+.code-body code {
+  min-width: var(--longest-line, auto);
+}
+
+.code-block {
+  display: block;
+  content-visibility: auto;
+  width: max-content;
+  min-width: 100%;
 }
 
 /* Wrapped lines no longer match the gutter, so it's hidden. */
@@ -1149,6 +1166,14 @@ html {
 .code-view.wrap .code-body code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.code-view.wrap .code-block {
+  width: auto;
+}
+
+.code-view.wrap .code-body code {
+  min-width: 0;
 }
 
 /* --- Live syntax highlighting in the editor ------------------------------

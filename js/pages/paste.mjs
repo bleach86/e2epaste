@@ -69,12 +69,144 @@ let passwordModal;
 // until then, which a quick unlock (say, by a password manager) could hit.
 let passwordModalOpen = false;
 
+// --- Showing the text ------------------------------------------------------
+
+// Longer text (in characters) is shown plain at once, in blocks of lines,
+// and highlighted in a worker (highlight-worker.mjs), then coloured a block
+// at a time, what's on screen first. On a phone, highlighting 1 MB in one go
+// freezes the page for seconds: about half is highlight.js, half the browser
+// laying out the result. The blocks have content-visibility: auto, so ones
+// off screen aren't laid out until they're scrolled to.
+const DIRECT_HIGHLIGHT_MAX = 100_000;
+const LINES_PER_BLOCK = 200;
+// Main-thread time per frame for swapping in highlighted blocks.
+const SLICE_MS = 8;
+
+let sourceShown = false;
+
+// Fills the source view, once: highlighted, or plain text for no language.
+function showSource() {
+  if (sourceShown) {
+    return;
+  }
+  sourceShown = true;
+  if (pasteText.length > DIRECT_HIGHLIGHT_MAX) {
+    showInBlocks(pasteText, pasteLanguage);
+  } else if (pasteLanguage) {
+    // highlight.js escapes the text; its output is safe as HTML.
+    viewArea.innerHTML = hljs.highlight(pasteText, { language: pasteLanguage, ignoreIllegals: true }).value;
+  } else {
+    viewArea.textContent = pasteText;
+  }
+}
+
+function showInBlocks(text, language) {
+  const lines = text.split("\n");
+  const blocks = [];
+  for (let i = 0; i < lines.length; i += LINES_PER_BLOCK) {
+    const end = Math.min(i + LINES_PER_BLOCK, lines.length);
+    const block = document.createElement("span");
+    block.className = "code-block";
+    // Its height until it's laid out, so the scrollbar is about right.
+    block.style.containIntrinsicBlockSize = `auto ${end - i}lh`;
+    block.textContent = lines.slice(i, end).join("\n") + (end < lines.length ? "\n" : "");
+    blocks.push(block);
+  }
+  viewArea.replaceChildren(...blocks);
+  fitLongestLine(lines, blocks);
+  if (!language) {
+    return;
+  }
+
+  const worker = new Worker(new URL("../highlight-worker.mjs", import.meta.url), { type: "module" });
+  worker.onmessage = ({ data: highlighted }) => {
+    worker.terminate();
+    if (highlighted.length === blocks.length) {
+      colourBlocks(blocks, highlighted);
+    }
+  };
+  // The plain text stays: still readable, just not coloured.
+  worker.onerror = (e) => {
+    console.error("Highlighting failed", e);
+    worker.terminate();
+  };
+  worker.postMessage({ text, language, linesPerBlock: LINES_PER_BLOCK });
+}
+
+// Makes the text as wide as its longest line, so a long line scrolls into
+// view. The blocks can't do that themselves: a content-visibility: auto
+// element doesn't count towards its scroll container's width. The width is
+// estimated in characters first (a tab as 4), then corrected from the
+// blocks' real widths as they're laid out (wide characters, say).
+function fitLongestLine(lines, blocks) {
+  let columns = 0;
+  for (const line of lines) {
+    columns = Math.max(columns, line.length + 3 * (line.split("\t").length - 1));
+  }
+  let widest = 0;
+  const update = () => viewArea.style.setProperty("--longest-line", `max(${columns}ch, ${widest}px)`);
+  update();
+  const observer = new ResizeObserver((entries) => {
+    let width = widest;
+    for (const entry of entries) {
+      width = Math.max(width, entry.borderBoxSize[0].inlineSize);
+    }
+    if (width > widest) {
+      widest = width;
+      update();
+    }
+  });
+  blocks.forEach((block) => observer.observe(block));
+}
+
+// Swaps in each block's highlighted HTML (from highlight.js, which escapes
+// the text), a time slice per frame: blocks on screen first, then the rest
+// from the top.
+function colourBlocks(blocks, highlighted) {
+  const pending = new Map(blocks.map((block, i) => [block, i]));
+  const onScreen = new Set();
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        onScreen.add(entry.target);
+      } else {
+        onScreen.delete(entry.target);
+      }
+    }
+  });
+  blocks.forEach((block) => observer.observe(block));
+
+  const colour = (block) => {
+    block.innerHTML = highlighted[pending.get(block)];
+    pending.delete(block);
+  };
+  const step = () => {
+    const start = performance.now();
+    for (const block of onScreen) {
+      if (pending.has(block)) {
+        colour(block);
+      }
+    }
+    for (const block of pending.keys()) {
+      if (performance.now() - start > SLICE_MS) {
+        break;
+      }
+      colour(block);
+    }
+    if (pending.size > 0) {
+      requestAnimationFrame(step);
+    } else {
+      observer.disconnect();
+    }
+  };
+  requestAnimationFrame(step);
+}
+
 // --- Decrypting -----------------------------------------------------------
 
 // `syntax` is the paste's chosen language, or "auto" to guess it.
 function showText(text, syntax) {
   pasteText = text;
-  viewArea.textContent = text;
 
   // One number per line; a trailing newline doesn't start a visible line.
   let lines = text.split("\n").length;
@@ -85,8 +217,6 @@ function showText(text, syntax) {
 
   pasteLanguage = effectiveLanguage(syntax, text);
   if (pasteLanguage) {
-    // highlight.js escapes the text; its output is safe as HTML.
-    viewArea.innerHTML = hljs.highlight(text, { language: pasteLanguage, ignoreIllegals: true }).value;
     viewArea.className = `hljs language-${pasteLanguage}`;
   }
   if (syntax === AUTO) {
@@ -105,11 +235,15 @@ function showText(text, syntax) {
   if (pasteLanguage === "markdown") {
     markdownToggle.hidden = false;
     // Rendered by default when the creator chose Markdown; a guess might be
-    // wrong, so then it starts as source.
+    // wrong, so then it starts as source. Rendered, the source is only
+    // filled in (and highlighted) if it's asked for.
     if (syntax === "markdown") {
+      codeView.hidden = true;
       switchMarkdown("rendered");
+      return;
     }
   }
+  showSource();
 }
 
 // --- Markdown ---------------------------------------------------------------
@@ -133,6 +267,9 @@ async function showMarkdown(view) {
     }
     markdownRendered = true;
   }
+  if (!rendered) {
+    showSource();
+  }
   markdownView.hidden = !rendered;
   codeView.hidden = rendered;
   wrapButton.hidden = rendered;
@@ -150,6 +287,10 @@ function switchMarkdown(view) {
   showMarkdown(view).catch((e) => {
     console.error("Failed to render Markdown", e);
     error.hidden = false;
+    showSource();
+    markdownView.hidden = true;
+    codeView.hidden = false;
+    wrapButton.hidden = false;
     for (const button of markdownToggle.querySelectorAll("button")) {
       button.setAttribute("aria-pressed", String(button.dataset.view === "source"));
     }
