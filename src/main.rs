@@ -517,7 +517,8 @@ Text can be up to {paste}. {files}
 
 ## Getting e2ep
 
-Source code and releases: {source}
+- [Source code and releases]({source}): prebuilt `e2ep` for Linux, macOS and Windows, or build it \
+from source with Cargo.
 
 Run `e2ep --help` for every option, the JSON output and the exit codes.
 
@@ -526,6 +527,13 @@ Run `e2ep --help` for every option, the JSON output and the exit codes.
 `e2ep mcp --server {site} --files-dir DIR --password-env VAR` runs e2ep as an MCP server, with the \
 tools `create_paste`, `get_paste`, `paste_info`, `delete_paste` and `site_limits`. For example, with \
 Claude Code: `claude mcp add e2ep -- e2ep mcp --server {site} --files-dir ~/e2ep-files`.
+
+## Optional
+
+- [FAQ]({site}/faq): how the encryption works, what the server can and can't see, and this site's \
+limits.
+- [Limits as JSON]({site}/api/limits): the paste format version and the largest text and \
+attachment this site takes.
 ",
         paste = limits.max_paste_label,
         source = config.source_url,
@@ -789,6 +797,14 @@ async fn rocket() -> _ {
             engines
                 .minijinja
                 .add_global("source_url", source_url.clone());
+            // Empty when it wasn't built from a git checkout; "dirty" when
+            // the checkout had uncommitted changes.
+            engines
+                .minijinja
+                .add_global("build_commit", env!("BUILD_COMMIT"));
+            engines
+                .minijinja
+                .add_global("build_dirty", !env!("BUILD_DIRTY").is_empty());
             // For the Tools menu in nav.html.j2.
             engines.minijinja.add_global(
                 "nav_tools",

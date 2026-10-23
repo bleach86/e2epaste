@@ -21,13 +21,13 @@
             <label for="now-s" class="visually-hidden">Seconds</label>
             <input id="now-s" class="form-control font-monospace now-time" type="text" readonly size="12">
             <button type="button" class="btn btn-quiet" data-copy="now-s" aria-label="Copy seconds">{{ icons.icon("copy") }}</button>
-            <span class="small text-secondary">seconds</span>
+            <span class="small text-body-secondary">seconds</span>
         </div>
         <div class="d-flex align-items-center gap-2">
             <label for="now-ms" class="visually-hidden">Milliseconds</label>
             <input id="now-ms" class="form-control font-monospace" type="text" readonly size="15">
             <button type="button" class="btn btn-quiet" data-copy="now-ms" aria-label="Copy milliseconds">{{ icons.icon("copy") }}</button>
-            <span class="small text-secondary">milliseconds</span>
+            <span class="small text-body-secondary">milliseconds</span>
         </div>
     </div>
 </section>
@@ -36,7 +36,7 @@
     <div class="d-flex justify-content-between align-items-center gap-3">
         <div>
             <h2 class="h5 fw-semibold mb-1" id="convert-heading">Convert</h2>
-            <p class="small text-secondary mb-0">Type a timestamp to see its date, or a date to see its timestamp.</p>
+            <p class="small text-body-secondary mb-0">Type a timestamp to see its date, or a date to see its timestamp.</p>
         </div>
         <button type="button" class="btn btn-quiet btn-sm" id="ts-clear">{{ icons.icon("eraser") }} Clear</button>
     </div>
@@ -46,7 +46,7 @@
             <input id="ts-in" class="form-control font-monospace" type="text" spellcheck="false" autocomplete="off"
                 placeholder="1700000000, or 2026-10-21T14:30:00Z" aria-describedby="ts-error ts-note">
             <div id="ts-error" class="small text-warn mt-1" role="status"></div>
-            <div id="ts-note" class="small text-secondary mt-1" role="status"></div>
+            <div id="ts-note" class="small text-body-secondary mt-1" role="status"></div>
         </div>
         <div class="col-auto">
             <label for="ts-unit" class="visually-hidden">Timestamp unit</label>
@@ -63,7 +63,7 @@
         </div>
     </div>
     <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-        <label for="ts-pick" class="small text-secondary">Or pick a date and time (in your time zone):</label>
+        <label for="ts-pick" class="small text-body-secondary">Or pick a date and time (in your time zone):</label>
         <input id="ts-pick" class="form-control form-control-sm w-auto" type="datetime-local" step="1">
     </div>
 

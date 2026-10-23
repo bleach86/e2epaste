@@ -36,7 +36,7 @@
        opening it would use up a limited view or start its timer. #}
     <section id="owner-prompt" class="panel panel-pad mb-3" aria-labelledby="owner-prompt-title" hidden>
         <h2 class="h5 fw-bold mb-1" id="owner-prompt-title">You created this paste</h2>
-        <p class="text-secondary mb-3" id="owner-prompt-text"></p>
+        <p class="text-body-secondary mb-3" id="owner-prompt-text"></p>
         <div class="d-flex flex-wrap gap-2">
             <button type="button" id="owner-open-btn" class="btn btn-accent d-inline-flex align-items-center gap-2">
                 {{ icons.icon("eye") }} Open it</button>
@@ -89,7 +89,7 @@
         <span class="attachment-icon">{{ icons.icon("file") }}</span>
         <div class="min-w-0 flex-grow-1">
             <div id="attachment-name" class="fw-semibold text-truncate"></div>
-            <div id="download-status" class="small text-secondary" role="status" aria-live="polite">Encrypted attachment</div>
+            <div id="download-status" class="small text-body-secondary" role="status" aria-live="polite">Encrypted attachment</div>
         </div>
         <button type="button" id="download-link" class="btn btn-quiet btn-outline-accent">
             <span class="dl-idle d-inline-flex align-items-center gap-2">{{ icons.icon("download") }} Decrypt &amp; download</span>
@@ -111,7 +111,7 @@
                 <span class="dialog-badge">{{ icons.icon("lock") }}</span>
                 <div>
                     <h2 id="password-modal-title" class="h5 fw-bold mb-0">This paste is password protected</h2>
-                    <p class="mb-0 small text-secondary">Enter the password to decrypt it. The password itself
+                    <p class="mb-0 small text-body-secondary">Enter the password to decrypt it. The password itself
                         never leaves your browser.</p>
                 </div>
             </div>
