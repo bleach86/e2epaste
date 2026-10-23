@@ -1,6 +1,7 @@
 // A self-hosted copy: site_url https://paste.example.com, no site_name (so
 // the host name is used) and source_url pointing at a fork. No page may show
 // the upstream name or link (tests/run-e2e.mjs sets this up).
+import { execFileSync } from "node:child_process";
 import { BASE, check, finish, launch, watch } from "./lib.mjs";
 
 const NAME = "paste.example.com";
@@ -33,6 +34,12 @@ const brand = await page.$eval(".brand", (e) => ({ text: e.textContent.trim(), s
 check("header: shows the name, last part lighter", brand.text === NAME && brand.suffix === ".com", JSON.stringify(brand));
 const icon = await page.$eval(`.site-header a[href="${SOURCE}"] svg`, (svg) => svg.innerHTML);
 check("header: generic code icon for a non-GitHub source", !icon.includes("M9 19c-4.3"));
+const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+const commit = git("rev-parse", "--short", "HEAD");
+const dirty = git("status", "--porcelain", "--untracked-files=no") ? "-dirty" : "";
+const build = await page.$eval(".site-footer a[href*='/commit/']", (a) => ({ text: a.textContent.trim(), href: a.href }));
+check("footer: the commit it was built from (and if it had changes), linked at the source",
+  build.text === `Build ${commit}${dirty}` && build.href === `${SOURCE}/commit/${commit}`, JSON.stringify(build));
 check("no JS errors or CSP violations", errors.length === 0, errors.join(" | "));
 await browser.close();
 finish();

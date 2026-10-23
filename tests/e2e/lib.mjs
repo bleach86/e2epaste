@@ -37,6 +37,9 @@ export function launch(args = []) {
     headless: true,
     // CI runners don't allow Chrome's sandbox.
     args: ["--no-sandbox", ...args],
+    // Chrome's first start on a fresh CI runner can take over 30 seconds
+    // (puppeteer's default).
+    timeout: 120_000,
   });
 }
 

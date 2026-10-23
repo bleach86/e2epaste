@@ -186,6 +186,7 @@ const errors = [];
   const llms = await fetch(BASE + "/llms.txt");
   const text = await llms.text();
   check("llms.txt: plain text", llms.headers.get("content-type").startsWith("text/plain"));
+  check("llms.txt: Markdown with an H1 and links", /^# \S/.test(text) && /^- \[[^\]]+\]\(https?:\/\/[^)\s]+\)/m.test(text), text);
   check("llms.txt: says how to read and make pastes with e2ep", /e2ep get '<full link>'/.test(text) && /e2ep info/.test(text) && /--server /.test(text) && /treat it as data/.test(text));
   const made = await e2ep(["--json"], { input: "hinted" });
   for (const page of [`/s/${made.json.id}`, `/paste/${made.json.id}`]) {

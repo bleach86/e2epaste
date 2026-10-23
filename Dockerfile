@@ -25,6 +25,9 @@ COPY crates ./crates
 COPY cli ./cli
 COPY --from=web /src/static/js/dist ./static/js/dist
 ENV SKIP_NPM_BUILD=1
+# There's no .git in the build, so the footer's commit comes from here:
+#   docker build --build-arg E2EPASTE_COMMIT=$(git rev-parse --short HEAD) .
+ARG E2EPASTE_COMMIT=
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked -p e2epaste \

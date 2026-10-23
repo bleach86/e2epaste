@@ -5,6 +5,7 @@
             <a href="/faq">FAQ</a>
             <a href="{{ source_url }}" target="_blank" rel="noopener noreferrer">Source code</a>
             <a href="/credits">Open source credits</a>
+            {% if build_commit %}<a href="{{ source_url }}/commit/{{ build_commit }}" target="_blank" rel="noopener noreferrer" title="The commit this site runs{% if build_dirty %}, with uncommitted changes{% endif %}">Build {{ build_commit }}{% if build_dirty %}-dirty{% endif %}</a>{% endif %}
         </div>
         <div>
             Pastes: <span id="total-pastes">{{ site_stats.pastes }}</span> ·
