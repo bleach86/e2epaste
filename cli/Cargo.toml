@@ -6,6 +6,9 @@ description = "Command-line client for e2ePaste: end-to-end encrypted pastes, en
 license = "MIT"
 publish = false
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "e2ep"
 path = "src/main.rs"

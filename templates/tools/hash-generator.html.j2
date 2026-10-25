@@ -12,6 +12,8 @@
         <div class="seg hash-mode flex-grow-1" role="radiogroup" aria-label="What to hash">
             <input type="radio" class="btn-check" name="hash-mode" id="mode-text" value="text" checked>
             <label class="seg-btn" for="mode-text">Text</label>
+            <input type="radio" class="btn-check" name="hash-mode" id="mode-hex" value="hex">
+            <label class="seg-btn" for="mode-hex">Hex</label>
             <input type="radio" class="btn-check" name="hash-mode" id="mode-file" value="file">
             <label class="seg-btn gap-2" for="mode-file">{{ icons.icon("file") }} File</label>
         </div>
@@ -22,6 +24,13 @@
         <label for="hash-text" class="visually-hidden">Text to hash</label>
         <textarea id="hash-text" class="form-control tool-area" rows="5" spellcheck="false"
             placeholder="Type or paste text. It's hashed as UTF-8."></textarea>
+    </div>
+    <div id="hash-hex-box" class="mt-3" hidden>
+        <label for="hash-hex" class="visually-hidden">Bytes to hash, as hex</label>
+        <textarea id="hash-hex" class="form-control tool-area" rows="5" spellcheck="false"
+            aria-describedby="hash-hex-error"
+            placeholder="Type or paste bytes as hex, e.g. 48 65 6c 6c 6f. Spaces, colons, commas, dashes and 0x are ignored."></textarea>
+        <p id="hash-hex-error" class="small text-warn mt-2 mb-0" role="alert" hidden></p>
     </div>
     <div id="hash-file-box" class="mt-3" hidden>
         <input type="file" id="hash-file" class="visually-hidden">
@@ -90,6 +99,11 @@
     <strong>BLAKE3</strong> is a modern, very fast design. <strong>MD5</strong> and <strong>SHA-1</strong> are
     broken for security: people can make two different inputs with the same hash. They're still fine for
     spotting accidental corruption, and still widely published, so they're here for checking checksums.</p>
+
+<h2 class="h4">Hashing bytes written as hex</h2>
+<p>Text mode hashes the characters you type, as UTF-8, so typing <code>ff</code> hashes the two letters f and f.
+    To hash the byte 0xff itself, as in a test vector or a key from a spec, use Hex mode: each pair of hex
+    digits is one byte.</p>
 
 <h2 class="h4">HMAC</h2>
 <p>An HMAC is a hash mixed with a secret key, used to check that a message came from someone who knows the key,

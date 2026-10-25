@@ -91,8 +91,9 @@ export function hexEncode(text) {
   return Array.from(encoder.encode(text), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Ignores spaces, colons, commas, dashes and 0x prefixes.
-export function hexDecode(input) {
+// The bytes written as hex. Ignores spaces, colons, commas, dashes and 0x
+// prefixes.
+export function hexBytes(input) {
   const hex = input.replace(/0x/gi, "").replace(/[\s:,-]/g, "");
   if (!/^[0-9a-fA-F]*$/.test(hex)) {
     throw new Error("Hex can only contain the digits 0-9 and letters a-f.");
@@ -104,7 +105,11 @@ export function hexDecode(input) {
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
-  return decodeUtf8(bytes);
+  return bytes;
+}
+
+export function hexDecode(input) {
+  return decodeUtf8(hexBytes(input));
 }
 
 // --- Binary -----------------------------------------------------------------
