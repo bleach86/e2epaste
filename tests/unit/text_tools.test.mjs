@@ -35,6 +35,8 @@ eq("hex decode separators + 0x", T.hexDecode("0x48 0x69"), "Hi");
 eq("hex decode colons", T.hexDecode("48:69"), "Hi");
 throws("hex odd length", () => T.hexDecode("486"), /even/);
 throws("hex bad char", () => T.hexDecode("zz"), /0-9/);
+eq("hex bytes, even ones that aren't UTF-8", [...T.hexBytes("0xff, 00-80")], [255, 0, 128]);
+eq("hex bytes of nothing", [...T.hexBytes(" ")], []);
 
 // Binary
 eq("bin encode padded (old code gave 1000001)", T.binaryEncode("A"), "01000001");

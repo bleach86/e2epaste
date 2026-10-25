@@ -316,6 +316,24 @@ check("mb-to-gb: no JS errors", p.errors.length === 0, p.errors.join(" | "));
     && /No match/.test(await txt(p, "#hash-compare-result")), JSON.stringify(Object.keys(r)));
   await setValue(p, "#hash-key", "");
   await setValue(p, "#hash-compare", "");
+  // Hex mode hashes the bytes the digits stand for, not the digits.
+  await p.click('label[for="mode-hex"]');
+  check("hash: hex mode shows its own box", !(await p.$eval("#hash-hex-box", (e) => e.hidden)) && await p.$eval("#hash-text-box", (e) => e.hidden)
+    && Object.keys(await rows()).length === 0);
+  await setValue(p, "#hash-hex", "0x61 62:63");
+  r = await rows();
+  check("hash: hex is hashed as bytes", r["SHA-256"] === createHash("sha256").update("abc").digest("hex").toUpperCase(), r["SHA-256"]);
+  await setValue(p, "#hash-hex", "616");
+  check("hash: half a byte of hex is explained, with no stale hashes", /even number of digits/.test(await txt(p, "#hash-hex-error"))
+    && !(await p.$eval("#hash-hex-error", (e) => e.hidden)) && (await p.$eval("#hash-hex", (e) => e.getAttribute("aria-invalid"))) === "true"
+    && Object.keys(await rows()).length === 0);
+  await setValue(p, "#hash-hex", "ff");
+  r = await rows();
+  check("hash: and goes away once it's hex again", await p.$eval("#hash-hex-error", (e) => e.hidden) && !(await p.$eval("#hash-hex", (e) => e.hasAttribute("aria-invalid")))
+    && r["SHA-256"] === createHash("sha256").update(Buffer.from([0xff])).digest("hex").toUpperCase());
+  await p.click("#hash-clear");
+  check("hash: clear empties the hex and keeps it focused", (await val(p, "#hash-hex")) === "" && Object.keys(await rows()).length === 0
+    && (await p.evaluate(() => document.activeElement.id)) === "hash-hex");
   await p.click('label[for="mode-file"]');
   await (await p.$("#hash-file")).uploadFile(bigFile);
   await p.waitForFunction(() => document.getElementById("hash-progress").hidden && document.querySelector("#hash-results [data-algorithm]"), { timeout: 30000 });

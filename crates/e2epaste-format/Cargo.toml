@@ -6,4 +6,7 @@ description = "The e2ePaste paste format's padded sizes, shared by the server an
 license = "MIT"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]

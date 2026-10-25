@@ -1,11 +1,15 @@
-// Hash generator (templates/tools/hash-generator.html.j2): text is hashed as
-// it's typed; a file is read a piece at a time, with progress.
+// Hash generator (templates/tools/hash-generator.html.j2): text, or bytes
+// written as hex, is hashed as it's typed; a file is read a piece at a time,
+// with progress.
 import { ALGORITHMS, findMatch, formatDigest, hashBytes, parseDigest } from "../hashes.mjs";
+import { hexBytes } from "../text.mjs";
 import { hashFileInParallel } from "../hash-parallel.mjs";
 import { bindCopy, bindCopyAndClear } from "../common.mjs";
 
 const tool = document.getElementById("hash-tool");
 const textInput = document.getElementById("hash-text");
+const hexInput = document.getElementById("hash-hex");
+const hexError = document.getElementById("hash-hex-error");
 const fileInput = document.getElementById("hash-file");
 const keyInput = document.getElementById("hash-key");
 const formatSelect = document.getElementById("hash-format");
@@ -97,13 +101,35 @@ function compare() {
   }
 }
 
+// The bytes typed in text or hex mode. Null if there are none, or if the hex
+// isn't valid, which the hex box then explains.
+function typedBytes() {
+  if (mode() === "text") return encoder.encode(textInput.value);
+  try {
+    return hexBytes(hexInput.value);
+  } catch (e) {
+    hexError.textContent = e.message;
+    hexError.hidden = false;
+    hexInput.setAttribute("aria-invalid", "true");
+    return null;
+  }
+}
+
+// The box to type in for the chosen mode; none for a file.
+function focusTyping() {
+  ({ text: textInput, hex: hexInput })[mode()]?.focus();
+}
+
 async function run() {
   running?.abort();
   running = null;
   progress.hidden = true;
   hashError.hidden = true;
-  if (mode() === "text") {
-    digests = textInput.value === "" ? {} : hashBytes(encoder.encode(textInput.value), chosen(), key());
+  hexError.hidden = true;
+  hexInput.removeAttribute("aria-invalid");
+  if (mode() !== "file") {
+    const bytes = typedBytes();
+    digests = bytes?.length ? hashBytes(bytes, chosen(), key()) : {};
     showResults();
     return;
   }
@@ -152,12 +178,13 @@ const DROP_PROMPT = {
 // checksum to compare with and the ticked algorithms stay.
 document.getElementById("hash-clear").addEventListener("click", () => {
   textInput.value = "";
+  hexInput.value = "";
   file = null;
   fileInput.value = "";
   document.getElementById("hash-file-name").textContent = DROP_PROMPT.name;
   document.getElementById("hash-file-size").textContent = DROP_PROMPT.size;
   run();
-  if (mode() === "text") textInput.focus();
+  focusTyping();
 });
 
 function chooseFile(chosenFile) {
@@ -170,6 +197,7 @@ function chooseFile(chosenFile) {
 // Shows the box for the chosen mode.
 function showMode() {
   document.getElementById("hash-text-box").hidden = mode() !== "text";
+  document.getElementById("hash-hex-box").hidden = mode() !== "hex";
   document.getElementById("hash-file-box").hidden = mode() !== "file";
 }
 
@@ -195,6 +223,7 @@ tool.addEventListener("drop", (event) => {
 });
 
 textInput.addEventListener("input", run);
+hexInput.addEventListener("input", run);
 keyInput.addEventListener("input", run);
 formatSelect.addEventListener("change", showResults);
 compareInput.addEventListener("input", compare);
@@ -207,4 +236,4 @@ if (mode() === "file" && fileInput.files[0]) {
 } else {
   run();
 }
-if (mode() === "text") textInput.focus();
+focusTyping();
