@@ -155,15 +155,15 @@ pub struct PasteDB {
 
 impl PasteDB {
     /// Opens (or creates) the database at `db_path` and brings its tables up
-    /// to date. If there's no database yet (or one that has never held a
-    /// paste) but there is one from an older version in `legacy_sled_dir`,
-    /// that's imported first.
+    /// to date. Refuses if there's no database yet (or one that has never
+    /// held a paste) but there is one from a version before redb in
+    /// `legacy_sled_dir`, which an older version has to import first.
     pub fn open(db_path: &Path, legacy_sled_dir: &Path, file_dir: PathBuf) -> Result<Self> {
         if legacy_sled_dir.exists() {
             if db_path.exists() && !migrate::never_used(db_path)? {
                 migrate::set_aside_sled(legacy_sled_dir, db_path)?;
             } else {
-                migrate::import_sled(legacy_sled_dir, db_path)?;
+                return Err(migrate::unimported_sled(legacy_sled_dir));
             }
         }
 
