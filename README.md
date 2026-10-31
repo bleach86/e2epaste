@@ -372,25 +372,21 @@ and `file_store/` together, with the server stopped.
 ### Upgrading from a version before redb
 
 Versions before October 2026 stored pastes in a [sled](https://github.com/spacejam/sled) database, the
-`paste_db/` directory. The first time a newer version starts, it imports that database automatically:
+`paste_db/` directory. The current version can't read it, and refuses to start if it finds one that
+hasn't been imported. Upgrade in two steps:
 
-1. It copies everything into `e2epaste.redb`: pastes, pending attachment uploads and site stats.
-   Attachments in `file_store/` stay where they are.
-2. It renames `paste_db/` to `paste_db.sled-backup/`. Nothing in the old database is changed or deleted.
-3. It logs what it imported. Check that your pastes open, then delete `paste_db.sled-backup/`.
+1. Check out commit `44e55db`, the last version with the import, build it and start it once. It copies
+   everything into `e2epaste.redb` (pastes, pending attachment uploads and site stats; attachments in
+   `file_store/` stay where they are), renames `paste_db/` to `paste_db.sled-backup/` and logs what it
+   imported.
+2. Check that your pastes open, then update to the current version as usual. Delete
+   `paste_db.sled-backup/` once everything looks right.
 
-The import happens in a temporary file that only replaces `e2epaste.redb` once it's complete, so if
-it's interrupted, the next start simply runs it again. To go back to the old version, stop the server,
-delete `e2epaste.redb` and rename `paste_db.sled-backup/` back to `paste_db/`. Any pastes created since
-the upgrade will be lost.
+### Schema changes
 
-The database also records its schema version, and future changes to its layout are applied
-automatically at startup, the same way. A version that finds a database written by a newer version
-refuses to start rather than risk damaging it.
-
-The import is built in by default, through the `sled-import` cargo feature. A build without it
-(`cargo build --no-default-features`) has no sled code, and refuses to start if it finds a `paste_db/`
-that hasn't been imported.
+The database records its schema version, and changes to its layout are applied automatically at
+startup. A version that finds a database written by a newer version refuses to start rather than risk
+damaging it.
 
 ### Build options
 
@@ -403,7 +399,7 @@ that hasn't been imported.
 
 | Command            | What it runs                                                                                                                   |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `cargo test --workspace` | Rust unit tests: storage, migrations and the sled import, rate limits, tokens, the format's sizes, and e2ep's crypto |
+| `cargo test --workspace` | Rust unit tests: storage, migrations, rate limits, tokens, the format's sizes, and e2ep's crypto |
 | `npm test`         | JavaScript unit tests: paste formats v1 to v4 (old pastes made with the code that created them), v4 padding, access proofs, the text tools |
 | `npm run test:e2e` | Browser tests in headless Chrome, each against its own server                                                                  |
 

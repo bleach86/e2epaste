@@ -2,8 +2,7 @@
 
 The steps for moving a running e2ePaste site, such as one started by hand from a checkout, to a new
 Debian 13 server running it as a systemd service, behind Apache. They were rehearsed in full on a
-Debian 13 VM: the build, the install, importing an old (sled) database, Apache, an update, going back,
-and a reboot.
+Debian 13 VM: the build, the install, Apache, an update, going back, and a reboot.
 
 The old server keeps running until the new one is ready, and stays as the fallback for a while after,
 so going back is a DNS change.
@@ -63,11 +62,12 @@ points at the new server.
 Downtime is the time it takes to copy the data.
 
 1. On the old server, stop e2ePaste, so no new pastes arrive.
-2. Copy its data directory's database and attachments to the new server. That's `paste_db/` (from
-   releases before redb) or `e2epaste.redb`, and `file_store/`:
+2. Copy its data directory's database and attachments to the new server. That's `e2epaste.redb` and
+   `file_store/`. (An old server that still has a `paste_db/` is on a version before redb: update it in
+   place first, as in "Upgrading from a version before redb" in the main README.)
 
    ```sh
-   rsync -a old-server:/path/to/e2epaste/paste_db old-server:/path/to/e2epaste/file_store ~/olddata/
+   rsync -a old-server:/path/to/e2epaste/e2epaste.redb old-server:/path/to/e2epaste/file_store ~/olddata/
    ```
 
 3. On the new server, move it into place and start the service:
@@ -77,9 +77,6 @@ Downtime is the time it takes to copy the data.
    sudo systemctl start e2epaste
    journalctl -u e2epaste -o cat | head
    ```
-
-   The first start imports `paste_db/` into `e2epaste.redb` and says how many pastes it imported. The
-   old database is kept as `/var/lib/e2epaste/paste_db.sled-backup`.
 4. Check it before switching DNS. From your own computer, point the name at the new server for
    yourself (an `/etc/hosts` line), then open the site, create and open a paste, and open an old link.
 5. Point DNS at the new server.
@@ -103,8 +100,7 @@ from one computer should get the 11th refused, even if each request sends its ow
 - **To the previous build, on the new server:**
   `sudo mv /opt/e2epaste/e2epaste.previous /opt/e2epaste/e2epaste && sudo systemctl restart e2epaste`
 
-Keep the old server, with e2ePaste stopped, for a week or two before cancelling it. Once everything
-looks right, `/var/lib/e2epaste/paste_db.sled-backup` can be deleted.
+Keep the old server, with e2ePaste stopped, for a week or two before cancelling it.
 
 ## Updating later
 

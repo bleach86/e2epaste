@@ -42,9 +42,7 @@ jobs:
       # The server, the e2ep client and the format crate they share.
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - run: cargo clippy --locked -p e2epaste --all-targets --no-default-features -- -D warnings
       - run: cargo test --locked --workspace
-      - run: cargo test --locked -p e2epaste --no-default-features
 
   browser:
     name: JavaScript and browser tests
