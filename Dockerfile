@@ -2,7 +2,7 @@
 
 # The base images are pinned to the digest behind each tag (multi-arch manifest
 # lists). Dependabot moves the pins; to do it by hand:
-#   docker buildx imagetools inspect node:24-trixie-slim
+#   docker buildx imagetools inspect node:26-trixie-slim
 
 # 1. Browser bundles: webpack writes them to static/js/dist.
 FROM node:26-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS web
