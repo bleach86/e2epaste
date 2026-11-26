@@ -25,7 +25,8 @@ use rocket::serde::json::Json;
 use rocket::tokio;
 use rocket::State;
 use rocket::{post, Data};
-use rocket_dyn_templates::{context, Template};
+use rocket_dyn_templates::minijinja::value::{Serde, Value};
+use rocket_dyn_templates::{context, Template, Templating};
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -200,7 +201,7 @@ async fn share_short(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
 async fn filter_bots(id: PasteId<'_>, db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
-        "bot_filter",
+        "bot_filter.html",
         context! {page: PASTE_PAGE, paste_id: id.to_string(), site_stats, year: Utc::now().year()},
     )
 }
@@ -351,7 +352,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> (Status, Templat
     let formatted_lang = get_formatted_lang(&paste_data.syntax);
 
     let template = Template::render(
-        "paste",
+        "paste.html",
         context! {
             page: PASTE_PAGE,
             // Not the paste's content: the browser fetches that from
@@ -367,7 +368,7 @@ async fn retrieve(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> (Status, Templat
 
 fn paste_not_found(site_stats: paste_db::SiteStats, year: i32) -> (Status, Template) {
     let template = Template::render(
-        "paste_not_found",
+        "paste_not_found.html",
         context! {page: NOT_FOUND_PAGE, site_stats, year},
     );
     (Status::NotFound, template)
@@ -377,7 +378,7 @@ fn paste_not_found(site_stats: paste_db::SiteStats, year: i32) -> (Status, Templ
 fn faq(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     Template::render(
-        "faq",
+        "faq.html",
         context! {page: FAQ_PAGE, site_stats, year: Utc::now().year()},
     )
 }
@@ -385,7 +386,7 @@ fn faq(db: &State<Arc<PasteDB>>) -> Template {
 #[get("/credits")]
 fn credits(db: &State<Arc<PasteDB>>) -> Template {
     Template::render(
-        "credits",
+        "credits.html",
         context! {page: CREDITS_PAGE, site_stats: db.get_site_stats(), year: Utc::now().year()},
     )
 }
@@ -414,7 +415,7 @@ fn tool_hub(db: &State<Arc<PasteDB>>, group: tools::ToolGroup) -> Template {
     let hub = tools::hub(group);
     let listings = tools::listings();
     Template::render(
-        "tool_hub",
+        "tool_hub.html",
         context! {
             page: &hub.page,
             hub,
@@ -429,7 +430,7 @@ fn tool_hub(db: &State<Arc<PasteDB>>, group: tools::ToolGroup) -> Template {
 fn tool_page(db: &State<Arc<PasteDB>>, slug: &str) -> Option<Template> {
     let (tool, variant) = tools::find_page(slug)?;
     Some(Template::render(
-        format!("tools/{}", tool.slug),
+        format!("tools/{}.html", tool.slug),
         context! {
             page: variant.map_or(&tool.page, |v| &v.page),
             tool,
@@ -448,7 +449,7 @@ fn index(db: &State<Arc<PasteDB>>) -> Template {
     let site_stats: paste_db::SiteStats = db.get_site_stats();
     let languages: Vec<(&str, &str)> = get_languages();
     Template::render(
-        "index",
+        "index.html",
         context! {page: INDEX_PAGE, site_stats, languages, year: Utc::now().year()},
     )
 }
@@ -773,16 +774,15 @@ async fn rocket() -> _ {
                 assets::dist_asset,
             ],
         )
-        .attach(Template::custom(move |engines| {
+        .attach(Templating::init(move |engines| {
             engines
                 .minijinja
                 .add_global("asset_version", env!("ASSET_VERSION"));
             engines.minijinja.add_global("site_url", site_url.clone());
             // What one paste can hold, for the create page and the FAQ.
-            engines.minijinja.add_global(
-                "limits",
-                rocket_dyn_templates::minijinja::Value::from_serialize(&paste_limits),
-            );
+            engines
+                .minijinja
+                .add_global("limits", Value::from(Serde(&paste_limits)));
             engines.minijinja.add_global("site_name", site_name.clone());
             // The header shows a domain-style name's last part, e.g. ".XYZ",
             // in a lighter colour.
@@ -806,10 +806,9 @@ async fn rocket() -> _ {
                 .minijinja
                 .add_global("build_dirty", !env!("BUILD_DIRTY").is_empty());
             // For the Tools menu in nav.html.j2.
-            engines.minijinja.add_global(
-                "nav_tools",
-                rocket_dyn_templates::minijinja::Value::from_serialize(tools::listings()),
-            );
+            engines
+                .minijinja
+                .add_global("nav_tools", Value::from(Serde(tools::listings())));
         }))
         .attach(security::SecurityHeaders { hsts });
 

@@ -1,5 +1,5 @@
-{% extends "layout" %}
-{% import "icons" as icons %}
+{% extends "layout.html" %}
+{% import "icons.html" as icons %}
 
 {% block page %}
 <div class="page">
@@ -17,6 +17,6 @@
         Every tool runs entirely in your browser. Nothing you enter is sent to the server.
     </p>
 
-    {% include "tool_list" %}
+    {% include "tool_list.html" %}
 </div>
 {% endblock %}

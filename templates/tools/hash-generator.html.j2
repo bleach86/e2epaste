@@ -1,5 +1,5 @@
-{% extends "tool_layout" %}
-{% import "icons" as icons %}
+{% extends "tool_layout.html" %}
+{% import "icons.html" as icons %}
 
 {# js/tools/pages/hash-generator.mjs builds the algorithm list and results.
    On a variant's page (e.g. SHA-256 Hash Generator), its algorithm comes
@@ -79,7 +79,7 @@
     </div>
 </section>
 {% set variants_heading = "By algorithm" %}
-{% include "tool_variants" %}
+{% include "tool_variants.html" %}
 {% endblock %}
 
 {% block about %}

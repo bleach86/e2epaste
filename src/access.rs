@@ -181,7 +181,7 @@ pub async fn download_attachment(
 #[get("/delete/<id>")]
 pub fn delete_page(db: &State<Arc<PasteDB>>, id: PasteId<'_>) -> Template {
     Template::render(
-        "delete",
+        "delete.html",
         context! {
             page: crate::DELETE_PAGE,
             paste_id: id.to_string(),

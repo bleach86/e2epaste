@@ -1,5 +1,5 @@
-{% extends "tool_layout" %}
-{% import "tool_macros" as m %}
+{% extends "tool_layout.html" %}
+{% import "tool_macros.html" as m %}
 
 {% block tool %}
 {{ m.panel("encode", "Text to Hex", "Type or paste text. Each UTF-8 byte becomes two hex digits.",

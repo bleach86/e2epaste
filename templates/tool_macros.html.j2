@@ -1,6 +1,6 @@
 {# One input -> output panel. js/tools/common.mjs wires up ids "<id>-in",
    "<id>-out" and "<id>-error", plus the data-copy / data-clear buttons. #}
-{% import "icons" as icons %}
+{% import "icons.html" as icons %}
 {% macro panel(id, heading, description, in_placeholder, out_placeholder) %}
 <section class="panel panel-pad tool-panel" aria-labelledby="{{ id }}-heading">
     <div class="d-flex justify-content-between align-items-center gap-3">
