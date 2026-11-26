@@ -1,5 +1,5 @@
-{% extends "tool_layout" %}
-{% import "icons" as icons %}
+{% extends "tool_layout.html" %}
+{% import "icons.html" as icons %}
 
 {# js/tools/pages/byte-size.mjs fills the rows. On a variant's page (e.g. MB
    to GB) it starts at 1 of its "from" unit, with its "to" unit picked out. #}
@@ -52,7 +52,7 @@
         {% endfor %}
     </div>
 </section>
-{% include "tool_variants" %}
+{% include "tool_variants.html" %}
 {% endblock %}
 
 {% block about %}

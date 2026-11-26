@@ -1,5 +1,5 @@
-{% extends "tool_layout" %}
-{% import "tool_macros" as m %}
+{% extends "tool_layout.html" %}
+{% import "tool_macros.html" as m %}
 
 {% block tool %}
 {{ m.panel("encode", "Text to Base64", "Type or paste text. It's encoded as UTF-8, then Base64.",

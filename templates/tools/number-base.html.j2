@@ -1,5 +1,5 @@
-{% extends "tool_layout" %}
-{% import "icons" as icons %}
+{% extends "tool_layout.html" %}
+{% import "icons.html" as icons %}
 
 {# js/tools/pages/number-base.mjs. On a variant's page (e.g. Hex to Decimal)
    its "from" field comes first and its "to" field second. #}
@@ -74,7 +74,7 @@
     <p id="num-info" class="small text-body-secondary mt-3 mb-0" role="status"></p>
 </section>
 
-{% include "tool_variants" %}
+{% include "tool_variants.html" %}
 {% endblock %}
 
 {% block about %}

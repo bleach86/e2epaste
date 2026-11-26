@@ -1,5 +1,5 @@
 <!doctype html>
-{% import "icons" as icons %}
+{% import "icons.html" as icons %}
 <html data-bs-theme="dark" lang="en-US">
 
 <head>
@@ -44,7 +44,7 @@
 
 <body class="d-flex flex-column min-vh-100">
     <a href="#main" class="visually-hidden-focusable position-absolute top-0 start-0 m-2 btn btn-accent skip-link">Skip to content</a>
-    {% include "nav" %}
+    {% include "nav.html" %}
     {# Shown by common.mjs when the page isn't a secure context (plain HTTP),
        where browsers turn off the Web Crypto API. #}
     <div id="insecure-warning" class="insecure-warning" role="alert" hidden>
@@ -63,7 +63,7 @@
     <main id="main" class="flex-grow-1">
         {% block page %}{% endblock %}
     </main>
-    {% include "footer" %}
+    {% include "footer.html" %}
 
     <script src="/public/js/dist/common.js?v={{ asset_version }}"></script>
     {% block scripts %}{% endblock %}

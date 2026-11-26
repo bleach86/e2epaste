@@ -9,7 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use redb::{Database, ReadableDatabase, TableDefinition, WriteTransaction};
+use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction};
 
 use crate::paste_db::{DbError, Result, EXPIRY, PASTES, STATS, STAT_PASTES, UPLOAD_TOKENS};
 
